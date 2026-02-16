@@ -1,0 +1,18 @@
+<Project xmlns:xsi="" xmlns:xsd="">
+    <Name>reviewsrv.mfd</Name>
+    <PackageNames>
+        <string>common</string>
+        <string>review</string>
+        <string>project</string>
+    </PackageNames>
+    <Languages>
+        <string>ru</string>
+    </Languages>
+    <GoPGVer>10</GoPGVer>
+    <CustomTypes></CustomTypes>
+    <TableMapping>
+        <common>users</common>
+        <project>projects,taskTrackers,slackChannels,prompts</project>
+        <review>reviews,reviewFiles,issues</review>
+    </TableMapping>
+</Project>

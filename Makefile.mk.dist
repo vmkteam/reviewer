@@ -1,0 +1,14 @@
+# project service name
+NAME := reviewsrv
+
+# local database connection settings
+TEST_PGDATABASE ?= test-reviewsrv
+
+PGDATABASE ?= reviewsrv
+PGHOST ?= localhost
+PGPORT ?= 5432
+PGUSER ?= postgres
+PGPASSWORD ?= postgres
+
+# add -race to GOFLAGS if RACE=1
+RACE=0

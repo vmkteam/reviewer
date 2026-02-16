@@ -1,0 +1,319 @@
+{
+  "review": {
+    "externalId": "",
+    "title": "Add backend API, frontend, VT admin",
+    "description": "Крупный MR добавляет полную систему code review: REST/JSON-RPC бэкенд, Vue 3 фронтенд, VT-админку, Slack-уведомления и Docker-деплой. Основные проблемы — недостаточная валидация в REST-слое и отсутствие аутентификации на API.",
+    "commitHash": "ffb51cfb923e5e0f25cd3c17d38de82df32632d7",
+    "sourceBranch": "devel",
+    "targetBranch": "master",
+    "author": "Sergey Bykov",
+    "createdAt": "2026-02-16T12:00:00Z",
+    "durationMs": 600000,
+    "modelInfo": {
+      "model": "claude-opus-4-6",
+      "inputTokens": 250000,
+      "outputTokens": 15000,
+      "costUsd": 5.25
+    }
+  },
+  "files": [
+    {
+      "reviewType": "architecture",
+      "summary": "Бизнес-логика хорошо структурирована по слоям. Основные проблемы — недостаточная валидация входных данных в REST-слое (отсутствие проверки обязательных полей, потенциальная потеря issues) и хрупкость транзакционной обёртки в ReviewManager."
+    },
+    {
+      "reviewType": "code",
+      "summary": "Код чистый и идиоматичный. Рекомендации: убрать дублирование IssueStats в трёх пакетах, кешировать парсинг шаблона, добавить RPC-метод для получения одного проекта, привести нейминг API-методов к Go-конвенциям."
+    },
+    {
+      "reviewType": "security",
+      "summary": "REST и JSON-RPC API без аутентификации. Auth token task tracker'а передаётся через открытый endpoint. CORS wildcard. Debug pprof доступен в production. Для внутреннего инструмента за reverse proxy приемлемо, но auth token — реальный риск."
+    },
+    {
+      "reviewType": "tests",
+      "summary": "Тесты в pkg/reviewer хорошо написаны (unit + integration). Критический пробел — отсутствие тестов для pkg/rest (валидация, конвертация), pkg/rpc (9 методов), pkg/slack. Фронтенд без тестов."
+    }
+  ],
+  "issues": [
+    {
+      "severity": "high",
+      "title": "Отсутствует валидация обязательных полей ReviewDraft",
+      "description": "Validate() проверяет только reviewType, fileType и severity, но не проверяет Title, Author, CommitHash, SourceBranch, TargetBranch. Можно создать ревью с пустыми полями.",
+      "content": "### Отсутствует валидация обязательных полей ReviewDraft\n\n`ReviewDraft.Validate()` проверяет только `reviewType`, `fileType` и `severity`, но не проверяет обязательные поля: `Title`, `Author`, `CommitHash`, `SourceBranch`, `TargetBranch`. Можно создать ревью с пустым title и author, что приведёт к бессмысленным записям в БД и некорректным Slack-уведомлениям.\n\n```go\nfunc (rd ReviewDraft) Validate() error {\n    // Нет проверки: rd.Review.Title, rd.Review.Author, rd.Review.CommitHash и т.д.\n    for _, f := range rd.Files {\n        if !reviewer.IsValidReviewType(f.ReviewType) {\n            return fmt.Errorf(\"invalid reviewType: %s\", f.ReviewType)\n        }\n    }\n    // ...\n}\n```\n\n**Рекомендация:** добавить проверку обязательных строковых полей в `Validate()`.",
+      "file": "pkg/rest/model.go",
+      "lines": "46-61",
+      "issueType": "error-handling",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "high",
+      "title": "Нет проверки соответствия issues и files в ReviewDraft",
+      "description": "В ToModel() issues группируются по FileType. Если issue указывает fileType, которого нет в files, она молча теряется без ошибки.",
+      "content": "### Нет проверки соответствия issues и files в ReviewDraft\n\nВ `ToModel()` issues группируются по `FileType` и назначаются review files. Если issue указывает `fileType`, которого нет в `files`, она молча теряется. Нет проверки в `Validate()`, что каждый `issue.FileType` соответствует одному из `files[].ReviewType`.\n\n```go\nissuesByType := make(map[string]reviewer.Issues, len(rd.Files))\nfor _, iss := range rd.Issues {\n    issuesByType[iss.FileType] = append(issuesByType[iss.FileType], ...)\n}\n// Если FileType не совпадает ни с одним ReviewType из Files — issue теряется\n```\n\n**Рекомендация:** в `Validate()` проверить, что `issue.FileType` присутствует среди `files[].ReviewType`.",
+      "file": "pkg/rest/model.go",
+      "lines": "85-108",
+      "issueType": "error-handling",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "medium",
+      "title": "ReviewManager.runInLock создаёт TxManager с DB вместо TX",
+      "description": "Хрупкая инициализация: если кто-то вызовет txRM.Conn() до SetTx — получит не-транзакционное соединение.",
+      "content": "### ReviewManager.runInLock создаёт TxManager с DB вместо TX\n\nВ `runInLock` создаётся `txRM` с `TxManager: db.NewTxManager(rm.DB())`, но `rm.DB()` возвращает указатель на базу, а не транзакцию. Код затем вызывает `txRM.SetTx(tx)`. Это работает, но `NewTxManager` получает `*DB`, а `repo` уже имеет `WithTransaction(tx)`. Потенциальная путаница: если кто-то вызовет `txRM.Conn()` до `SetTx` — получит не-транзакционное соединение. Код сейчас корректен, но хрупок.",
+      "file": "pkg/reviewer/manager.go",
+      "lines": "25-35",
+      "issueType": "architecture",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "medium",
+      "title": "UploadReviewFile не ограничивает размер Body явно",
+      "description": "io.ReadAll(c.Request().Body) без ограничения размера. Глобальный BodyLimit(\"2M\") может не сработать для всех случаев.",
+      "content": "### UploadReviewFile не ограничивает размер Body\n\n`UploadReviewFile` читает `io.ReadAll(c.Request().Body)` без ограничения размера. Хотя middleware `BodyLimit(\"2M\")` стоит глобально, рекомендуется явно ограничить чтение через `io.LimitReader`.\n\n```go\ncontent, err := io.ReadAll(c.Request().Body)\n```",
+      "file": "pkg/rest/rest.go",
+      "lines": "139",
+      "issueType": "security",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "medium",
+      "title": "Нет валидации длин строковых полей в ReviewDraft",
+      "description": "Поля Title, Description, Content, File принимают строки произвольной длины, что может привести к проблемам в БД.",
+      "content": "### Нет валидации длин строковых полей в ReviewDraft\n\nПоля `Title`, `Description`, `Content`, `File` принимают строки произвольной длины. Если клод сгенерирует гигантский `content` для issue, это может привести к проблемам в БД или к неоправданно большим записям.",
+      "file": "pkg/rest/model.go",
+      "lines": "11-43",
+      "issueType": "error-handling",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "low",
+      "title": "calcIssueStats молча игнорирует неизвестные severity",
+      "description": "Issues с неизвестной severity не включаются в Total. Validate() уже проверяет это, но поведение неочевидно.",
+      "content": "### calcIssueStats молча игнорирует неизвестные severity\n\nЕсли в issues попадётся severity, отличная от четырёх известных, она будет проигнорирована в подсчёте, но `Total` не будет включать эту issue. При этом `Validate()` в REST уже проверяет severity, поэтому на практике маловероятно.",
+      "file": "pkg/reviewer/model.go",
+      "lines": "150-166",
+      "issueType": "error-handling",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "low",
+      "title": "ProjectsStats использует raw SQL вместо ORM",
+      "description": "Raw SQL запрос с DISTINCT ON не использует ORM-механизмы, присутствующие в остальном проекте.",
+      "content": "### ProjectsStats использует raw SQL вместо ORM\n\nRaw SQL запрос с `DISTINCT ON` и `count(*) OVER (PARTITION BY ...)` не использует ORM-механизмы. Это не ошибка, но усложняет поддержку при изменении схемы.",
+      "file": "pkg/reviewer/manager.go",
+      "lines": "128-150",
+      "issueType": "architecture",
+      "fileType": "architecture"
+    },
+    {
+      "severity": "medium",
+      "title": "Дублирование подсчёта IssueStats в rest.go",
+      "description": "В notifySlack вручную суммируются Critical, High, Medium, Low. Эта логика уже реализована в reviewer.IssueStats.Add().",
+      "content": "### Дублирование подсчёта IssueStats в rest.go\n\nВ `notifySlack` вручную суммируются `Critical`, `High`, `Medium`, `Low` из review files. Эта же логика уже есть в `reviewer.IssueStats.Add()` и вычисляется в `prepareReview`. Лучше вычислять суммарную статистику один раз.\n\n```go\nvar stats slack.IssueStats\nfor _, rf := range rv.ReviewFiles {\n    stats.Critical += rf.IssueStats.Critical\n    // ...\n}\n```\n\n**Рекомендация:** сохранять суммарную `IssueStats` в структуре `Review`.",
+      "file": "pkg/rest/rest.go",
+      "lines": "91-97",
+      "issueType": "duplication",
+      "fileType": "code"
+    },
+    {
+      "severity": "medium",
+      "title": "Дублирование типа IssueStats в трёх пакетах",
+      "description": "Структура IssueStats определена трижды — в reviewer, rpc и slack пакетах с одинаковыми полями.",
+      "content": "### Дублирование типа IssueStats в трёх пакетах\n\nСтруктура `IssueStats` определена трижды — в `reviewer`, `rpc` и `slack` пакетах. Каждая содержит одни и те же поля. Пакет `slack` мог бы принимать `reviewer.IssueStats`.\n\n**Рекомендация:** использовать один тип из domain-слоя.",
+      "file": "pkg/slack/slack.go",
+      "lines": "30-35",
+      "issueType": "duplication",
+      "fileType": "code"
+    },
+    {
+      "severity": "low",
+      "title": "GetUploadScript парсит шаблон при каждом запросе",
+      "description": "Шаблон uploadScriptTmpl парсится при каждом вызове GetUploadScript. Достаточно распарсить один раз при инициализации.",
+      "content": "### GetUploadScript парсит шаблон при каждом запросе\n\nШаблон `uploadScriptTmpl` парсится при каждом вызове `GetUploadScript`. Шаблон статичен — достаточно распарсить при инициализации `Handler`.\n\n```go\ntmpl, err := template.New(\"upload.js\").Parse(uploadScriptTmpl) // парсинг каждый раз\n```",
+      "file": "pkg/rest/rest.go",
+      "lines": "152-163",
+      "issueType": "perf",
+      "fileType": "code"
+    },
+    {
+      "severity": "low",
+      "title": "Неиспользуемый FilterBar.vue",
+      "description": "Компонент FilterBar.vue определён, но нигде не импортируется и не используется.",
+      "content": "### Неиспользуемый FilterBar.vue\n\nКомпонент `FilterBar.vue` определён (5 строк — обёртка со `<slot />`), но нигде не импортируется и не используется.\n\n**Рекомендация:** удалить.",
+      "file": "frontend/src/components/FilterBar.vue",
+      "lines": "1-5",
+      "issueType": "architecture",
+      "fileType": "code"
+    },
+    {
+      "severity": "low",
+      "title": "ReviewsPage загружает все проекты для получения одного",
+      "description": "Вызывается api.review.projects() чтобы найти один проект по ID. Неэффективно при росте числа проектов.",
+      "content": "### ReviewsPage загружает все проекты для одного\n\nВ `loadInitial` вызывается `api.review.projects()`, чтобы найти один проект по ID. Загружаются все проекты только для получения title одного.\n\n**Рекомендация:** добавить отдельный RPC-метод `review.GetProject(projectId)`.",
+      "file": "frontend/src/pages/ReviewsPage.vue",
+      "lines": "153-157",
+      "issueType": "perf",
+      "fileType": "code"
+    },
+    {
+      "severity": "low",
+      "title": "Двойной await nextTick() — хрупкий хак",
+      "description": "Два nextTick подряд для ожидания рендеринга HeadlessUI TabPanel. Может сломаться при обновлении библиотеки.",
+      "content": "### Двойной await nextTick()\n\n```typescript\nawait nextTick()\nawait nextTick()\n```\n\nДва `nextTick` подряд — хак для ожидания HeadlessUI TabPanel. Хрупко.\n\n**Рекомендация:** использовать `MutationObserver` или `requestAnimationFrame`.",
+      "file": "frontend/src/pages/ReviewPage.vue",
+      "lines": "374-376",
+      "issueType": "architecture",
+      "fileType": "code"
+    },
+    {
+      "severity": "low",
+      "title": "Нейминг: Get вместо List в RPC ReviewService",
+      "description": "Метод Get возвращает список []ReviewSummary. В Go-конвенциях Get обычно означает получение одной сущности.",
+      "content": "### Нейминг: Get вместо List\n\nМетод `Get` возвращает список `[]ReviewSummary`. В Go-конвенциях `Get` обычно означает получение одной сущности, а `List` — списка.\n\n**Рекомендация:** переименовать в `List` или `ListReviews`.",
+      "file": "pkg/rpc/review.go",
+      "lines": "85",
+      "issueType": "naming",
+      "fileType": "code"
+    },
+    {
+      "severity": "high",
+      "title": "REST API без аутентификации",
+      "description": "REST-эндпоинты /v1/prompt/ и /v1/upload/ не имеют никакой аутентификации. Единственная защита — знание UUID projectKey.",
+      "content": "### REST API полностью без аутентификации\n\nREST-эндпоинты (`/v1/prompt/`, `/v1/upload/`) не имеют никакой аутентификации:\n\n```go\na.echo.GET(\"/v1/prompt/:projectKey/\", h.GetPrompt, lg)\na.echo.POST(\"/v1/upload/:projectKey/\", h.CreateReview, lg)\n```\n\nUUID может утечь через логи, Slack-сообщения, CI pipeline. README рекомендует закрывать через nginx, но это не реализовано на уровне приложения.\n\n**Рекомендация:** добавить API-ключ или Bearer-токен для REST-эндпоинтов.",
+      "file": "pkg/app/handlers.go",
+      "lines": "71-74",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "high",
+      "title": "Auth token task tracker'а передаётся через prompt в открытом виде",
+      "description": "GetPrompt API возвращает собранный prompt с подставленным auth token YouTrack'а. Endpoint доступен без аутентификации.",
+      "content": "### Auth token task tracker'а в открытом виде\n\n```go\ndata.FetchPrompt = strings.ReplaceAll(pr.TaskTracker.FetchPrompt, \"{{TOKEN}}\", pr.TaskTracker.AuthToken)\n```\n\n`GetPrompt` API возвращает prompt с подставленным auth token. Если кто-то получит доступ к `projectKey`, он получит и auth token.\n\n**Рекомендация:** передавать token как переменную окружения в CI.",
+      "file": "pkg/reviewer/project.go",
+      "lines": "93",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "high",
+      "title": "Нет аутентификации на JSON-RPC API",
+      "description": "JSON-RPC /v1/rpc/ без аутентификации. Методы Feedback и SetComment позволяют менять данные. Любой может пометить issue как false positive.",
+      "content": "### Нет аутентификации на JSON-RPC API\n\nJSON-RPC эндпоинт `/v1/rpc/` не имеет аутентификации. Методы `review.Feedback` и `review.SetComment` позволяют менять данные.\n\n**Рекомендация:** добавить базовую аутентификацию для write-операций.",
+      "file": "pkg/rpc/server.go",
+      "lines": "29-56",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "medium",
+      "title": "CORS настроен с AllowOrigins: [\"*\"]",
+      "description": "Wildcard CORS разрешает запросы с любого origin. В сочетании с отсутствием аутентификации любой сайт может делать запросы к API.",
+      "content": "### CORS wildcard\n\n```go\nmiddleware.CORSConfig{\n    AllowOrigins: []string{\"*\"},\n}\n```\n\nWildcard CORS разрешает запросы с любого origin.\n\n**Рекомендация:** ограничить `AllowOrigins` конкретным доменом.",
+      "file": "pkg/app/handlers.go",
+      "lines": "35-38",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "medium",
+      "title": "Slack webhook URL хранится без шифрования",
+      "description": "WebhookURL хранится в БД как plain text. При утечке БД webhook URL компрометируется.",
+      "content": "### Slack webhook URL без шифрования\n\n`WebhookURL` хранится в БД как `string` без шифрования. Slack incoming webhook URL — секрет.\n\n**Рекомендация:** шифрование секретов в БД или хранение в vault.",
+      "file": "pkg/db/model.go",
+      "lines": "364-372",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "medium",
+      "title": "Debug-хендлеры pprof доступны в production",
+      "description": "pprof-эндпоинты регистрируются безусловно, без проверки IsDevel. В production дают доступ к профилям CPU, памяти, горутин.",
+      "content": "### pprof доступен в production\n\n```go\nfunc (a *App) registerDebugHandlers() {\n    dbg := a.echo.Group(\"/debug\")\n    dbg.Any(\"/debug/pprof/*\", appkit.PprofHandler)\n```\n\npprof регистрируются безусловно. В production дают ценную информацию для атакующего.\n\n**Рекомендация:** регистрировать `/debug/pprof/` только при `IsDevel == true`.",
+      "file": "pkg/app/handlers.go",
+      "lines": "78-82",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "low",
+      "title": "Docker-compose использует стандартный пароль postgres",
+      "description": "Стандартный пароль postgres в docker-compose. Для локальной разработки приемлемо, но рискованно как шаблон.",
+      "content": "### Стандартный пароль postgres\n\n```yaml\nenvironment:\n  POSTGRES_PASSWORD: postgres\n```\n\nСтандартный пароль в docker-compose.",
+      "file": "docker-compose.yml",
+      "lines": "",
+      "issueType": "security",
+      "fileType": "security"
+    },
+    {
+      "severity": "high",
+      "title": "Отсутствуют тесты для REST-слоя (pkg/rest)",
+      "description": "Validate() и ToModel() содержат критическую логику конвертации и валидации, но не покрыты ни одним тестом.",
+      "content": "### Отсутствуют тесты для REST-слоя\n\nПакет `pkg/rest` содержит критическую логику:\n- `ReviewDraft.Validate()` — валидация входных данных\n- `ReviewDraft.ToModel()` — конвертация в domain model\n\nНи одна из этих функций не покрыта тестами. Это важно, учитывая найденные проблемы с потерей issues.\n\n**Рекомендация:** добавить unit-тесты для `Validate()` и `ToModel()`.",
+      "file": "pkg/rest/model.go",
+      "lines": "1-112",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "high",
+      "title": "Отсутствуют тесты для RPC-слоя (pkg/rpc)",
+      "description": "ReviewService содержит 9 методов, ни один не покрыт тестами. Feedback и SetComment изменяют данные.",
+      "content": "### Отсутствуют тесты для RPC-слоя\n\nJSON-RPC сервис `ReviewService` содержит 9 методов, ни один не покрыт тестами. Особенно важны:\n- `Feedback` — меняет состояние\n- `SetComment` — валидация длины (255 символов)\n- Конвертеры `ReviewFilters.ToDomain`, `IssueFilters.ToDomain`",
+      "file": "pkg/rpc/review.go",
+      "lines": "1-252",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "medium",
+      "title": "Отсутствуют тесты для Slack-нотификатора",
+      "description": "Notifier.Send, text(), trafficLightEmoji() — не покрыты тестами.",
+      "content": "### Отсутствуют тесты для Slack-нотификатора\n\n`Notifier.Send`, `text()`, `trafficLightEmoji()` — не покрыты тестами.\n\n**Рекомендация:** unit-тесты для `text()` и `trafficLightEmoji()`. Для `Send` — httptest.Server.",
+      "file": "pkg/slack/slack.go",
+      "lines": "1-110",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "medium",
+      "title": "Тесты createTestReview всегда создают одинаковые данные",
+      "description": "При создании нескольких ревью все имеют одинаковые title, author, ExternalID. Затрудняет отладку и не проверяет фильтрацию.",
+      "content": "### createTestReview с захардкоженными данными\n\nФункция `createTestReview` создаёт ревью с одинаковыми данными. При создании нескольких ревью все будут иметь одинаковые title, author. Рекомендуется использовать `gofakeit` (уже в зависимостях).",
+      "file": "pkg/reviewer/manager_test.go",
+      "lines": "38-71",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "medium",
+      "title": "Нет negative-тестов для SetComment",
+      "description": "SetComment имеет валидацию len(*comment) > 255, но нет теста для этого ограничения.",
+      "content": "### Нет negative-тестов для SetComment\n\n`SetComment` имеет валидацию `len(*comment) > 255`, но нет теста для этого ограничения. Также нет теста на `SetComment` для несуществующего issue.",
+      "file": "pkg/rpc/review.go",
+      "lines": "238-251",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "low",
+      "title": "TestDBLoad помечен как SkipNow — мёртвый код в тестах",
+      "description": "Тест используется как seed-скрипт и всегда пропускается. Лучше оформить как отдельный скрипт.",
+      "content": "### TestDBLoad — мёртвый код\n\n```go\nfunc TestDBLoad(t *testing.T) {\n    t.SkipNow()\n    // ...\n}\n```\n\nТест-утилита, не тест. Лучше оформить как `cmd/seed/main.go`.",
+      "file": "pkg/reviewer/init_test.go",
+      "lines": "10",
+      "issueType": "tests",
+      "fileType": "tests"
+    },
+    {
+      "severity": "low",
+      "title": "Нет тестов для фронтенда",
+      "description": "Frontend (Vue 3 + TypeScript) не содержит ни одного теста. Стоит покрыть utils/format.ts и utils/breadcrumbs.ts.",
+      "content": "### Нет тестов для фронтенда\n\nФронтенд не содержит тестов. Стоит добавить unit-тесты для:\n- `utils/format.ts` (чистые функции: `timeAgo`, `formatDuration`, `compareSeverity`)\n- `utils/breadcrumbs.ts`",
+      "file": "frontend/src/utils/format.ts",
+      "lines": "1-81",
+      "issueType": "tests",
+      "fileType": "tests"
+    }
+  ]
+}

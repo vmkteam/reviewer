@@ -1,0 +1,8 @@
+builds:
+  - main: ./zenrpc/
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin

@@ -1,0 +1,120 @@
+<VTNamespace xmlns:xsi="" xmlns:xsd="">
+    <Name>review</Name>
+    <VTEntities>
+        <Entity Name="Issue" Mode="Full">
+            <TerminalPath>issues</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ReviewFileID" AttrName="ReviewFileID" SearchName="ReviewFileID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="IssueType" AttrName="IssueType" SearchName="IssueTypeILike" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="ReviewID" AttrName="ReviewID" SearchName="ReviewID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Severity" AttrName="Severity" SearchName="SeverityILike" Summary="true" Search="true" Max="16" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Description" AttrName="Description" SearchName="DescriptionILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Content" AttrName="Content" SearchName="ContentILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="File" AttrName="File" SearchName="FileILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Lines" AttrName="Lines" SearchName="LinesILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Comment" AttrName="Comment" SearchName="CommentILike" Summary="true" Search="true" Max="255" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="IsFalsePositive" AttrName="IsFalsePositive" SearchName="IsFalsePositive" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ProcessedAt" AttrName="ProcessedAt" SearchName="ProcessedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="UserID" AttrName="UserID" SearchName="UserID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ReviewFileReviewType" SearchName="ReviewFileReviewType" Summary="false" Search="true" Max="64" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="ReviewFileID" VTAttrName="ReviewFileID" List="false" FKOpts="id" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="ReviewFile" VTAttrName="ReviewFileID" List="false" FKOpts="id" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="IssueType" VTAttrName="IssueType" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="ReviewID" VTAttrName="ReviewID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Severity" VTAttrName="Severity" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Description" VTAttrName="Description" List="false" Form="HTML_EDITOR" Search="HTML_EDITOR"></Attribute>
+                <Attribute Name="Content" VTAttrName="Content" List="false" Form="HTML_EDITOR" Search="HTML_EDITOR"></Attribute>
+                <Attribute Name="File" VTAttrName="File" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Lines" VTAttrName="Lines" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Comment" VTAttrName="Comment" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IsFalsePositive" VTAttrName="IsFalsePositive" List="true" Form="HTML_CHECKBOX" Search="HTML_CHECKBOX"></Attribute>
+                <Attribute Name="ProcessedAt" VTAttrName="ProcessedAt" List="false" Form="HTML_DATETIME" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="UserID" VTAttrName="UserID" List="false" FKOpts="login" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="User" VTAttrName="UserID" List="false" FKOpts="login" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="ReviewFileReviewType" VTAttrName="ReviewFileReviewType" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="ReviewFile" Mode="Full">
+            <TerminalPath>review-files</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ReviewID" AttrName="ReviewID" SearchName="ReviewID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="ReviewType" AttrName="ReviewType" SearchName="ReviewTypeILike" Summary="true" Search="true" Max="64" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Content" AttrName="Content" SearchName="ContentILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="IssueStats" AttrName="IssueStats" SearchName="IssueStats" Summary="false" Search="false" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="TrafficLight" AttrName="TrafficLight" SearchName="TrafficLightILike" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Summary" AttrName="Summary" SearchName="SummaryILike" Summary="true" Search="true" Max="2048" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="IsAccepted" AttrName="IsAccepted" SearchName="IsAccepted" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ReviewIDs" SearchName="ReviewIDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="ReviewID" VTAttrName="ReviewID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Review" VTAttrName="ReviewID" List="true" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="ReviewType" VTAttrName="ReviewType" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Content" VTAttrName="Content" List="true" Form="HTML_EDITOR" Search="HTML_EDITOR"></Attribute>
+                <Attribute Name="TrafficLight" VTAttrName="TrafficLight" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="Summary" VTAttrName="Summary" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="IsAccepted" VTAttrName="IsAccepted" List="true" Form="HTML_CHECKBOX" Search="HTML_CHECKBOX"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="ReviewIDs" VTAttrName="ReviewIDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="Review" Mode="Full">
+            <TerminalPath>reviews</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ProjectID" AttrName="ProjectID" SearchName="ProjectID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="Title" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Description" AttrName="Description" SearchName="Description" Summary="true" Search="true" Max="2048" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="ExternalID" AttrName="ExternalID" SearchName="ExternalID" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="TrafficLight" AttrName="TrafficLight" SearchName="TrafficLight" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CommitHash" AttrName="CommitHash" SearchName="CommitHash" Summary="true" Search="true" Max="40" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="SourceBranch" AttrName="SourceBranch" SearchName="SourceBranch" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="TargetBranch" AttrName="TargetBranch" SearchName="TargetBranch" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Author" AttrName="Author" SearchName="AuthorILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="DurationMS" AttrName="DurationMS" SearchName="DurationMS" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="ModelInfo" AttrName="ModelInfo" SearchName="ModelInfo" Summary="false" Search="false" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="PromptID" AttrName="PromptID" SearchName="PromptID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="IDLt" SearchName="IDLt" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="ProjectID" VTAttrName="ProjectID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Project" VTAttrName="ProjectID" List="false" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Description" VTAttrName="Description" List="false" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="ExternalID" VTAttrName="ExternalID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="TrafficLight" VTAttrName="TrafficLight" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="CommitHash" VTAttrName="CommitHash" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="SourceBranch" VTAttrName="SourceBranch" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="TargetBranch" VTAttrName="TargetBranch" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Author" VTAttrName="Author" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="DurationMS" VTAttrName="DurationMS" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="PromptID" VTAttrName="PromptID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Prompt" VTAttrName="PromptID" List="false" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="IDLt" VTAttrName="IDLt" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+            </Template>
+        </Entity>
+    </VTEntities>
+</VTNamespace>

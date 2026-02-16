@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/* Base typography & body */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Table row hover */
+.row-hover {
+  transition: background-color 0.1s ease;
+}
+
+/* Smooth tabs underline */
+.tab-underline {
+  position: relative;
+}
+.tab-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #2563eb;
+  transform: scaleX(0);
+  transition: transform 0.15s ease;
+}
+.tab-underline[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+/* Spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+.spinner-lg {
+  width: 32px;
+  height: 32px;
+}
+
+/* Markdown content refinements */
+.markdown-body {
+  line-height: 1.65;
+  color: #1f2937;
+}
+.markdown-body h1 { font-size: 1.5em; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; color: #111827; }
+.markdown-body h2 { font-size: 1.25em; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; color: #111827; }
+.markdown-body h3 { font-size: 1.1em; font-weight: 600; margin-top: 1.25em; margin-bottom: 0.4em; color: #1f2937; }
+.markdown-body p { margin: 0.6em 0; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin: 0.5em 0; }
+.markdown-body li { margin: 0.25em 0; }
+.markdown-body li::marker { color: #9ca3af; }
+.markdown-body pre {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  margin: 0.75em 0;
+}
+.markdown-body code {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+.markdown-body :not(pre) > code {
+  background: #f1f5f9;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: #dc2626;
+}
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+.markdown-body blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 1em;
+  color: #6b7280;
+  margin: 0.75em 0;
+}
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+.markdown-body th {
+  background: #f8fafc;
+  font-weight: 600;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+}
+.markdown-body td {
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+}
+.markdown-body a {
+  color: #2563eb;
+  text-decoration: none;
+}
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1.5em 0;
+}
+
+/* Badge / pill base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Feedback button active states */
+.fb-btn {
+  transition: all 0.12s ease;
+}
+.fb-btn:active {
+  transform: scale(0.95);
+}
+
+/* Select / input reset for consistency */
+select, input[type="text"] {
+  background-color: white;
+}

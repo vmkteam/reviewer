@@ -1,0 +1,17 @@
+[Server]
+Host      = "localhost"
+Port      = 8075
+IsDevel   = true
+BaseURL   = "http://localhost:8075"
+
+[Database]
+Addr            = "localhost:5432"
+User            = "postgres"
+Database        = "reviewsrv"
+Password        = ""
+PoolSize        = 5
+ApplicationName = "reviewsrv"
+
+[Sentry]
+DSN         = ""
+Environment = ""

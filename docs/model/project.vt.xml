@@ -1,0 +1,102 @@
+<VTNamespace xmlns:xsi="" xmlns:xsd="">
+    <Name>project</Name>
+    <VTEntities>
+        <Entity Name="Project" Mode="Full">
+            <TerminalPath>projects</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="VcsURL" AttrName="VcsURL" SearchName="VcsURLILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Language" AttrName="Language" SearchName="LanguageILike" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="ProjectKey" AttrName="ProjectKey" SearchName="ProjectKey" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="PromptID" AttrName="PromptID" SearchName="PromptID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="TaskTrackerID" AttrName="TaskTrackerID" SearchName="TaskTrackerID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="SlackChannelID" AttrName="SlackChannelID" SearchName="SlackChannelID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ProjectKeyILike" SearchName="ProjectKeyILike" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="VcsURL" VTAttrName="VcsURL" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Language" VTAttrName="Language" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="ProjectKey" VTAttrName="ProjectKey" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="PromptID" VTAttrName="PromptID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Prompt" VTAttrName="PromptID" List="true" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="TaskTrackerID" VTAttrName="TaskTrackerID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="TaskTracker" VTAttrName="TaskTrackerID" List="true" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="SlackChannelID" VTAttrName="SlackChannelID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="SlackChannel" VTAttrName="SlackChannelID" List="false" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="ProjectKeyILike" VTAttrName="ProjectKeyILike" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="Prompt" Mode="Full">
+            <TerminalPath>prompts</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Common" AttrName="Common" SearchName="CommonILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Architecture" AttrName="Architecture" SearchName="ArchitectureILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Code" AttrName="Code" SearchName="CodeILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Security" AttrName="Security" SearchName="SecurityILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Tests" AttrName="Tests" SearchName="TestsILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Common" VTAttrName="Common" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="Architecture" VTAttrName="Architecture" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="Code" VTAttrName="Code" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="Security" VTAttrName="Security" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="Tests" VTAttrName="Tests" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="SlackChannel" Mode="Full">
+            <TerminalPath>slack-channels</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Channel" AttrName="Channel" SearchName="ChannelILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="WebhookURL" AttrName="WebhookURL" SearchName="WebhookURLILike" Summary="true" Search="true" Max="1024" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Channel" VTAttrName="Channel" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="WebhookURL" VTAttrName="WebhookURL" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="TaskTracker" Mode="Full">
+            <TerminalPath>task-trackers</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="AuthToken" AttrName="AuthToken" SearchName="AuthTokenILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="FetchPrompt" AttrName="FetchPrompt" SearchName="FetchPromptILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="AuthToken" VTAttrName="AuthToken" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="FetchPrompt" VTAttrName="FetchPrompt" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+            </Template>
+        </Entity>
+    </VTEntities>
+</VTNamespace>

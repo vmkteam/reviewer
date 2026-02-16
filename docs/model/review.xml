@@ -1,0 +1,84 @@
+<Package xmlns:xsi="" xmlns:xsd="">
+    <Name>review</Name>
+    <Entities>
+        <Entity Name="Issue" Namespace="review" Table="issues">
+            <Attributes>
+                <Attribute Name="ID" DBName="issueId" DBType="int4" GoType="int" PK="true" Nullable="Yes" Addable="true" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="ReviewFileID" DBName="reviewFileId" DBType="int4" GoType="int" PK="false" FK="ReviewFile" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="IssueType" DBName="issueType" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="32"></Attribute>
+                <Attribute Name="ReviewID" DBName="reviewId" DBType="int4" GoType="int" PK="false" FK="Review" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="Title" DBName="title" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Severity" DBName="severity" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="16"></Attribute>
+                <Attribute Name="Description" DBName="description" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="Content" DBName="content" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="File" DBName="file" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Lines" DBName="lines" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Comment" DBName="comment" DBType="varchar" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="IsFalsePositive" DBName="isFalsePositive" DBType="bool" GoType="*bool" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="ProcessedAt" DBName="processedAt" DBType="timestamptz" GoType="*time.Time" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="UserID" DBName="userId" DBType="int4" GoType="*int" PK="false" FK="User" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+            </Attributes>
+            <Searches>
+                <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
+                <Search Name="IssueTypeILike" AttrName="IssueType" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="TitleILike" AttrName="Title" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="SeverityILike" AttrName="Severity" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="DescriptionILike" AttrName="Description" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="ContentILike" AttrName="Content" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="FileILike" AttrName="File" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="LinesILike" AttrName="Lines" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="CommentILike" AttrName="Comment" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="ReviewFileReviewType" AttrName="ReviewFile.ReviewType" SearchType="SEARCHTYPE_EQUALS"></Search>
+                <Search Name="ReviewProjectID" AttrName="Review.ProjectID" SearchType="SEARCHTYPE_EQUALS"></Search>
+            </Searches>
+        </Entity>
+        <Entity Name="ReviewFile" Namespace="review" Table="reviewFiles">
+            <Attributes>
+                <Attribute Name="ID" DBName="reviewFileId" DBType="int4" GoType="int" PK="true" Nullable="Yes" Addable="true" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="ReviewID" DBName="reviewId" DBType="int4" GoType="int" PK="false" FK="Review" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="ReviewType" DBName="reviewType" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="64"></Attribute>
+                <Attribute Name="Content" DBName="content" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="IssueStats" DBName="issueStats" DBType="jsonb" GoType="ReviewFileIssueStats" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="TrafficLight" DBName="trafficLight" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="32"></Attribute>
+                <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="Summary" DBName="summary" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="2048"></Attribute>
+                <Attribute Name="IsAccepted" DBName="isAccepted" DBType="bool" GoType="bool" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+            </Attributes>
+            <Searches>
+                <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
+                <Search Name="ReviewTypeILike" AttrName="ReviewType" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="ContentILike" AttrName="Content" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="TrafficLightILike" AttrName="TrafficLight" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="SummaryILike" AttrName="Summary" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="ReviewIDs" AttrName="ReviewID" SearchType="SEARCHTYPE_ARRAY"></Search>
+            </Searches>
+        </Entity>
+        <Entity Name="Review" Namespace="review" Table="reviews">
+            <Attributes>
+                <Attribute Name="ID" DBName="reviewId" DBType="int4" GoType="int" PK="true" Nullable="Yes" Addable="true" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="ProjectID" DBName="projectId" DBType="int4" GoType="int" PK="false" FK="Project" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="Title" DBName="title" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Description" DBName="description" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="2048"></Attribute>
+                <Attribute Name="ExternalID" DBName="externalId" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="32"></Attribute>
+                <Attribute Name="TrafficLight" DBName="trafficLight" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="32" HasDefault="true"></Attribute>
+                <Attribute Name="CommitHash" DBName="commitHash" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="40"></Attribute>
+                <Attribute Name="SourceBranch" DBName="sourceBranch" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="TargetBranch" DBName="targetBranch" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Author" DBName="author" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="DurationMS" DBName="durationMS" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="ModelInfo" DBName="modelInfo" DBType="jsonb" GoType="ReviewModelInfo" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="PromptID" DBName="promptId" DBType="int4" GoType="int" PK="false" FK="Prompt" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+            </Attributes>
+            <Searches>
+                <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
+                <Search Name="IDLt" AttrName="ID" SearchType="SEARCHTYPE_L"></Search>
+                <Search Name="AuthorILike" AttrName="Author" SearchType="SEARCHTYPE_ILIKE"></Search>
+            </Searches>
+        </Entity>
+    </Entities>
+</Package>

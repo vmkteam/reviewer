@@ -1,0 +1,17 @@
+[Server]
+Host    = "0.0.0.0"
+Port    = 8080
+IsDevel = false
+BaseURL = "http://localhost:8080"
+
+[Database]
+Addr            = "db:5432"
+User            = "postgres"
+Database        = "reviewsrv"
+Password        = "postgres"
+PoolSize        = 5
+ApplicationName = "reviewsrv"
+
+[Sentry]
+DSN         = ""
+Environment = ""
