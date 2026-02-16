@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getAuthKey } from '../api/vtClient'
+import { getAuthKey } from '../api/auth'
 
 import LoginPage from './pages/LoginPage.vue'
 import ProfilePage from './pages/ProfilePage.vue'

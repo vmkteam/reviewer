@@ -1,14 +1,17 @@
 import { ref } from 'vue'
 import vtApi, { type UserProfile } from '../../api/vt'
-import { getAuthKey, setAuthKey } from '../../api/vtClient'
+import { getAuthKey, setAuthKey } from '../../api/auth'
+import { client } from '../../api/vt'
 
 const user = ref<UserProfile | null>(null)
 const isAuthenticated = ref(!!getAuthKey())
 
 export function useAuth() {
   async function login(login: string, password: string, remember: boolean) {
-    const authKey = await vtApi.auth.login(login, password, remember)
+    const authKey = await vtApi.auth.login({ login, password, remember })
     setAuthKey(authKey)
+    client.setHeader('Authorization2', authKey)
+    client.token = { value: authKey }
     isAuthenticated.value = true
     await loadProfile()
   }
@@ -18,6 +21,8 @@ export function useAuth() {
       await vtApi.auth.logout()
     } finally {
       setAuthKey(null)
+      client.setHeader('Authorization2', '')
+      client.token = { value: undefined }
       user.value = null
       isAuthenticated.value = false
     }
@@ -35,7 +40,7 @@ export function useAuth() {
   }
 
   async function changePassword(password: string) {
-    const newAuthKey = await vtApi.auth.changePassword(password)
+    const newAuthKey = await vtApi.auth.changePassword({ password })
     setAuthKey(newAuthKey)
   }
 

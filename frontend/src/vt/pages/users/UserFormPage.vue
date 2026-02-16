@@ -14,11 +14,11 @@
       <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
 
       <FormField label="Login" :error="fieldError('login')">
-        <input v-model="entity.login" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <VInput v-model="entity.login" type="text" />
       </FormField>
 
       <FormField label="Password" :error="fieldError('password')">
-        <input v-model="entity.password" type="password" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" :placeholder="isEdit ? 'Leave empty to keep current' : 'Enter password'" />
+        <VInput v-model="entity.password" type="password" :placeholder="isEdit ? 'Leave empty to keep current' : 'Enter password'" />
       </FormField>
 
       <FormField label="Status" :error="fieldError('statusId')">
@@ -51,6 +51,7 @@ import vtApi, { type User } from '../../../api/vt'
 import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
+import VInput from '../../components/VInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const props = defineProps<{ id?: string }>()
@@ -58,7 +59,7 @@ const router = useRouter()
 const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
-const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<User>(vtApi.user, () => ({
+const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<User>(vtApi.user, 'user', () => ({
   id: 0, login: '', password: '', statusId: 1,
 }))
 

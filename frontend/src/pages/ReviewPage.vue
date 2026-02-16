@@ -16,7 +16,7 @@
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ error }}</div>
+    <ErrorAlert v-else-if="error">{{ error }}</ErrorAlert>
 
     <template v-else-if="review">
       <!-- Header Card -->
@@ -140,36 +140,24 @@
           <TabPanel>
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-3 mb-5">
-              <select
-                v-model="issueFilters.severity"
-                class="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
-                @change="loadIssues"
-              >
+              <PSelect v-model="issueFilters.severity" @change="loadIssues">
                 <option value="">All severities</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
-              </select>
-              <select
-                v-model="issueFilters.issueType"
-                class="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
-                @change="loadIssues"
-              >
+              </PSelect>
+              <PSelect v-model="issueFilters.issueType" @change="loadIssues">
                 <option value="">All issue types</option>
                 <option v-for="it in issueTypes" :key="it" :value="it">{{ it }}</option>
-              </select>
-              <select
-                v-model="issueFilters.reviewType"
-                class="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
-                @change="loadIssues"
-              >
+              </PSelect>
+              <PSelect v-model="issueFilters.reviewType" @change="loadIssues">
                 <option value="">All review types</option>
                 <option value="architecture">Architecture</option>
                 <option value="code">Code</option>
                 <option value="security">Security</option>
                 <option value="tests">Tests</option>
-              </select>
+              </PSelect>
               <span v-if="issueCount !== null" class="ml-auto text-xs text-gray-400">
                 {{ issueCount }} issue{{ issueCount !== 1 ? 's' : '' }}
               </span>
@@ -229,32 +217,14 @@
                       </td>
                       <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
                       <td class="px-4 py-3">
-                        <span class="badge bg-gray-100 text-gray-600">{{ reviewTypeLabel(issue.reviewType) }}</span>
+                        <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
                       </td>
                       <td class="px-4 py-3" @click.stop>
                         <div class="flex items-center gap-1">
-                          <button
-                            class="px-2 py-1 text-xs rounded-md border transition-all fb-btn"
-                            :class="issue.isFalsePositive === false
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-medium'
-                              : 'border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50/50'"
-                            @click="setFeedback(issue, false)"
-                            title="Confirmed issue"
-                          >Valid</button>
-                          <button
-                            class="px-2 py-1 text-xs rounded-md border transition-all fb-btn"
-                            :class="issue.isFalsePositive === true
-                              ? 'bg-red-50 border-red-300 text-red-700 font-medium'
-                              : 'border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50/50'"
-                            @click="setFeedback(issue, true)"
-                            title="False positive"
-                          >FP</button>
-                          <button
-                            v-if="issue.isFalsePositive !== null"
-                            class="px-1.5 py-1 text-xs rounded-md border border-gray-200 text-gray-300 hover:text-gray-500 hover:border-gray-300 transition-all fb-btn"
-                            @click="setFeedback(issue, null)"
-                            title="Reset"
-                          >&times;</button>
+                          <FeedbackButtons
+                            :is-false-positive="issue.isFalsePositive"
+                            @feedback="setFeedback(issue, $event)"
+                          />
                           <button
                             class="px-1.5 py-1 text-xs rounded-md border border-gray-200 text-gray-300 hover:text-gray-500 hover:border-gray-300 transition-all fb-btn ml-1"
                             :title="copiedIssueId === issue.issueId ? 'Copied!' : 'Copy link'"
@@ -271,8 +241,8 @@
                       <td colspan="6" class="px-0 py-0">
                         <div class="px-6 py-5 border-t border-gray-100 space-y-3">
                           <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                            <span class="badge bg-gray-100 text-gray-600">{{ issue.issueType }}</span>
-                            <span class="badge bg-gray-100 text-gray-600">{{ reviewTypeLabel(issue.reviewType) }}</span>
+                            <InfoBadge>{{ issue.issueType }}</InfoBadge>
+                            <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
                             <span class="font-mono">
                               <a
                                 v-if="project?.vcsURL && issue.commitHash"
@@ -287,12 +257,10 @@
                           <MarkdownContent v-if="issue.content" :content="issue.content" />
                           <!-- Comment -->
                           <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100" @click.stop>
-                            <textarea
+                            <PTextarea
                               v-model="commentTexts[issue.issueId]"
                               placeholder="Add comment..."
                               maxlength="255"
-                              rows="2"
-                              class="flex-1 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors resize-none placeholder:text-gray-300"
                             />
                             <div class="flex items-start gap-2">
                               <button
@@ -327,11 +295,16 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import api, { type Review, type Issue, type IssueFilters, type Project } from '../api/factory'
-import { RpcError } from '../api/client'
+import { ApiRpcError } from '../api/errors'
 import TrafficLight from '../components/TrafficLight.vue'
 import SeverityBadge from '../components/SeverityBadge.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
+import PSelect from '../components/PSelect.vue'
+import PTextarea from '../components/PTextarea.vue'
+import InfoBadge from '../components/InfoBadge.vue'
+import ErrorAlert from '../components/ErrorAlert.vue'
+import FeedbackButtons from '../components/FeedbackButtons.vue'
 import { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity, buildVcsCommitURL, buildVcsFileURL, buildVcsMrURL } from '../utils/format'
 import { setProjectCrumb, setReviewCrumb } from '../utils/breadcrumbs'
 
@@ -503,8 +476,8 @@ async function loadIssues() {
   expandedIssueId.value = null
   try {
     const [items, count] = await Promise.all([
-      api.review.issues(reviewId.value, buildIssueFilters()),
-      api.review.countIssues(reviewId.value, buildIssueFilters()),
+      api.review.issues({ reviewId: reviewId.value, filters: buildIssueFilters() }),
+      api.review.countIssues({ reviewId: reviewId.value, filters: buildIssueFilters() }),
     ])
     issues.value = items
     issueCount.value = count
@@ -517,7 +490,7 @@ async function loadIssues() {
 
 async function setFeedback(issue: Issue, value: boolean | null) {
   try {
-    await api.review.feedback(issue.issueId, value)
+    await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
     issue.isFalsePositive = value ?? undefined
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to update feedback'
@@ -530,11 +503,11 @@ async function saveComment(issue: Issue) {
   commentSaving[id] = true
   try {
     const text = commentTexts[id]?.trim() || ''
-    await api.review.setComment(id, text || null)
+    await api.review.setComment({ issueId: id, comment: text || undefined })
     issue.comment = text || undefined
     commentOriginals[id] = commentTexts[id] ?? ''
   } catch (e) {
-    commentErrors[id] = e instanceof RpcError ? e.message : 'Failed to save comment'
+    commentErrors[id] = e instanceof ApiRpcError ? e.message : 'Failed to save comment'
   } finally {
     commentSaving[id] = false
   }
@@ -566,7 +539,7 @@ async function loadProjectCrumb(projectId: number, rv: { reviewId: number; title
 
 onMounted(async () => {
   try {
-    review.value = await api.review.getByID(reviewId.value)
+    review.value = await api.review.getByID({ reviewId: reviewId.value })
     document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
@@ -591,7 +564,7 @@ watch(() => props.id, async () => {
   loading.value = true
   error.value = ''
   try {
-    review.value = await api.review.getByID(reviewId.value)
+    review.value = await api.review.getByID({ reviewId: reviewId.value })
     document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)

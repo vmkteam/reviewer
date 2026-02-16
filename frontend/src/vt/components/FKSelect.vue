@@ -1,16 +1,16 @@
 <template>
-  <select
-    :value="modelValue"
-    @change="$emit('update:modelValue', toValue(($event.target as HTMLSelectElement).value))"
-    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  <VSelect
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', toValue($event))"
   >
     <option v-if="nullable" :value="undefined">-- None --</option>
     <option v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.title }}</option>
-  </select>
+  </VSelect>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import VSelect from './VSelect.vue'
 
 interface FKOption {
   id: number

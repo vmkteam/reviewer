@@ -1,16 +1,16 @@
 import { ref, reactive } from 'vue'
 import type { FieldError } from '../../api/vt'
-import { RpcError } from '../../api/vtClient'
+import { ApiRpcError } from '../../api/errors'
 
 interface FormApi<T> {
-  getByID: (id: number) => Promise<T>
-  add: (entity: Partial<T>) => Promise<T>
-  update: (entity: Partial<T>) => Promise<boolean>
-  delete: (id: number) => Promise<boolean>
-  validate: (entity: Partial<T>) => Promise<FieldError[]>
+  getByID: (params: { id: number }) => Promise<T>
+  add: (params: any) => Promise<T>
+  update: (params: any) => Promise<boolean>
+  delete: (params: { id: number }) => Promise<boolean>
+  validate: (params: any) => Promise<FieldError[]>
 }
 
-export function useForm<T extends { id: number }>(api: FormApi<T>, defaults: () => Partial<T>) {
+export function useForm<T extends { id: number }>(api: FormApi<T>, entityKey: string, defaults: () => Partial<T>) {
   const entity = reactive<Partial<T>>(defaults()) as T
   const errors = ref<FieldError[]>([])
   const loading = ref(false)
@@ -35,7 +35,7 @@ export function useForm<T extends { id: number }>(api: FormApi<T>, defaults: () 
     loading.value = true
     error.value = ''
     try {
-      const data = await api.getByID(id)
+      const data = await api.getByID({ id })
       Object.assign(entity, data)
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -49,21 +49,21 @@ export function useForm<T extends { id: number }>(api: FormApi<T>, defaults: () 
     errors.value = []
     error.value = ''
     try {
-      const validationErrors = await api.validate(entity)
+      const validationErrors = await api.validate({ [entityKey]: entity })
       if (validationErrors && validationErrors.length > 0) {
         errors.value = validationErrors
         return false
       }
 
       if (entity.id) {
-        await api.update(entity)
+        await api.update({ [entityKey]: entity })
       } else {
-        const created = await api.add(entity)
+        const created = await api.add({ [entityKey]: entity })
         Object.assign(entity, created)
       }
       return true
     } catch (e: unknown) {
-      if (e instanceof RpcError && e.data) {
+      if (e instanceof ApiRpcError && e.data) {
         const data = e.data as FieldError[]
         if (Array.isArray(data)) {
           errors.value = data
@@ -79,7 +79,7 @@ export function useForm<T extends { id: number }>(api: FormApi<T>, defaults: () 
 
   async function remove(id: number): Promise<boolean> {
     try {
-      return await api.delete(id)
+      return await api.delete({ id })
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
       return false

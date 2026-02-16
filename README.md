@@ -133,62 +133,18 @@ TypeScript clients are auto-generated at `/v1/rpc/api.ts` and `/v1/vt/api.ts`.
 
 ## CI Integration
 
-The admin panel generates a ready-to-use GitLab CI configuration for each project.
+The admin panel (`/vt/`) provides ready-to-use CI configuration:
 
-### Setup
-
-1. Build the Docker image with Claude Code:
-
-```dockerfile
-FROM node:20-alpine
-RUN apk add git bash curl
-WORKDIR /app
-RUN npm install -g @anthropic-ai/claude-code
-RUN npm install -g marked
-
-# Claude Code default settings
-RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json <<'EOF'
-{
-  "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
-  },
-  "attribution": {
-    "commit": "",
-    "pr": ""
-  },
-  "includeCoAuthoredBy": false,
-  "permissions": {
-    "deny": [
-      "Read(**/.env)",
-      "Bash(sudo:*)",
-      "Bash(su:*)",
-      "Bash(ssh:*)"
-    ]
-  },
-  "language": "Russian",
-  "autoUpdatesChannel": "latest",
-  "gitAttribution": false,
-  "env": {
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "DISABLE_TELEMETRY": 1,
-    "DISABLE_ERROR_REPORTING": 1
-  }
-}
-EOF
-
-CMD ["claude-code"]
-```
-
-2. In the admin panel (`/vt/`), open the project list and click the **CI** button to get the generated `.gitlab-ci.yml` fragment.
-
-3. Add the following CI/CD variables to your GitLab project:
-   - `PROJECT_KEY` -- project key from reviewer
-   - `ANTHROPIC_API_KEY` -- Claude API key
-
+1. Open **Projects** and click the **CI** button in the page header — it shows the Dockerfile and GitLab CI YAML.
+2. Build the Docker image from the provided Dockerfile.
+3. Add CI/CD variables to your GitLab project:
+   - `PROJECT_KEY` — project key from reviewer
+   - `ANTHROPIC_API_KEY` — Claude API key
 4. Paste the generated YAML into your repository's `.gitlab-ci.yml`.
 
 The CI job runs on merge requests as a manual step. It fetches the prompt, runs Claude Code review, and uploads results back to the reviewer server.
+
+For local runs, click the **Run** button on a specific project row to get a ready-to-use bash script.
 
 ## Administration
 

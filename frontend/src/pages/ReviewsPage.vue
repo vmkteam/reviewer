@@ -8,7 +8,7 @@
       </router-link>
       <div v-if="project" class="flex items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">{{ project.title }}</h1>
-        <span class="badge bg-gray-100 text-gray-600">{{ project.language }}</span>
+        <InfoBadge>{{ project.language }}</InfoBadge>
         <a
           v-if="project.vcsURL"
           :href="project.vcsURL"
@@ -46,23 +46,21 @@
     <div v-show="activeTab === 'reviews'">
       <!-- Filters -->
       <div class="flex flex-wrap items-center gap-3 mb-5">
-        <input
+        <PInput
           v-model="filters.author"
-          type="text"
           placeholder="Filter by author..."
-          class="w-full sm:w-44 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-gray-300"
+          class="w-full sm:w-44"
           @input="onFilterChange"
         />
-        <select
+        <PSelect
           v-model="filters.trafficLight"
-          class="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
           @change="onFilterChange"
         >
           <option value="">All statuses</option>
           <option value="green">Green</option>
           <option value="yellow">Yellow</option>
           <option value="red">Red</option>
-        </select>
+        </PSelect>
       </div>
 
       <!-- Loading -->
@@ -71,7 +69,7 @@
       </div>
 
       <!-- Error -->
-      <div v-else-if="error" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ error }}</div>
+      <ErrorAlert v-else-if="error">{{ error }}</ErrorAlert>
 
       <!-- Table -->
       <div v-else>
@@ -141,7 +139,7 @@
       </div>
 
       <!-- Risks error -->
-      <div v-else-if="risksError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ risksError }}</div>
+      <ErrorAlert v-else-if="risksError">{{ risksError }}</ErrorAlert>
 
       <!-- Risks table -->
       <div v-else>
@@ -183,29 +181,10 @@
                     </td>
                     <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
                     <td class="px-4 py-3" @click.stop>
-                      <div class="flex items-center gap-1">
-                        <button
-                          class="px-2 py-1 text-xs rounded-md border transition-all"
-                          :class="issue.isFalsePositive === false
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-medium'
-                            : 'border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50/50'"
-                          @click="setRiskFeedback(issue, false)"
-                          title="Confirmed issue"
-                        >Valid</button>
-                        <button
-                          class="px-2 py-1 text-xs rounded-md border transition-all"
-                          :class="issue.isFalsePositive === true
-                            ? 'bg-red-50 border-red-300 text-red-700 font-medium'
-                            : 'border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50/50'"
-                          @click="setRiskFeedback(issue, true)"
-                          title="False positive"
-                        >FP</button>
-                        <button
-                          class="px-1.5 py-1 text-xs rounded-md border border-gray-200 text-gray-300 hover:text-gray-500 hover:border-gray-300 transition-all"
-                          @click="setRiskFeedback(issue, null)"
-                          title="Reset"
-                        >&times;</button>
-                      </div>
+                      <FeedbackButtons
+                        :is-false-positive="issue.isFalsePositive"
+                        @feedback="setRiskFeedback(issue, $event)"
+                      />
                     </td>
                   </tr>
                   <!-- Expanded detail row -->
@@ -213,8 +192,8 @@
                     <td colspan="5" class="px-0 py-0">
                       <div class="px-6 py-5 border-t border-gray-100 space-y-3">
                         <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span class="badge bg-gray-100 text-gray-600">{{ issue.issueType }}</span>
-                          <span class="badge bg-gray-100 text-gray-600">{{ issue.reviewType }}</span>
+                          <InfoBadge>{{ issue.issueType }}</InfoBadge>
+                          <InfoBadge>{{ issue.reviewType }}</InfoBadge>
                           <span class="font-mono">
                             <a
                               v-if="project?.vcsURL && issue.commitHash"
@@ -229,12 +208,10 @@
                         <MarkdownContent v-if="issue.content" :content="issue.content" />
                         <!-- Comment -->
                         <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100" @click.stop>
-                          <textarea
+                          <PTextarea
                             v-model="commentTexts[issue.issueId]"
                             placeholder="Add comment..."
                             maxlength="255"
-                            rows="2"
-                            class="flex-1 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors resize-none placeholder:text-gray-300"
                           />
                           <div class="flex items-start gap-2">
                             <button
@@ -268,13 +245,19 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api, { type ReviewSummary, type Project, type ReviewFilters, type Issue } from '../api/factory'
-import { RpcError } from '../api/client'
+import { ApiRpcError } from '../api/errors'
 import TrafficLight from '../components/TrafficLight.vue'
 import ReviewTypeDots from '../components/ReviewTypeDots.vue'
 import TimeAgo from '../components/TimeAgo.vue'
 import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SeverityBadge from '../components/SeverityBadge.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
+import PInput from '../components/PInput.vue'
+import PSelect from '../components/PSelect.vue'
+import PTextarea from '../components/PTextarea.vue'
+import InfoBadge from '../components/InfoBadge.vue'
+import ErrorAlert from '../components/ErrorAlert.vue'
+import FeedbackButtons from '../components/FeedbackButtons.vue'
 import { setProjectCrumb } from '../utils/breadcrumbs'
 import { buildVcsFileURL } from '../utils/format'
 
@@ -336,8 +319,8 @@ async function loadInitial() {
   try {
     const [projects, items, count] = await Promise.all([
       api.review.projects(),
-      api.review.get(projectId, buildFilters()),
-      api.review.count(projectId, buildFilters()),
+      api.review.get({ projectId, filters: buildFilters() }),
+      api.review.count({ projectId, filters: buildFilters() }),
     ])
     project.value = projects.find(p => p.projectId === projectId) ?? null
     if (project.value) {
@@ -361,7 +344,7 @@ async function loadMore() {
 
   loadingMore.value = true
   try {
-    const items = await api.review.get(projectId, buildFilters(), lastId)
+    const items = await api.review.get({ projectId, filters: buildFilters(), fromReviewId: lastId })
     reviews.value.push(...items)
     hasMore.value = items.length >= 50
   } catch (e) {
@@ -393,8 +376,8 @@ async function loadRisks() {
   expandedIssueId.value = null
   try {
     const [items, count] = await Promise.all([
-      api.review.issuesByProject(projectId, risksFilters),
-      api.review.countIssuesByProject(projectId, risksFilters),
+      api.review.issuesByProject({ projectId, filters: risksFilters }),
+      api.review.countIssuesByProject({ projectId, filters: risksFilters }),
     ])
     risks.value = items
     risksCount.value = count
@@ -414,7 +397,7 @@ async function loadMoreRisks() {
 
   risksLoadingMore.value = true
   try {
-    const items = await api.review.issuesByProject(projectId, risksFilters, lastId)
+    const items = await api.review.issuesByProject({ projectId, filters: risksFilters, fromIssueId: lastId })
     risks.value.push(...items)
     risksHasMore.value = items.length >= 50
   } catch (e) {
@@ -426,7 +409,7 @@ async function loadMoreRisks() {
 
 async function setRiskFeedback(issue: Issue, value: boolean | null) {
   try {
-    await api.review.feedback(issue.issueId, value)
+    await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
     if (value !== true) {
       // Issue is no longer a false positive — remove from list
       risks.value = risks.value.filter(i => i.issueId !== issue.issueId)
@@ -461,11 +444,11 @@ async function saveComment(issue: Issue) {
   commentSaving[id] = true
   try {
     const text = commentTexts[id]?.trim() || ''
-    await api.review.setComment(id, text || null)
+    await api.review.setComment({ issueId: id, comment: text || undefined })
     issue.comment = text || undefined
     commentOriginals[id] = commentTexts[id] ?? ''
   } catch (e) {
-    commentErrors[id] = e instanceof RpcError ? e.message : 'Failed to save comment'
+    commentErrors[id] = e instanceof ApiRpcError ? e.message : 'Failed to save comment'
   } finally {
     commentSaving[id] = false
   }
@@ -474,7 +457,7 @@ async function saveComment(issue: Issue) {
 onMounted(async () => {
   await loadInitial()
   // Pre-load risks count for the tab badge
-  api.review.countIssuesByProject(projectId, risksFilters)
+  api.review.countIssuesByProject({ projectId, filters: risksFilters })
     .then(count => { risksCount.value = count })
     .catch(() => {})
 })
