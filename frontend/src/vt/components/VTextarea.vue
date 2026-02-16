@@ -1,7 +1,7 @@
 <template>
   <textarea
     :value="modelValue"
-    @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+    @input="onInput"
     :rows="rows"
     :placeholder="placeholder"
     v-bind="$attrs"
@@ -18,7 +18,11 @@ defineProps<{
   placeholder?: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+
+function onInput(e: Event) {
+  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
+}
 </script>
