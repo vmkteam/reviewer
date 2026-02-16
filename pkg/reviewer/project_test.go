@@ -15,7 +15,7 @@ func newTestProjectManager(t *testing.T) (*ProjectManager, db.DB) {
 	return NewProjectManager(dbc), dbc
 }
 
-func TestProjectManager_GetByID(t *testing.T) {
+func TestDBProjectManager_GetByID(t *testing.T) {
 	pm, dbc := newTestProjectManager(t)
 
 	pr, cl := test.Project(t, dbc, nil, test.WithProjectRelations, test.WithFakeProject)
@@ -36,7 +36,7 @@ func TestProjectManager_GetByID(t *testing.T) {
 	})
 }
 
-func TestProjectManager_GetByKey(t *testing.T) {
+func TestDBProjectManager_GetByKey(t *testing.T) {
 	pm, dbc := newTestProjectManager(t)
 
 	pr, cl := test.Project(t, dbc, nil, test.WithProjectRelations, test.WithFakeProject)
@@ -58,7 +58,7 @@ func TestProjectManager_GetByKey(t *testing.T) {
 	})
 }
 
-func TestProjectManager_List(t *testing.T) {
+func TestDBProjectManager_List(t *testing.T) {
 	pm, dbc := newTestProjectManager(t)
 
 	pr, cl := test.Project(t, dbc, nil, test.WithProjectRelations, test.WithFakeProject)
@@ -78,7 +78,7 @@ func TestProjectManager_List(t *testing.T) {
 	assert.True(t, found, "created project should appear in list")
 }
 
-func TestProjectManager_Prompt(t *testing.T) {
+func TestDBProjectManager_Prompt(t *testing.T) {
 	pm, dbc := newTestProjectManager(t)
 
 	t.Run("with prompt template", func(t *testing.T) {

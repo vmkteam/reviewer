@@ -70,7 +70,7 @@ func createTestReview(t *testing.T, rm *ReviewManager, pr *Project) *Review {
 	return created
 }
 
-func TestReviewManager_CreateReview(t *testing.T) {
+func TestDBReviewManager_CreateReview(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -122,7 +122,7 @@ func TestReviewManager_CreateReview(t *testing.T) {
 	})
 }
 
-func TestReviewManager_GetReview(t *testing.T) {
+func TestDBReviewManager_GetReview(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -153,7 +153,7 @@ func TestReviewManager_GetReview(t *testing.T) {
 	})
 }
 
-func TestReviewManager_ListReviews(t *testing.T) {
+func TestDBReviewManager_ListReviews(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -196,7 +196,7 @@ func TestReviewManager_ListReviews(t *testing.T) {
 	})
 }
 
-func TestReviewManager_CountReviews(t *testing.T) {
+func TestDBReviewManager_CountReviews(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -209,7 +209,7 @@ func TestReviewManager_CountReviews(t *testing.T) {
 	assert.GreaterOrEqual(t, count, 1)
 }
 
-func TestReviewManager_ReviewFileByKey(t *testing.T) {
+func TestDBReviewManager_ReviewFileByKey(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -237,7 +237,7 @@ func TestReviewManager_ReviewFileByKey(t *testing.T) {
 	})
 }
 
-func TestReviewManager_UpdateReviewFileContent(t *testing.T) {
+func TestDBReviewManager_UpdateReviewFileContent(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -260,7 +260,7 @@ func TestReviewManager_UpdateReviewFileContent(t *testing.T) {
 	assert.Equal(t, newContent, rf2.Content)
 }
 
-func TestReviewManager_ProjectsStats(t *testing.T) {
+func TestDBReviewManager_ProjectsStats(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -279,7 +279,7 @@ func TestReviewManager_ProjectsStats(t *testing.T) {
 	assert.NotEmpty(t, ps.TrafficLight)
 }
 
-func TestReviewManager_SetFeedback(t *testing.T) {
+func TestDBReviewManager_SetFeedback(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -314,7 +314,7 @@ func TestReviewManager_SetFeedback(t *testing.T) {
 	})
 }
 
-func TestReviewManager_ListIssues(t *testing.T) {
+func TestDBReviewManager_ListIssues(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -327,7 +327,7 @@ func TestReviewManager_ListIssues(t *testing.T) {
 	assert.Len(t, issues, 3)
 }
 
-func TestReviewManager_CountIssues(t *testing.T) {
+func TestDBReviewManager_CountIssues(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
@@ -340,7 +340,7 @@ func TestReviewManager_CountIssues(t *testing.T) {
 	assert.Equal(t, 3, count)
 }
 
-func TestReviewManager_ListIssuesByProject(t *testing.T) {
+func TestDBReviewManager_ListIssuesByProject(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
