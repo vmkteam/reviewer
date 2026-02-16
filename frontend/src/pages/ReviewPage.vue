@@ -305,8 +305,11 @@ import PTextarea from '../components/PTextarea.vue'
 import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
 import FeedbackButtons from '../components/FeedbackButtons.vue'
-import { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity, buildVcsCommitURL, buildVcsFileURL, buildVcsMrURL } from '../utils/format'
-import { setProjectCrumb, setReviewCrumb } from '../utils/breadcrumbs'
+import { useFormat } from '../composables/useFormat'
+import { useBreadcrumbs } from '../composables/useBreadcrumbs'
+
+const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity, buildVcsCommitURL, buildVcsFileURL, buildVcsMrURL } = useFormat()
+const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumbs()
 
 const props = defineProps<{ id: string }>()
 

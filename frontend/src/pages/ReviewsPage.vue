@@ -258,8 +258,11 @@ import PTextarea from '../components/PTextarea.vue'
 import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
 import FeedbackButtons from '../components/FeedbackButtons.vue'
-import { setProjectCrumb } from '../utils/breadcrumbs'
-import { buildVcsFileURL } from '../utils/format'
+import { useBreadcrumbs } from '../composables/useBreadcrumbs'
+import { useFormat } from '../composables/useFormat'
+
+const { setProject: setProjectCrumb } = useBreadcrumbs()
+const { buildVcsFileURL } = useFormat()
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()

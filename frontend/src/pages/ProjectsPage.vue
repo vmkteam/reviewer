@@ -55,7 +55,9 @@ import TimeAgo from '../components/TimeAgo.vue'
 import PInput from '../components/PInput.vue'
 import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
-import { clearCrumbs } from '../utils/breadcrumbs'
+import { useBreadcrumbs } from '../composables/useBreadcrumbs'
+
+const { clear: clearCrumbs } = useBreadcrumbs()
 
 const projects = ref<Project[]>([])
 const loading = ref(true)
