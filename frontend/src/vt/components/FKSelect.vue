@@ -29,9 +29,10 @@ defineEmits<{
 
 const options = ref<FKOption[]>([])
 
-function toValue(val: string): number | null | undefined {
-  if (val === '' || val === 'undefined') return props.nullable ? null : undefined
-  return parseInt(val, 10)
+function toValue(val: unknown): number | null | undefined {
+  if (val === undefined || val === null || val === '') return props.nullable ? null : undefined
+  if (typeof val === 'number') return val
+  return parseInt(String(val), 10)
 }
 
 onMounted(async () => {

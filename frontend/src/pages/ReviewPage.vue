@@ -140,18 +140,18 @@
           <TabPanel>
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-3 mb-5">
-              <PSelect v-model="issueFilters.severity" @change="loadIssues">
+              <PSelect v-model="issueFilters.severity">
                 <option value="">All severities</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
               </PSelect>
-              <PSelect v-model="issueFilters.issueType" @change="loadIssues">
+              <PSelect v-model="issueFilters.issueType">
                 <option value="">All issue types</option>
                 <option v-for="it in issueTypes" :key="it" :value="it">{{ it }}</option>
               </PSelect>
-              <PSelect v-model="issueFilters.reviewType" @change="loadIssues">
+              <PSelect v-model="issueFilters.reviewType">
                 <option value="">All review types</option>
                 <option value="architecture">Architecture</option>
                 <option value="code">Code</option>
@@ -294,7 +294,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
-import api, { type Review, type Issue, type IssueFilters, type Project } from '../api/factory'
+import api, { type Review, type Issue, type Project } from '../api/factory'
 import { ApiRpcError } from '../api/errors'
 import TrafficLight from '../components/TrafficLight.vue'
 import SeverityBadge from '../components/SeverityBadge.vue'
@@ -317,8 +317,7 @@ const loading = ref(true)
 const error = ref('')
 
 // Issues
-const issues = ref<Issue[]>([])
-const issueCount = ref<number | null>(null)
+const allIssues = ref<Issue[]>([])
 const issuesLoading = ref(false)
 const expandedIssueId = ref<number | null>(null)
 
@@ -383,7 +382,7 @@ function copyIssueLink(issueId: number) {
 
 async function scrollToIssue(issueId: number) {
   expandedIssueId.value = issueId
-  const issue = issues.value.find(i => i.issueId === issueId)
+  const issue = allIssues.value.find(i => i.issueId === issueId)
   if (issue && !(issueId in commentTexts)) {
     commentTexts[issueId] = issue.comment ?? ''
     commentOriginals[issueId] = issue.comment ?? ''
@@ -417,12 +416,23 @@ const tabs = computed(() => {
 })
 
 const issueTypes = computed(() => {
-  const types = new Set(issues.value.map(i => i.issueType))
+  const types = new Set(allIssues.value.map(i => i.issueType))
   return [...types].sort()
 })
 
+const filteredIssues = computed(() => {
+  return allIssues.value.filter(i => {
+    if (issueFilters.severity && i.severity !== issueFilters.severity) return false
+    if (issueFilters.issueType && i.issueType !== issueFilters.issueType) return false
+    if (issueFilters.reviewType && i.reviewType !== issueFilters.reviewType) return false
+    return true
+  })
+})
+
+const issueCount = computed(() => filteredIssues.value.length)
+
 const sortedIssues = computed(() => {
-  const copy = [...issues.value]
+  const copy = [...filteredIssues.value]
   copy.sort((a, b) => {
     let cmp = 0
     if (sortField.value === 'severity') cmp = compareSeverity(a.severity, b.severity)
@@ -454,7 +464,7 @@ function toggleIssueDetail(id: number) {
   } else {
     expandedIssueId.value = id
     updateHash('issues-' + id)
-    const issue = issues.value.find(i => i.issueId === id)
+    const issue = allIssues.value.find(i => i.issueId === id)
     if (issue && !(id in commentTexts)) {
       commentTexts[id] = issue.comment ?? ''
       commentOriginals[id] = issue.comment ?? ''
@@ -462,25 +472,11 @@ function toggleIssueDetail(id: number) {
   }
 }
 
-function buildIssueFilters(): IssueFilters | undefined {
-  const f: IssueFilters = {}
-  if (issueFilters.severity) f.severity = issueFilters.severity
-  if (issueFilters.issueType) f.issueType = issueFilters.issueType
-  if (issueFilters.reviewType) f.reviewType = issueFilters.reviewType
-  if (!f.severity && !f.issueType && !f.reviewType) return undefined
-  return f
-}
-
 async function loadIssues() {
   issuesLoading.value = true
   expandedIssueId.value = null
   try {
-    const [items, count] = await Promise.all([
-      api.review.issues({ reviewId: reviewId.value, filters: buildIssueFilters() }),
-      api.review.countIssues({ reviewId: reviewId.value, filters: buildIssueFilters() }),
-    ])
-    issues.value = items
-    issueCount.value = count
+    allIssues.value = await api.review.issues({ reviewId: reviewId.value })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load issues'
   } finally {
