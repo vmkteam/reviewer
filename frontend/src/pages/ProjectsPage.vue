@@ -53,6 +53,7 @@ const loading = ref(true)
 const error = ref('')
 
 clearCrumbs()
+document.title = 'Projects — reviewer'
 
 onMounted(async () => {
   try {

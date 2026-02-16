@@ -29,6 +29,15 @@
             <h1 class="text-xl font-bold text-gray-900 leading-snug">{{ review.title }}</h1>
             <p v-if="review.description" class="text-sm text-gray-500 mt-1 line-clamp-2">{{ review.description }}</p>
           </div>
+          <a
+            v-if="review.externalId && review.externalId !== '0' && project?.vcsURL"
+            :href="buildVcsMrURL(project.vcsURL, review.externalId)"
+            target="_blank"
+            class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            {{ project.vcsURL.includes('github.com') ? 'PR' : 'MR' }} #{{ review.externalId }}
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-gray-100">
@@ -46,7 +55,15 @@
           </div>
           <div>
             <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Commit</div>
-            <div class="text-sm font-mono text-gray-600">{{ shortHash(review.commitHash) }}</div>
+            <div class="text-sm font-mono text-gray-600">
+              <a
+                v-if="project?.vcsURL && review.commitHash"
+                :href="buildVcsCommitURL(project.vcsURL, review.commitHash)"
+                target="_blank"
+                class="text-blue-600 hover:text-blue-800 hover:underline"
+              >{{ shortHash(review.commitHash) }}</a>
+              <template v-else>{{ shortHash(review.commitHash) }}</template>
+            </div>
           </div>
           <div>
             <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Date</div>
@@ -73,7 +90,7 @@
 
       <!-- Tabs -->
       <TabGroup :selected-index="selectedTab" @change="onTabChange">
-        <TabList class="flex gap-1 border-b border-gray-200 mb-6">
+        <TabList class="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
           <Tab
             v-for="tab in tabs"
             :key="tab.key"
@@ -81,7 +98,7 @@
             as="template"
           >
             <button
-              class="relative px-4 py-2.5 text-sm font-medium rounded-t-lg focus:outline-none transition-colors"
+              class="relative px-4 py-2.5 text-sm font-medium rounded-t-lg focus:outline-none transition-colors whitespace-nowrap flex-shrink-0"
               :class="selected
                 ? 'text-blue-600 bg-blue-50/50'
                 : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'"
@@ -199,9 +216,15 @@
                       <td class="px-4 py-3 text-sm text-gray-800 max-w-xs">
                         <span class="line-clamp-1">{{ issue.title }}</span>
                       </td>
-                      <td class="px-4 py-3 hidden md:table-cell">
+                      <td class="px-4 py-3 hidden md:table-cell" @click.stop>
                         <div class="text-xs font-mono text-gray-500">
-                          {{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span>
+                          <a
+                            v-if="project?.vcsURL && issue.commitHash"
+                            :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
+                            target="_blank"
+                            class="text-blue-600 hover:text-blue-800 hover:underline"
+                          >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
+                          <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span></template>
                         </div>
                       </td>
                       <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
@@ -251,7 +274,13 @@
                             <span class="badge bg-gray-100 text-gray-600">{{ issue.issueType }}</span>
                             <span class="badge bg-gray-100 text-gray-600">{{ reviewTypeLabel(issue.reviewType) }}</span>
                             <span class="font-mono">
-                              {{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span>
+                              <a
+                                v-if="project?.vcsURL && issue.commitHash"
+                                :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
+                                target="_blank"
+                                class="text-blue-600 hover:text-blue-800 hover:underline"
+                              >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
+                              <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                             </span>
                           </div>
                           <p v-if="issue.description" class="text-sm text-gray-600 leading-relaxed">{{ issue.description }}</p>
@@ -297,19 +326,20 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
-import api, { type Review, type Issue, type IssueFilters } from '../api/factory'
+import api, { type Review, type Issue, type IssueFilters, type Project } from '../api/factory'
 import { RpcError } from '../api/client'
 import TrafficLight from '../components/TrafficLight.vue'
 import SeverityBadge from '../components/SeverityBadge.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
-import { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity } from '../utils/format'
+import { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity, buildVcsCommitURL, buildVcsFileURL, buildVcsMrURL } from '../utils/format'
 import { setProjectCrumb, setReviewCrumb } from '../utils/breadcrumbs'
 
 const props = defineProps<{ id: string }>()
 
 const reviewId = computed(() => parseInt(props.id, 10))
 const review = ref<Review | null>(null)
+const project = ref<Project | null>(null)
 const loading = ref(true)
 const error = ref('')
 
@@ -522,9 +552,10 @@ function onTabChange(index: number) {
 async function loadProjectCrumb(projectId: number, rv: { reviewId: number; title: string }) {
   try {
     const projects = await api.review.projects()
-    const project = projects.find(p => p.projectId === projectId)
-    if (project) {
-      setProjectCrumb(project.projectId, project.title)
+    const p = projects.find(p => p.projectId === projectId)
+    if (p) {
+      project.value = p
+      setProjectCrumb(p.projectId, p.title)
       // Re-set review crumb because setProjectCrumb clears it
       setReviewCrumb(rv.reviewId, rv.title)
     }
@@ -536,6 +567,7 @@ async function loadProjectCrumb(projectId: number, rv: { reviewId: number; title
 onMounted(async () => {
   try {
     review.value = await api.review.getByID(reviewId.value)
+    document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
     await loadIssues()
@@ -560,6 +592,7 @@ watch(() => props.id, async () => {
   error.value = ''
   try {
     review.value = await api.review.getByID(reviewId.value)
+    document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
     selectedTab.value = 0

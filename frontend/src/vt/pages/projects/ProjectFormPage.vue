@@ -18,7 +18,7 @@
       </FormField>
 
       <FormField label="VCS URL" :error="fieldError('vcsURL')">
-        <input v-model="entity.vcsURL" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://github.com/..." />
+        <input v-model="entity.vcsURL" @change="onVcsURLChange" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://github.com/..." />
       </FormField>
 
       <FormField label="Language" :error="fieldError('language')">
@@ -101,6 +101,17 @@ async function loadSlackChannels() {
 onMounted(() => {
   if (props.id) load(parseInt(props.id))
 })
+
+function onVcsURLChange() {
+  if (entity.title) return
+  try {
+    const path = new URL(entity.vcsURL).pathname.replace(/^\/|\.git$/g, '')
+    const parts = path.split('/')
+    if (parts.length >= 2) {
+      entity.title = parts.slice(-2).join('/')
+    }
+  } catch { /* ignore invalid URLs */ }
+}
 
 async function handleSave() {
   if (await save()) router.push('/projects')

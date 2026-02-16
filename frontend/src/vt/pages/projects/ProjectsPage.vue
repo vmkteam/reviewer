@@ -39,6 +39,14 @@
       <template #cell-title="{ item }">
         <span class="font-medium text-gray-900">{{ (item as ProjectSummary).title }}</span>
       </template>
+      <template #cell-projectKey="{ item }">
+        <button
+          @click.stop="copyKey((item as ProjectSummary).projectKey)"
+          class="font-mono text-xs px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+          :class="keyCopied === (item as ProjectSummary).projectKey ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-blue-100 hover:text-blue-700'"
+          title="Copy to clipboard"
+        >{{ keyCopied === (item as ProjectSummary).projectKey ? 'Copied!' : (item as ProjectSummary).projectKey }}</button>
+      </template>
       <template #cell-prompt="{ item }">
         {{ (item as ProjectSummary).prompt?.title ?? '—' }}
       </template>
@@ -165,6 +173,14 @@ const columns = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: '' },
 ]
+
+// Copy project key
+const keyCopied = ref('')
+function copyKey(key: string) {
+  navigator.clipboard.writeText(key)
+  keyCopied.value = key
+  setTimeout(() => { keyCopied.value = '' }, 2000)
+}
 
 // CI modal state
 const ciVisible = ref(false)

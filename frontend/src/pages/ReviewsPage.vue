@@ -170,9 +170,15 @@
                     <td class="px-4 py-3 text-sm text-gray-800 max-w-xs">
                       <span class="line-clamp-1">{{ issue.title }}</span>
                     </td>
-                    <td class="px-4 py-3 hidden md:table-cell">
+                    <td class="px-4 py-3 hidden md:table-cell" @click.stop>
                       <div class="text-xs font-mono text-gray-500">
-                        {{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span>
+                        <a
+                          v-if="project?.vcsURL && issue.commitHash"
+                          :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
+                          target="_blank"
+                          class="text-blue-600 hover:text-blue-800 hover:underline"
+                        >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
+                        <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span></template>
                       </div>
                     </td>
                     <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
@@ -210,7 +216,13 @@
                           <span class="badge bg-gray-100 text-gray-600">{{ issue.issueType }}</span>
                           <span class="badge bg-gray-100 text-gray-600">{{ issue.reviewType }}</span>
                           <span class="font-mono">
-                            {{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span>
+                            <a
+                              v-if="project?.vcsURL && issue.commitHash"
+                              :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
+                              target="_blank"
+                              class="text-blue-600 hover:text-blue-800 hover:underline"
+                            >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
+                            <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                           </span>
                         </div>
                         <p v-if="issue.description" class="text-sm text-gray-600 leading-relaxed">{{ issue.description }}</p>
@@ -264,6 +276,7 @@ import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SeverityBadge from '../components/SeverityBadge.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
 import { setProjectCrumb } from '../utils/breadcrumbs'
+import { buildVcsFileURL } from '../utils/format'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -327,7 +340,10 @@ async function loadInitial() {
       api.review.count(projectId, buildFilters()),
     ])
     project.value = projects.find(p => p.projectId === projectId) ?? null
-    if (project.value) setProjectCrumb(project.value.projectId, project.value.title)
+    if (project.value) {
+      setProjectCrumb(project.value.projectId, project.value.title)
+      document.title = `${project.value.title} — reviewer`
+    }
     reviews.value = items
     totalCount.value = count
     hasMore.value = items.length >= 50

@@ -198,6 +198,7 @@ type Issue struct {
 	Lines           string  `json:"lines"`
 	IssueType       string  `json:"issueType"`
 	ReviewType      string  `json:"reviewType"`
+	CommitHash      string  `json:"commitHash"`
 	IsFalsePositive *bool   `json:"isFalsePositive"`
 	Comment         *string `json:"comment"`
 }
@@ -207,7 +208,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 		return nil
 	}
 
-	return &Issue{
+	issue := &Issue{
 		ID:              in.ID,
 		Title:           in.Title,
 		Severity:        in.Severity,
@@ -220,6 +221,12 @@ func newIssue(in *reviewer.Issue) *Issue {
 		IsFalsePositive: in.IsFalsePositive,
 		Comment:         in.Comment,
 	}
+
+	if in.Review != nil {
+		issue.CommitHash = in.Review.CommitHash
+	}
+
+	return issue
 }
 
 // ReviewFilters — фильтры для списка ревью.

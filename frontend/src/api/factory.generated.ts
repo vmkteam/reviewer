@@ -11,6 +11,7 @@ export interface IIssue {
   lines: string,
   issueType: string,
   reviewType: string,
+  commitHash: string,
   isFalsePositive?: boolean,
   comment?: string
 }
