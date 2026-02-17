@@ -77,15 +77,16 @@ func newProject(in *reviewer.Project) *Project {
 
 // ReviewSummary — строка таблицы ревью для /reviews/project/<projectId>/.
 type ReviewSummary struct {
-	ID           int                 `json:"reviewId"`
-	Title        string              `json:"title"`
-	ExternalID   string              `json:"externalId"`
-	TrafficLight string              `json:"trafficLight"`
-	Author       string              `json:"author"`
-	SourceBranch string              `json:"sourceBranch"`
-	TargetBranch string              `json:"targetBranch"`
-	CreatedAt    time.Time           `json:"createdAt"`
-	ReviewFiles  []ReviewFileSummary `json:"reviewFiles"`
+	ID                  int                 `json:"reviewId"`
+	Title               string              `json:"title"`
+	ExternalID          string              `json:"externalId"`
+	TrafficLight        string              `json:"trafficLight"`
+	Author              string              `json:"author"`
+	SourceBranch        string              `json:"sourceBranch"`
+	TargetBranch        string              `json:"targetBranch"`
+	CreatedAt           time.Time           `json:"createdAt"`
+	ReviewFiles         []ReviewFileSummary `json:"reviewFiles"`
+	LastVersionReviewID *int                `json:"lastVersionReviewId,omitempty"`
 }
 
 // ReviewFileSummary — мини-кружок A/C/S/T в таблице ревью.
@@ -120,25 +121,28 @@ func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 		}
 	}
 
+	rs.LastVersionReviewID = in.LastVersionReviewID
+
 	return rs
 }
 
 // Review — полные данные ревью для /reviews/<reviewId>/.
 type Review struct {
-	ID           int          `json:"reviewId"`
-	ProjectID    int          `json:"projectId"`
-	Title        string       `json:"title"`
-	Description  string       `json:"description"`
-	ExternalID   string       `json:"externalId"`
-	TrafficLight string       `json:"trafficLight"`
-	CommitHash   string       `json:"commitHash"`
-	SourceBranch string       `json:"sourceBranch"`
-	TargetBranch string       `json:"targetBranch"`
-	Author       string       `json:"author"`
-	CreatedAt    time.Time    `json:"createdAt"`
-	DurationMS   int          `json:"durationMs"`
-	ModelInfo    ModelInfo    `json:"modelInfo"`
-	ReviewFiles  []ReviewFile `json:"reviewFiles"`
+	ID                  int          `json:"reviewId"`
+	ProjectID           int          `json:"projectId"`
+	Title               string       `json:"title"`
+	Description         string       `json:"description"`
+	ExternalID          string       `json:"externalId"`
+	TrafficLight        string       `json:"trafficLight"`
+	CommitHash          string       `json:"commitHash"`
+	SourceBranch        string       `json:"sourceBranch"`
+	TargetBranch        string       `json:"targetBranch"`
+	Author              string       `json:"author"`
+	CreatedAt           time.Time    `json:"createdAt"`
+	DurationMS          int          `json:"durationMs"`
+	ModelInfo           ModelInfo    `json:"modelInfo"`
+	ReviewFiles         []ReviewFile `json:"reviewFiles"`
+	LastVersionReviewID *int         `json:"lastVersionReviewId,omitempty"`
 }
 
 func newReview(in *reviewer.Review) *Review {
@@ -147,20 +151,21 @@ func newReview(in *reviewer.Review) *Review {
 	}
 
 	r := &Review{
-		ID:           in.ID,
-		ProjectID:    in.ProjectID,
-		Title:        in.Title,
-		Description:  in.Description,
-		ExternalID:   in.ExternalID,
-		TrafficLight: in.TrafficLight,
-		CommitHash:   in.CommitHash,
-		SourceBranch: in.SourceBranch,
-		TargetBranch: in.TargetBranch,
-		Author:       in.Author,
-		CreatedAt:    in.CreatedAt,
-		DurationMS:   in.DurationMS,
-		ModelInfo:    newModelInfo(in.ModelInfo),
-		ReviewFiles:  newReviewFiles(in.ReviewFiles),
+		ID:                  in.ID,
+		ProjectID:           in.ProjectID,
+		Title:               in.Title,
+		Description:         in.Description,
+		ExternalID:          in.ExternalID,
+		TrafficLight:        in.TrafficLight,
+		CommitHash:          in.CommitHash,
+		SourceBranch:        in.SourceBranch,
+		TargetBranch:        in.TargetBranch,
+		Author:              in.Author,
+		CreatedAt:           in.CreatedAt,
+		DurationMS:          in.DurationMS,
+		ModelInfo:           newModelInfo(in.ModelInfo),
+		ReviewFiles:         newReviewFiles(in.ReviewFiles),
+		LastVersionReviewID: in.LastVersionReviewID,
 	}
 
 	return r

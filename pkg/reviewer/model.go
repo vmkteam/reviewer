@@ -41,7 +41,8 @@ func IsValidSeverity(s string) bool {
 
 type Review struct {
 	db.Review
-	ReviewFiles ReviewFiles
+	ReviewFiles         ReviewFiles
+	LastVersionReviewID *int
 }
 
 // NewReview converts a db.Review to the domain model, returning nil for nil input.

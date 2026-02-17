@@ -31,7 +31,7 @@ var (
 	flVerbose          = fs.Bool("verbose", false, "enable debug output")
 	flJSONLogs         = fs.Bool("json", false, "enable json output")
 	flDev              = fs.Bool("dev", false, "enable dev mode")
-	flGenerateTSClient = fs.Bool("ts_client", false, "generate TypeScript vt rpc client and exit")
+	flGenerateTSClient = fs.String("ts_client", "", "generate TypeScript vt rpc client and exit")
 	cfg                app.Config
 )
 
@@ -77,11 +77,11 @@ func main() {
 	}
 
 	// create & run app
-	a := app.New(appName, sl, cfg, dbc, pgdb)
+	a := app.New(appName, version, sl, cfg, dbc, pgdb)
 
 	// generate TS client from cmd flags
-	if *flGenerateTSClient {
-		b, er := a.VTTypeScriptClient()
+	if *flGenerateTSClient != "" {
+		b, er := a.TypeScriptClient(*flGenerateTSClient)
 		exitOnError(er)
 		_, _ = fmt.Fprint(os.Stdout, string(b))
 		os.Exit(0)

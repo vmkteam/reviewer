@@ -32,6 +32,12 @@
               </span>
             </template>
           </nav>
+
+          <div class="ml-auto">
+            <a :href="githubUrl" target="_blank" class="text-xs text-gray-400 hover:text-gray-500 transition-colors">
+              {{ version }}
+            </a>
+          </div>
         </div>
       </div>
     </header>
@@ -43,7 +49,20 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useBreadcrumbs } from './composables/useBreadcrumbs'
+import api from './api/factory'
 
 const { breadcrumbs } = useBreadcrumbs()
+
+const githubUrl = 'https://github.com/vmkteam/reviewer'
+const version = ref('')
+
+onMounted(async () => {
+  try {
+    version.value = await api.app.version()
+  } catch {
+    // ignore
+  }
+})
 </script>

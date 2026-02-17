@@ -110,8 +110,8 @@ mfd-vt-template: --check-ns type-script-client
 	@mfd-generator template -m docs/model/$(NAME).mfd  -o ../gold-vt/ -n $(NS)
 
 type-script-client: generate
-	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client > ../gold-vt/src/services/api/factory.ts
-
+	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client=rpc > frontend/src/api/factory.generated.ts
+	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client=vt > frontend/src/api/vt.generated.ts
 
 --check-ns:
 ifeq ($(NS),"NONE")

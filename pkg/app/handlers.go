@@ -10,7 +10,6 @@ import (
 
 	"reviewsrv/frontend"
 	"reviewsrv/pkg/rest"
-	"reviewsrv/pkg/rpc"
 	"reviewsrv/pkg/slack"
 
 	"github.com/labstack/echo/v4"
@@ -104,10 +103,9 @@ func (a *App) registerDebugHandlers() {
 
 // registerAPIHandlers registers main rpc server.
 func (a *App) registerAPIHandlers() {
-	srv := rpc.New(a.db, a.Logger, a.cfg.Server.IsDevel)
-	gen := rpcgen.FromSMD(srv.SMD())
+	gen := rpcgen.FromSMD(a.srv.SMD())
 
-	a.echo.Any("/v1/rpc/", appkit.EchoHandler(appkit.XRequestID(srv)))
+	a.echo.Any("/v1/rpc/", appkit.EchoHandler(appkit.XRequestID(a.srv)))
 	a.echo.Any("/v1/rpc/doc/", appkit.EchoHandlerFunc(zenrpc.SMDBoxHandler))
 	a.echo.Any("/v1/rpc/openrpc.json", appkit.EchoHandlerFunc(rpcgen.Handler(gen.OpenRPC("reviewsrv", "http://localhost:8075/v1/rpc"))))
 	a.echo.Any("/v1/rpc/api.ts", appkit.EchoHandlerFunc(rpcgen.Handler(gen.TSClient(nil))))

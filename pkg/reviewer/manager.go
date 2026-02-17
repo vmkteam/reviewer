@@ -124,6 +124,56 @@ func (rm *ReviewManager) CreateReview(ctx context.Context, pr *Project, rv *Revi
 	return rv, err
 }
 
+type lastVersionResult struct {
+	ReviewID            int `pg:"reviewId"`
+	LastVersionReviewID int `pg:"lastVersionReviewId"`
+}
+
+// FillLastVersions fills LastVersionReviewID for reviews that have a newer version
+// with the same (projectId, externalId). Only reviews with non-empty externalId are checked.
+func (rm *ReviewManager) FillLastVersions(ctx context.Context, reviews Reviews) error {
+	if len(reviews) == 0 {
+		return nil
+	}
+
+	var results []lastVersionResult
+	_, err := rm.Conn().QueryContext(ctx, &results, `
+		WITH latest AS (
+			SELECT DISTINCT ON ("projectId", "externalId")
+				"projectId", "externalId", "reviewId" as "lastVersionReviewId"
+			FROM reviews
+			WHERE "statusId" = ?
+			AND "externalId" != ''
+			ORDER BY "projectId", "externalId", "reviewId" DESC
+		)
+		SELECT r."reviewId", l."lastVersionReviewId"
+		FROM reviews r
+		JOIN latest l ON l."projectId" = r."projectId" AND l."externalId" = r."externalId"
+		WHERE r."reviewId" IN (?)
+		AND r."externalId" != ''
+		AND l."lastVersionReviewId" != r."reviewId"
+	`, db.StatusEnabled, pg.In(reviews.IDs()))
+	if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	idx := make(map[int]int, len(reviews))
+	for i := range reviews {
+		idx[reviews[i].ID] = i
+	}
+	for _, r := range results {
+		if i, ok := idx[r.ReviewID]; ok {
+			id := r.LastVersionReviewID
+			reviews[i].LastVersionReviewID = &id
+		}
+	}
+	return nil
+}
+
 // ProjectsStats returns review count and last review info for all active projects in one query.
 func (rm *ReviewManager) ProjectsStats(ctx context.Context) (map[int]ProjectStats, error) {
 	var stats []ProjectStats
