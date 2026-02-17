@@ -2,10 +2,7 @@
   <div>
     <div class="flex items-center justify-between mb-6 gap-4">
       <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Slack Channels</h1>
-      <router-link
-        to="/slack-channels/new"
-        class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shrink-0"
-      >Add Slack Channel</router-link>
+      <VButton size="sm" to="/slack-channels/new">Add Slack Channel</VButton>
     </div>
 
     <SearchBar>
@@ -59,6 +56,7 @@ import SearchBar from '../../components/SearchBar.vue'
 import VInput from '../../components/VInput.vue'
 import VSelect from '../../components/VSelect.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
+import VButton from '../../components/VButton.vue'
 
 const router = useRouter()
 const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.slackchannel, 'slackChannelId')

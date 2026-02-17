@@ -8,7 +8,7 @@ import (
 type Project struct {
 	ID             int    `json:"id"`
 	Title          string `json:"title" validate:"required,max=255"`
-	VcsURL         string `json:"vcsURL" validate:"required,max=255"`
+	VcsURL         string `json:"vcsURL" validate:"required,http_url,max=255"`
 	Language       string `json:"language" validate:"required,max=32"`
 	ProjectKey     string `json:"projectKey"`
 	PromptID       int    `json:"promptId" validate:"required"`

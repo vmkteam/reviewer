@@ -3,14 +3,9 @@
     <div class="flex items-center justify-between mb-6 gap-4">
       <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Projects</h1>
       <div class="flex items-center gap-2">
-        <button
-          @click="openCI"
-          class="px-4 py-2 bg-white text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
-        >CI</button>
-        <router-link
-          to="/projects/new"
-          class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shrink-0"
-        >Add Project</router-link>
+        <VButton variant="secondary" @click="openCI">CI</VButton>
+        <VButton variant="secondary" to="/projects/bulk-add">Bulk Add</VButton>
+        <VButton size="sm" to="/projects/new">Add Project</VButton>
       </div>
     </div>
 
@@ -116,9 +111,7 @@
             <div class="overflow-auto rounded-lg border border-gray-200 bg-gray-50 flex-1">
               <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ ciYaml }}</code></pre>
             </div>
-            <button @click="copyToClipboard(ciYaml)" class="self-end px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              {{ ciCopied === 'review' ? 'Copied!' : 'Copy' }}
-            </button>
+            <VButton variant="secondary" size="sm" class="self-end" @click="copyToClipboard(ciYaml)">{{ ciCopied === 'review' ? 'Copied!' : 'Copy' }}</VButton>
           </div>
 
           <!-- Dockerfile tab -->
@@ -127,9 +120,7 @@
             <div class="overflow-auto rounded-lg border border-gray-200 bg-gray-50 flex-1">
               <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ dockerfile }}</code></pre>
             </div>
-            <button @click="copyToClipboard(dockerfile, 'dockerfile')" class="self-end px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              {{ ciCopied === 'dockerfile' ? 'Copied!' : 'Copy' }}
-            </button>
+            <VButton variant="secondary" size="sm" class="self-end" @click="copyToClipboard(dockerfile, 'dockerfile')">{{ ciCopied === 'dockerfile' ? 'Copied!' : 'Copy' }}</VButton>
           </div>
         </div>
       </div>
@@ -150,9 +141,7 @@
             <div class="overflow-auto rounded-lg border border-gray-200 bg-gray-50 flex-1">
               <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ localRunScript }}</code></pre>
             </div>
-            <button @click="copyLocalRun" class="self-end px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              {{ localRunCopied ? 'Copied!' : 'Copy' }}
-            </button>
+            <VButton variant="secondary" size="sm" class="self-end" @click="copyLocalRun">{{ localRunCopied ? 'Copied!' : 'Copy' }}</VButton>
           </div>
         </div>
       </div>
@@ -171,6 +160,7 @@ import SearchBar from '../../components/SearchBar.vue'
 import VInput from '../../components/VInput.vue'
 import VSelect from '../../components/VSelect.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
+import VButton from '../../components/VButton.vue'
 
 const router = useRouter()
 const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.project, 'projectId')
