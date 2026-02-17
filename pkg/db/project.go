@@ -26,7 +26,7 @@ func NewProjectRepo(db orm.DB) ProjectRepo {
 			Tables.TaskTracker.Name:  {StatusFilter},
 		},
 		sort: map[string][]SortField{
-			Tables.Project.Name:      {{Column: Columns.Project.CreatedAt, Direction: SortDesc}},
+			Tables.Project.Name:      {{Column: Columns.Project.Title, Direction: SortAsc}},
 			Tables.Prompt.Name:       {{Column: Columns.Prompt.CreatedAt, Direction: SortDesc}},
 			Tables.SlackChannel.Name: {{Column: Columns.SlackChannel.Title, Direction: SortAsc}},
 			Tables.TaskTracker.Name:  {{Column: Columns.TaskTracker.CreatedAt, Direction: SortDesc}},

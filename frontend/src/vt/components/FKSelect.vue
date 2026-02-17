@@ -4,6 +4,7 @@
     @update:model-value="$emit('update:modelValue', toValue($event))"
   >
     <option v-if="nullable" :value="undefined">-- None --</option>
+    <option v-else disabled :value="undefined">-- Select --</option>
     <option v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.title }}</option>
   </VSelect>
 </template>
