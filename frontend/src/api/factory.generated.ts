@@ -68,7 +68,8 @@ export interface IReview {
   createdAt: string,
   durationMs: number,
   modelInfo: IModelInfo,
-  reviewFiles: Array<IReviewFile>
+  reviewFiles: Array<IReviewFile>,
+  lastVersionReviewId?: number
 }
 
 export interface IReviewCountIssuesByProjectParams {
@@ -115,11 +116,6 @@ export interface IReviewGetByIDParams {
   reviewId: number
 }
 
-export interface IReviewSetCommentParams {
-  issueId: number,
-  comment?: string
-}
-
 export interface IReviewGetParams {
   projectId: number,
   filters?: IReviewFilters,
@@ -137,6 +133,11 @@ export interface IReviewIssuesParams {
   filters?: IIssueFilters
 }
 
+export interface IReviewSetCommentParams {
+  issueId: number,
+  comment?: string
+}
+
 export interface IReviewSummary {
   reviewId: number,
   title: string,
@@ -146,10 +147,209 @@ export interface IReviewSummary {
   sourceBranch: string,
   targetBranch: string,
   createdAt: string,
-  reviewFiles: Array<IReviewFileSummary>
+  reviewFiles: Array<IReviewFileSummary>,
+  lastVersionReviewId?: number
+}
+
+export class Issue implements IIssue {
+  static entityName = "issue";
+
+  issueId: number = 0;
+  title: string = null;
+  severity: string = null;
+  description: string = null;
+  content: string = null;
+  file: string = null;
+  lines: string = null;
+  issueType: string = null;
+  reviewType: string = null;
+  commitHash: string = null;
+  isFalsePositive?: boolean = false;
+  comment?: string = null;
+}
+
+export class IssueFilters implements IIssueFilters {
+  static entityName = "issuefilters";
+
+  severity?: string = null;
+  issueType?: string = null;
+  reviewType?: string = null;
+  isFalsePositive?: boolean = false;
+}
+
+export class IssueStats implements IIssueStats {
+  static entityName = "issuestats";
+
+  critical: number = 0;
+  high: number = 0;
+  medium: number = 0;
+  low: number = 0;
+  total: number = 0;
+}
+
+export class LastReview implements ILastReview {
+  static entityName = "lastreview";
+
+  createdAt: string = null;
+  author: string = null;
+  trafficLight: string = null;
+}
+
+export class ModelInfo implements IModelInfo {
+  static entityName = "modelinfo";
+
+  model: string = null;
+  inputTokens: number = 0;
+  outputTokens: number = 0;
+  costUsd: number = 0;
+}
+
+export class Project implements IProject {
+  static entityName = "project";
+
+  projectId: number = 0;
+  title: string = null;
+  vcsURL: string = null;
+  language: string = null;
+  createdAt: string = null;
+  reviewCount: number = 0;
+  lastReview?: ILastReview = null;
+}
+
+export class Review implements IReview {
+  static entityName = "review";
+
+  reviewId: number = 0;
+  projectId: number = 0;
+  title: string = null;
+  description: string = null;
+  externalId: string = null;
+  trafficLight: string = null;
+  commitHash: string = null;
+  sourceBranch: string = null;
+  targetBranch: string = null;
+  author: string = null;
+  createdAt: string = null;
+  durationMs: number = 0;
+  modelInfo: IModelInfo = null;
+  reviewFiles: Array<IReviewFile> = null;
+  lastVersionReviewId?: number = 0;
+}
+
+export class ReviewCountIssuesByProjectParams implements IReviewCountIssuesByProjectParams {
+  static entityName = "reviewcountissuesbyprojectparams";
+
+  projectId: number = 0;
+  filters?: IIssueFilters = null;
+}
+
+export class ReviewCountIssuesParams implements IReviewCountIssuesParams {
+  static entityName = "reviewcountissuesparams";
+
+  reviewId: number = 0;
+  filters?: IIssueFilters = null;
+}
+
+export class ReviewCountParams implements IReviewCountParams {
+  static entityName = "reviewcountparams";
+
+  projectId: number = 0;
+  filters?: IReviewFilters = null;
+}
+
+export class ReviewFeedbackParams implements IReviewFeedbackParams {
+  static entityName = "reviewfeedbackparams";
+
+  issueId: number = 0;
+  isFalsePositive?: boolean = false;
+}
+
+export class ReviewFile implements IReviewFile {
+  static entityName = "reviewfile";
+
+  reviewFileId: number = 0;
+  reviewType: string = null;
+  trafficLight: string = null;
+  summary: string = null;
+  issueStats: IIssueStats = null;
+  content: string = null;
+}
+
+export class ReviewFileSummary implements IReviewFileSummary {
+  static entityName = "reviewfile";
+
+  reviewType: string = null;
+  trafficLight: string = null;
+  issueStats: IIssueStats = null;
+}
+
+export class ReviewFilters implements IReviewFilters {
+  static entityName = "reviewfilters";
+
+  author?: string = null;
+  trafficLight?: string = null;
+}
+
+export class ReviewGetByIDParams implements IReviewGetByIDParams {
+  static entityName = "reviewgetbyidparams";
+
+  reviewId: number = 0;
+}
+
+export class ReviewGetParams implements IReviewGetParams {
+  static entityName = "reviewgetparams";
+
+  projectId: number = 0;
+  filters?: IReviewFilters = null;
+  fromReviewId?: number = 0;
+}
+
+export class ReviewIssuesByProjectParams implements IReviewIssuesByProjectParams {
+  static entityName = "reviewissuesbyprojectparams";
+
+  projectId: number = 0;
+  filters?: IIssueFilters = null;
+  fromIssueId?: number = 0;
+}
+
+export class ReviewIssuesParams implements IReviewIssuesParams {
+  static entityName = "reviewissuesparams";
+
+  reviewId: number = 0;
+  filters?: IIssueFilters = null;
+}
+
+export class ReviewSetCommentParams implements IReviewSetCommentParams {
+  static entityName = "reviewsetcommentparams";
+
+  issueId: number = 0;
+  comment?: string = null;
+}
+
+export class ReviewSummary implements IReviewSummary {
+  static entityName = "review";
+
+  reviewId: number = 0;
+  title: string = null;
+  externalId: string = null;
+  trafficLight: string = null;
+  author: string = null;
+  sourceBranch: string = null;
+  targetBranch: string = null;
+  createdAt: string = null;
+  reviewFiles: Array<IReviewFileSummary> = null;
+  lastVersionReviewId?: number = 0;
 }
 
 export const factory = (send: any) => ({
+  app: {
+    /**
+     * Version returns application version.
+     */
+    version(): Promise<string> {
+      return send('app.Version')
+    }
+  },
   review: {
     /**
      * Count returns count of reviews for a project.

@@ -11,8 +11,12 @@ import (
 )
 
 var RPC = struct {
+	AppService    struct{ Version string }
 	ReviewService struct{ Projects, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }
 }{
+	AppService: struct{ Version string }{
+		Version: "version",
+	},
 	ReviewService: struct{ Projects, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }{
 		Projects:             "projects",
 		Get:                  "get",
@@ -25,6 +29,36 @@ var RPC = struct {
 		Feedback:             "feedback",
 		SetComment:           "setcomment",
 	},
+}
+
+func (AppService) SMD() smd.ServiceInfo {
+	return smd.ServiceInfo{
+		Methods: map[string]smd.Service{
+			"Version": {
+				Description: `Version returns application version.`,
+				Parameters:  []smd.JSONSchema{},
+				Returns: smd.JSONSchema{
+					Description: `string`,
+					Type:        smd.String,
+				},
+			},
+		},
+	}
+}
+
+// Invoke is as generated code from zenrpc cmd
+func (s AppService) Invoke(ctx context.Context, method string, params json.RawMessage) zenrpc.Response {
+	resp := zenrpc.Response{}
+
+	switch method {
+	case RPC.AppService.Version:
+		resp.Set(s.Version())
+
+	default:
+		resp = zenrpc.NewResponseError(nil, zenrpc.MethodNotFound, "", nil)
+	}
+
+	return resp
 }
 
 func (ReviewService) SMD() smd.ServiceInfo {
@@ -180,6 +214,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Items: map[string]string{
 										"$ref": "#/definitions/ReviewFileSummary",
 									},
+								},
+								{
+									Name:     "lastVersionReviewId",
+									Optional: true,
+									Type:     smd.Integer,
 								},
 							},
 						},
@@ -344,6 +383,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 							Items: map[string]string{
 								"$ref": "#/definitions/ReviewFile",
 							},
+						},
+						{
+							Name:     "lastVersionReviewId",
+							Optional: true,
+							Type:     smd.Integer,
 						},
 					},
 					Definitions: map[string]smd.Definition{
@@ -516,6 +560,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "commitHash",
+									Type: smd.String,
+								},
+								{
 									Name:     "isFalsePositive",
 									Optional: true,
 									Type:     smd.Boolean,
@@ -668,6 +716,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "reviewType",
+									Type: smd.String,
+								},
+								{
+									Name: "commitHash",
 									Type: smd.String,
 								},
 								{

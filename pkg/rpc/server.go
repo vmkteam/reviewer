@@ -26,7 +26,7 @@ var allowDebugFn = func() zm.AllowDebugFunc {
 //go:generate go tool zenrpc
 
 // New returns new zenrpc Server.
-func New(dbo db.DB, logger embedlog.Logger, isDevel bool) *zenrpc.Server {
+func New(dbo db.DB, logger embedlog.Logger, isDevel bool, version string) *zenrpc.Server {
 	rpc := zenrpc.NewServer(zenrpc.Options{
 		ExposeSMD: true,
 		AllowCORS: true,
@@ -50,6 +50,7 @@ func New(dbo db.DB, logger embedlog.Logger, isDevel bool) *zenrpc.Server {
 	// services
 	rpc.RegisterAll(map[string]zenrpc.Invoker{
 		"review": NewReviewService(dbo),
+		"app":    NewAppService(version),
 	})
 
 	return rpc

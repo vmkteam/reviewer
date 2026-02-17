@@ -98,8 +98,19 @@
                     <TrafficLight :color="r.trafficLight" />
                   </td>
                   <td class="px-4 py-3.5">
-                    <div class="text-sm font-medium text-gray-900">{{ r.title }}</div>
-                    <div class="text-xs text-gray-300 mt-0.5">{{ r.externalId }}</div>
+                    <div class="text-sm font-medium" :class="r.lastVersionReviewId ? 'text-gray-400' : 'text-gray-900'">{{ r.title }}</div>
+                    <div class="text-xs text-gray-300 mt-0.5">
+                      {{ r.externalId }}
+                      <router-link
+                        v-if="r.lastVersionReviewId"
+                        :to="{ name: 'review', params: { id: r.lastVersionReviewId } }"
+                        class="ml-1 text-amber-500 hover:text-amber-700"
+                        @click.stop
+                        title="Go to latest version"
+                      >
+                        <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                      </router-link>
+                    </div>
                   </td>
                   <td class="px-4 py-3.5 text-sm text-gray-600">{{ r.author }}</td>
                   <td class="px-4 py-3.5 hidden lg:table-cell">

@@ -92,6 +92,10 @@ func (s ReviewService) Get(ctx context.Context, projectId int, filters *ReviewFi
 		return nil, newInternalError(err)
 	}
 
+	if err := s.rm.FillLastVersions(ctx, reviews); err != nil {
+		return nil, newInternalError(err)
+	}
+
 	return newReviewSummaries(reviews), nil
 }
 
@@ -130,7 +134,12 @@ func (s ReviewService) GetByID(ctx context.Context, reviewId int) (*Review, erro
 		return nil, ErrNotFound
 	}
 
-	return newReview(rv), nil
+	reviews := reviewer.Reviews{*rv}
+	if err := s.rm.FillLastVersions(ctx, reviews); err != nil {
+		return nil, newInternalError(err)
+	}
+
+	return newReview(&reviews[0]), nil
 }
 
 // Issues returns list of issues for a review.

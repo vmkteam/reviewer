@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/rpc"
 	"reviewsrv/pkg/vt"
 
 	"github.com/go-pg/pg/v10"
@@ -35,17 +36,20 @@ type Config struct {
 type App struct {
 	embedlog.Logger
 	appName string
+	version string
 	cfg     Config
 	db      db.DB
 	dbc     *pg.DB
 	mon     *monitor.Monitor
 	echo    *echo.Echo
 	vtsrv   *zenrpc.Server
+	srv     *zenrpc.Server
 }
 
-func New(appName string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *App {
+func New(appName, version string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *App {
 	a := &App{
 		appName: appName,
+		version: version,
 		cfg:     cfg,
 		db:      db,
 		dbc:     dbc,
@@ -55,6 +59,7 @@ func New(appName string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *
 
 	// add services
 	a.vtsrv = vt.New(a.db, a.Logger, a.cfg.Server.IsDevel, a.cfg.Server.BaseURL)
+	a.srv = rpc.New(a.db, a.Logger, a.cfg.Server.IsDevel, a.version)
 
 	return a
 }
@@ -77,9 +82,13 @@ func (a *App) Run(ctx context.Context) error {
 	return a.runHTTPServer(ctx, a.cfg.Server.Host, a.cfg.Server.Port)
 }
 
-// VTTypeScriptClient returns TypeScript client for VT.
-func (a *App) VTTypeScriptClient() ([]byte, error) {
-	gen := rpcgen.FromSMD(a.vtsrv.SMD())
+// TypeScriptClient returns TypeScript client for VT or RPC.
+func (a *App) TypeScriptClient(client string) ([]byte, error) {
+	gen := rpcgen.FromSMD(a.srv.SMD())
+	if client == "vt" {
+		gen = rpcgen.FromSMD(a.vtsrv.SMD())
+	}
+
 	tsSettings := typescript.Settings{ExcludedNamespace: []string{}, WithClasses: true}
 	return gen.TSCustomClient(tsSettings).Generate()
 }

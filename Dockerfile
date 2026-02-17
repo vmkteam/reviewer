@@ -8,6 +8,7 @@ RUN npm run build:all
 
 # Build backend
 FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git
 COPY . /build
 COPY --from=frontend /frontend/dist /build/frontend/dist
 COPY --from=frontend /frontend/dist-vt /build/frontend/dist-vt
