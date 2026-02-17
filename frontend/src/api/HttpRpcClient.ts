@@ -32,7 +32,6 @@ interface PayloadLog {
 }
 
 export interface ResponsePayloadLog extends PayloadLog {
-  token?: string
   headers?: Record<string, string>
 }
 
@@ -64,7 +63,6 @@ const isValidRpcResponse = (obj: any): obj is IRpcResponse => {
     if (typeof obj.error !== 'object' || obj.error === null) {
       return false
     }
-    // Note: Not checking code/message/data fields because they can be missing by server
   }
 
   return true
@@ -74,10 +72,7 @@ export default class HttpRpcClient {
   url: string
   batching: boolean
   ofetch: $Fetch
-  refreshPromise: Promise<any> | null = null
-  refreshedAt: Date | null = null
-  refreshToken: ((data: { headers: Record<string, string>, body: IRpcRequest | IRpcRequest[] }) => Promise<any>) | undefined
-  token: { value: string | undefined } | undefined
+  onUnauthorized: (() => void) | undefined
   user?: string
   password?: string
   allHeaders: Record<string, string>
@@ -101,10 +96,6 @@ export default class HttpRpcClient {
 
     if (this.user) {
       result.Authorization = 'Basic ' + btoa(`${this.user}:${this.password}`)
-    }
-
-    if (this.token?.value) {
-      result['Authorization2'] = this.token.value
     }
 
     return result
@@ -158,10 +149,6 @@ export default class HttpRpcClient {
   }
 
   async batch<T extends readonly unknown[] | []>(queue: () => T): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> | null; }> {
-    if (this.refreshPromise) {
-      await this.refreshPromise
-    }
-
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
       try {
@@ -200,7 +187,7 @@ export default class HttpRpcClient {
           return resultDict[id][0].result
         })
 
-        resolve(result as any) // { -readonly [P in keyof T]: Awaited<T[P]> | null; }
+        resolve(result as any)
 
         const batchId = filteredBatch.map(({ id }) => id).join('-')
 
@@ -215,7 +202,7 @@ export default class HttpRpcClient {
             method: rpcRequest.method,
             params: rpcRequest.params,
             startTime,
-            duration: index === 0 ? duration : 0, // Only first value get duration in batch
+            duration: index === 0 ? duration : 0,
             batch: batchId,
             rpcResponse,
           })
@@ -226,17 +213,9 @@ export default class HttpRpcClient {
     })
   }
 
-  async fetch(body: IRpcRequest | IRpcRequest[], refreshed = false): Promise<IRpcResponse | IRpcResponse[]> {
+  async fetch(body: IRpcRequest | IRpcRequest[]): Promise<IRpcResponse | IRpcResponse[]> {
     const isArray = Array.isArray(body)
     this.#logToConsole('fetch', isArray ? 'batch' : body.method)
-
-    if (this.refreshPromise) {
-      try {
-        await this.refreshPromise
-      } catch (err) {
-        this.#logToConsole('failed by refresh token operation', err)
-      }
-    }
 
     const queryParams = isArray
       ? { methods: body.map(request => request.method).join(',') }
@@ -338,11 +317,8 @@ export default class HttpRpcClient {
         ? (response as IRpcResponse[]).some(r => r?.error?.code === 401)
         : (response as IRpcResponse).error?.code === 401
 
-      if (has401Error && this.refreshToken && this.token?.value && !refreshed) {
-        return this.#tryRefreshToken({
-          headers: this.headers,
-          body: body,
-        })
+      if (has401Error && this.onUnauthorized) {
+        this.onUnauthorized()
       }
 
       return response as IRpcResponse | IRpcResponse[]
@@ -357,40 +333,6 @@ export default class HttpRpcClient {
 
   onResponse = (_payload: ResponsePayloadLog) => {}
 
-  #tryRefreshToken = (data: { headers: Record<string, string>, body: IRpcRequest | IRpcRequest[] }): Promise<IRpcResponse | IRpcResponse[]> => {
-    const method = Array.isArray(data.body) ? 'batch' : data.body.method
-    if (this.refreshPromise) {
-      this.#logToConsole('wait refresh', method)
-      return this.refreshPromise.then(() => this.fetch(data.body, true))
-    } else {
-      this.#logToConsole('refresh', method)
-      this.refreshPromise = new Promise((resolve, reject) => {
-        this.refreshToken!(data)
-          .then((token) => {
-            if (this.token?.value) {
-              this.token.value = token
-            }
-
-            if (!token && this.isClient) {
-              window.location.reload()
-            }
-            this.refreshPromise = null
-            this.refreshedAt = new Date()
-          })
-          .then(() => this.fetch(data.body, true))
-          .then(resolve)
-          .catch((err) => {
-            this.#logToConsole('failed', method)
-            this.refreshPromise = null
-            this.refreshedAt = null
-            reject(err)
-          })
-      })
-
-      return this.refreshPromise
-    }
-  }
-
   #logToConsole = (message?: string, ...optionalParams: unknown[]) => {
     console.log(message, ...optionalParams)
   }
@@ -402,7 +344,6 @@ export default class HttpRpcClient {
 
     this.onResponse({
       ...payload,
-      token: this.headers.Authorization2,
       headers: this.headers,
     })
   }

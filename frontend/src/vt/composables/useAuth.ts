@@ -11,7 +11,6 @@ export function useAuth() {
     const authKey = await vtApi.auth.login({ login, password, remember })
     setAuthKey(authKey)
     client.setHeader('Authorization2', authKey)
-    client.token = { value: authKey }
     isAuthenticated.value = true
     await loadProfile()
   }
@@ -22,7 +21,6 @@ export function useAuth() {
     } finally {
       setAuthKey(null)
       client.setHeader('Authorization2', '')
-      client.token = { value: undefined }
       user.value = null
       isAuthenticated.value = false
     }

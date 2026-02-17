@@ -19,13 +19,9 @@ if (authKey) {
 }
 
 // Handle 401: reset token, redirect to login
-client.refreshToken = async () => {
+client.onUnauthorized = () => {
   setAuthKey(null)
   window.location.href = '/vt/login'
-  throw new Error('Unauthorized')
 }
-
-// Token object for refresh logic
-client.token = { value: getAuthKey() ?? undefined }
 
 export default factory(client.call)
