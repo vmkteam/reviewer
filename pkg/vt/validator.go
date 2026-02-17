@@ -38,6 +38,7 @@ var errorMap = map[string]string{
 	"len":           FieldErrorLen,
 	CustomStatusTag: FieldErrorIncorrect,
 	CustomAliasTag:  FieldErrorFormat,
+	"http_url":      FieldErrorFormat,
 }
 
 var validate = newPlaygroundValidator()
