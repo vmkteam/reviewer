@@ -173,17 +173,17 @@ import VSelect from '../../components/VSelect.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 
 const router = useRouter()
-const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.project)
+const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.project, 'projectId')
 
 const columns = [
-  { key: 'id', label: 'ID', sortable: true },
+  { key: 'id', label: 'ID', sortable: true, sortKey: 'projectId' },
   { key: 'title', label: 'Title', sortable: true },
   { key: 'language', label: 'Language', sortable: true },
   { key: 'projectKey', label: 'Key', sortable: true },
   { key: 'prompt', label: 'Prompt' },
   { key: 'taskTracker', label: 'Task Tracker' },
   { key: 'slackChannel', label: 'Slack Channel' },
-  { key: 'status', label: 'Status', sortable: true },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'statusId' },
   { key: 'actions', label: '' },
 ]
 

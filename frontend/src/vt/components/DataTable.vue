@@ -9,11 +9,11 @@
               :key="col.key"
               class="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               :class="{ 'cursor-pointer hover:text-gray-700 select-none': col.sortable }"
-              @click="col.sortable && $emit('sort', col.key)"
+              @click="col.sortable && $emit('sort', col.sortKey ?? col.key)"
             >
               <div class="flex items-center gap-1">
                 {{ col.label }}
-                <template v-if="col.sortable && sortColumn === col.key">
+                <template v-if="col.sortable && sortColumn === (col.sortKey ?? col.key)">
                   <span class="text-blue-600">{{ sortDesc ? '▼' : '▲' }}</span>
                 </template>
               </div>
@@ -53,6 +53,7 @@ export interface Column {
   key: string
   label: string
   sortable?: boolean
+  sortKey?: string
 }
 
 defineProps<{

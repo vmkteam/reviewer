@@ -81,7 +81,7 @@ const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
-  id: 0, title: '', vcsURL: '', language: '', promptId: 0, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1,
+  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1,
 }))
 
 async function loadPrompts() {

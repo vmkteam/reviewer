@@ -57,12 +57,12 @@ import VSelect from '../../components/VSelect.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 
 const router = useRouter()
-const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.prompt)
+const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.prompt, 'promptId')
 
 const columns = [
-  { key: 'id', label: 'ID', sortable: true },
+  { key: 'id', label: 'ID', sortable: true, sortKey: 'promptId' },
   { key: 'title', label: 'Title', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'statusId' },
 ]
 
 onMounted(load)

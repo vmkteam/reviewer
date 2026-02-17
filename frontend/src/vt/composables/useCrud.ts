@@ -6,7 +6,7 @@ interface CrudApi<T, S> {
   get: (params: { search?: S, viewOps?: ViewOps }) => Promise<T[]>
 }
 
-export function useCrud<T, S>(api: CrudApi<T, S>) {
+export function useCrud<T, S>(api: CrudApi<T, S>, defaultSortColumn = 'id') {
   const items: Ref<T[]> = shallowRef([])
   const total = ref(0)
   const loading = ref(false)
@@ -15,7 +15,7 @@ export function useCrud<T, S>(api: CrudApi<T, S>) {
   const viewOps = reactive<ViewOps>({
     page: 1,
     pageSize: 25,
-    sortColumn: 'id',
+    sortColumn: defaultSortColumn,
     sortDesc: true,
   })
 
