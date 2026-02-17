@@ -3,7 +3,9 @@
 </template>
 
 <script setup lang="ts">
-import { timeAgo, formatDateTime } from '../utils/format'
+import { useFormat } from '../composables/useFormat'
+
+const { timeAgo, formatDateTime } = useFormat()
 
 defineProps<{ date: string }>()
 </script>

@@ -15,7 +15,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ReviewFileSummary } from '../api/factory'
-import { reviewTypeLabel, reviewTypeFullName } from '../utils/format'
+import { useFormat } from '../composables/useFormat'
+
+const { reviewTypeLabel, reviewTypeFullName } = useFormat()
 
 const props = defineProps<{ reviewFiles: ReviewFileSummary[] }>()
 

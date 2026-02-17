@@ -43,5 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { breadcrumbs } from './utils/breadcrumbs'
+import { useBreadcrumbs } from './composables/useBreadcrumbs'
+
+const { breadcrumbs } = useBreadcrumbs()
 </script>

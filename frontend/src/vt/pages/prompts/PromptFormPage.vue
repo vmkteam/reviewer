@@ -15,27 +15,27 @@
       <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
 
       <FormField label="Title" :error="fieldError('title')">
-        <input v-model="entity.title" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <VInput v-model="entity.title" type="text" />
       </FormField>
 
       <FormField label="Common" :error="fieldError('common')">
-        <textarea v-model="entity.common" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <VTextarea v-model="entity.common" :rows="4" />
       </FormField>
 
       <FormField label="Architecture" :error="fieldError('architecture')">
-        <textarea v-model="entity.architecture" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <VTextarea v-model="entity.architecture" :rows="4" />
       </FormField>
 
       <FormField label="Code" :error="fieldError('code')">
-        <textarea v-model="entity.code" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <VTextarea v-model="entity.code" :rows="4" />
       </FormField>
 
       <FormField label="Security" :error="fieldError('security')">
-        <textarea v-model="entity.security" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <VTextarea v-model="entity.security" :rows="4" />
       </FormField>
 
       <FormField label="Tests" :error="fieldError('tests')">
-        <textarea v-model="entity.tests" rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <VTextarea v-model="entity.tests" :rows="4" />
       </FormField>
 
       <FormField label="Status" :error="fieldError('statusId')">
@@ -68,6 +68,8 @@ import vtApi, { type Prompt } from '../../../api/vt'
 import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
+import VInput from '../../components/VInput.vue'
+import VTextarea from '../../components/VTextarea.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const props = defineProps<{ id?: string }>()
@@ -75,7 +77,7 @@ const router = useRouter()
 const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
-const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Prompt>(vtApi.prompt, () => ({
+const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Prompt>(vtApi.prompt, 'prompt', () => ({
   id: 0, title: '', common: '', architecture: '', code: '', security: '', tests: '', statusId: 1,
 }))
 

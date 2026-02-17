@@ -14,19 +14,19 @@
       <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
 
       <FormField label="Title" :error="fieldError('title')">
-        <input v-model="entity.title" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <VInput v-model="entity.title" type="text" />
       </FormField>
 
       <FormField label="VCS URL" :error="fieldError('vcsURL')">
-        <input v-model="entity.vcsURL" @change="onVcsURLChange" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://github.com/..." />
+        <VInput v-model="entity.vcsURL" @change="onVcsURLChange" type="text" placeholder="https://github.com/..." />
       </FormField>
 
       <FormField label="Language" :error="fieldError('language')">
-        <input v-model="entity.language" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Go, TypeScript, etc." />
+        <VInput v-model="entity.language" type="text" placeholder="Go, TypeScript, etc." />
       </FormField>
 
       <FormField v-if="isEdit" label="Project Key">
-        <input :value="entity.projectKey" type="text" readonly class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500" />
+        <VInput :model-value="entity.projectKey" type="text" readonly class="border-gray-200 bg-gray-50 text-gray-500" />
       </FormField>
 
       <FormField label="Prompt" :error="fieldError('promptId')">
@@ -72,6 +72,7 @@ import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import FKSelect from '../../components/FKSelect.vue'
+import VInput from '../../components/VInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const props = defineProps<{ id?: string }>()
@@ -79,22 +80,22 @@ const router = useRouter()
 const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
-const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, () => ({
+const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
   id: 0, title: '', vcsURL: '', language: '', promptId: 0, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1,
 }))
 
 async function loadPrompts() {
-  const list = await vtApi.prompt.get(undefined, { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false })
+  const list = await vtApi.prompt.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
   return (list ?? []).map(p => ({ id: p.id, title: p.title }))
 }
 
 async function loadTaskTrackers() {
-  const list = await vtApi.taskTracker.get(undefined, { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false })
+  const list = await vtApi.tasktracker.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
   return (list ?? []).map(t => ({ id: t.id, title: t.title }))
 }
 
 async function loadSlackChannels() {
-  const list = await vtApi.slackChannel.get(undefined, { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false })
+  const list = await vtApi.slackchannel.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
   return (list ?? []).map(s => ({ id: s.id, title: s.title }))
 }
 

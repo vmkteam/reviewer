@@ -2,8 +2,8 @@ import { ref, reactive, type Ref, shallowRef } from 'vue'
 import type { ViewOps } from '../../api/vt'
 
 interface CrudApi<T, S> {
-  count: (search?: S) => Promise<number>
-  get: (search?: S, viewOps?: ViewOps) => Promise<T[]>
+  count: (params: { search?: S }) => Promise<number>
+  get: (params: { search?: S, viewOps?: ViewOps }) => Promise<T[]>
 }
 
 export function useCrud<T, S>(api: CrudApi<T, S>) {
@@ -31,8 +31,8 @@ export function useCrud<T, S>(api: CrudApi<T, S>) {
       const hasSearch = Object.keys(searchParams as Record<string, unknown>).length > 0
 
       const [count, list] = await Promise.all([
-        api.count(hasSearch ? searchParams : undefined),
-        api.get(hasSearch ? searchParams : undefined, { ...viewOps }),
+        api.count({ search: hasSearch ? searchParams : undefined }),
+        api.get({ search: hasSearch ? searchParams : undefined, viewOps: { ...viewOps } }),
       ])
       total.value = count
       items.value = list ?? []

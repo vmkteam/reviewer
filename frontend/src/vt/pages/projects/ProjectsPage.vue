@@ -2,28 +2,34 @@
   <div>
     <div class="flex items-center justify-between mb-6 gap-4">
       <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Projects</h1>
-      <router-link
-        to="/projects/new"
-        class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shrink-0"
-      >Add Project</router-link>
+      <div class="flex items-center gap-2">
+        <button
+          @click="openCI"
+          class="px-4 py-2 bg-white text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
+        >CI</button>
+        <router-link
+          to="/projects/new"
+          class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shrink-0"
+        >Add Project</router-link>
+      </div>
     </div>
 
     <SearchBar>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
-        <input v-model="search.title" @input="applySearch" type="text" placeholder="Search..." class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <VInput v-model="search.title" @input="applySearch" type="text" placeholder="Search..." />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Language</label>
-        <input v-model="search.language" @input="applySearch" type="text" placeholder="Go, JS..." class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <VInput v-model="search.language" @input="applySearch" type="text" placeholder="Go, JS..." />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-        <select v-model="search.statusId" @change="applySearch" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <VSelect v-model="search.statusId" @change="applySearch">
           <option :value="undefined">All</option>
           <option :value="1">Enabled</option>
           <option :value="2">Disabled</option>
-        </select>
+        </VSelect>
       </div>
     </SearchBar>
 
@@ -57,28 +63,25 @@
         {{ (item as ProjectSummary).slackChannel?.title ?? '—' }}
       </template>
       <template #cell-status="{ item }">
-        <span
-          class="badge"
-          :class="(item as ProjectSummary).status?.id === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
-        >{{ (item as ProjectSummary).status?.id === 1 ? 'Enabled' : 'Disabled' }}</span>
+        <StatusBadge :status-id="(item as ProjectSummary).status?.id" />
       </template>
       <template #cell-actions="{ item }">
         <button
-          @click.stop="openCI(item as ProjectSummary)"
+          @click.stop="openLocalRun(item as ProjectSummary)"
           class="px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
-        >CI</button>
+        >Run</button>
       </template>
     </DataTable>
 
     <Pagination :page="viewOps.page" :page-size="viewOps.pageSize" :total="total" @update:page="setPage" />
 
-    <!-- CI Modal -->
+    <!-- CI Setup Modal (general) -->
     <Teleport to="body">
       <div v-if="ciVisible" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="fixed inset-0 bg-black/40" @click="ciVisible = false"></div>
         <div class="relative bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 p-4 sm:p-6 max-h-[85vh] sm:max-h-[90vh] flex flex-col">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">GitLab CI — {{ ciProject?.title }}</h3>
+            <h3 class="text-lg font-semibold text-gray-900">CI Setup</h3>
             <button @click="ciVisible = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
           </div>
 
@@ -94,11 +97,6 @@
               class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
               :class="ciTab === 'dockerfile' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
             >Dockerfile</button>
-            <button
-              @click="ciTab = 'localrun'"
-              class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
-              :class="ciTab === 'localrun' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
-            >Local Run</button>
           </div>
 
           <!-- Review tab -->
@@ -133,15 +131,27 @@
               {{ ciCopied === 'dockerfile' ? 'Copied!' : 'Copy' }}
             </button>
           </div>
+        </div>
+      </div>
+    </Teleport>
 
-          <!-- Local Run tab -->
-          <div v-if="ciTab === 'localrun'" class="flex flex-col gap-3 overflow-hidden">
+    <!-- Local Run Modal (per-project) -->
+    <Teleport to="body">
+      <div v-if="localRunVisible" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="fixed inset-0 bg-black/40" @click="localRunVisible = false"></div>
+        <div class="relative bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 p-4 sm:p-6 max-h-[85vh] sm:max-h-[90vh] flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Local Run — {{ localRunProject?.title }}</h3>
+            <button @click="localRunVisible = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          </div>
+
+          <div class="flex flex-col gap-3 overflow-hidden">
             <div class="text-xs text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded self-start">bash</div>
             <div class="overflow-auto rounded-lg border border-gray-200 bg-gray-50 flex-1">
               <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ localRunScript }}</code></pre>
             </div>
-            <button @click="copyToClipboard(localRunScript, 'localrun')" class="self-end px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              {{ ciCopied === 'localrun' ? 'Copied!' : 'Copy' }}
+            <button @click="copyLocalRun" class="self-end px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              {{ localRunCopied ? 'Copied!' : 'Copy' }}
             </button>
           </div>
         </div>
@@ -158,6 +168,9 @@ import { useCrud } from '../../composables/useCrud'
 import DataTable from '../../components/DataTable.vue'
 import Pagination from '../../components/Pagination.vue'
 import SearchBar from '../../components/SearchBar.vue'
+import VInput from '../../components/VInput.vue'
+import VSelect from '../../components/VSelect.vue'
+import StatusBadge from '../../components/StatusBadge.vue'
 
 const router = useRouter()
 const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.project)
@@ -182,13 +195,17 @@ function copyKey(key: string) {
   setTimeout(() => { keyCopied.value = '' }, 2000)
 }
 
-// CI modal state
+// CI modal state (general)
 const ciVisible = ref(false)
-const ciTab = ref<'review' | 'dockerfile' | 'localrun'>('review')
+const ciTab = ref<'review' | 'dockerfile'>('review')
 const ciYaml = ref('')
 const ciTargetBranch = ref('devel')
-const ciProject = ref<ProjectSummary | null>(null)
 const ciCopied = ref('')
+
+// Local Run modal state (per-project)
+const localRunVisible = ref(false)
+const localRunProject = ref<ProjectSummary | null>(null)
+const localRunCopied = ref(false)
 
 const dockerfile = `FROM node:20-alpine
 RUN apk add git bash curl
@@ -231,7 +248,7 @@ CMD ["claude-code"]`
 
 const localRunScript = computed(() => {
   const baseURL = window.location.origin
-  const key = ciProject.value?.projectKey ?? 'YOUR_PROJECT_KEY'
+  const key = localRunProject.value?.projectKey ?? 'YOUR_PROJECT_KEY'
   return `export PROJECT_KEY="${key}"
 export REVIEWSRV_URL="${baseURL}"
 
@@ -246,29 +263,40 @@ claude \\
   -p "$(cat p.md)"
 
 # Upload results
-curl -sf "$REVIEWSRV_URL/v1/upload/upload.js" -o upload.js
-REVIEW_DIR=. node upload.js
+curl -sf "$REVIEWSRV_URL/v1/upload/upload.js" -o upload.cjs
+REVIEW_DIR=. node upload.cjs
 
 # Cleanup
-rm -f p.md upload.js`
+rm -f p.md upload.cjs`
 })
 
-async function openCI(project: ProjectSummary) {
-  ciProject.value = project
+async function openCI() {
   ciTab.value = 'review'
   ciCopied.value = ''
-  ciYaml.value = await vtApi.project.gitlabCI(ciTargetBranch.value)
+  ciYaml.value = await vtApi.project.gitlabCI({ targetBranch: ciTargetBranch.value })
   ciVisible.value = true
 }
 
+function openLocalRun(project: ProjectSummary) {
+  localRunProject.value = project
+  localRunCopied.value = false
+  localRunVisible.value = true
+}
+
 async function refreshCI() {
-  ciYaml.value = await vtApi.project.gitlabCI(ciTargetBranch.value)
+  ciYaml.value = await vtApi.project.gitlabCI({ targetBranch: ciTargetBranch.value })
 }
 
 function copyToClipboard(text: string, tab: string = 'review') {
   navigator.clipboard.writeText(text)
   ciCopied.value = tab
   setTimeout(() => { ciCopied.value = '' }, 2000)
+}
+
+function copyLocalRun() {
+  navigator.clipboard.writeText(localRunScript.value)
+  localRunCopied.value = true
+  setTimeout(() => { localRunCopied.value = false }, 2000)
 }
 
 onMounted(load)

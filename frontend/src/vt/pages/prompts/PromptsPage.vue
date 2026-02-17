@@ -11,15 +11,15 @@
     <SearchBar>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
-        <input v-model="search.title" @input="applySearch" type="text" placeholder="Search..." class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <VInput v-model="search.title" @input="applySearch" type="text" placeholder="Search..." />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-        <select v-model="search.statusId" @change="applySearch" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <VSelect v-model="search.statusId" @change="applySearch">
           <option :value="undefined">All</option>
           <option :value="1">Enabled</option>
           <option :value="2">Disabled</option>
-        </select>
+        </VSelect>
       </div>
     </SearchBar>
 
@@ -33,10 +33,7 @@
       @row-click="(item: any) => router.push(`/prompts/${item.id}`)"
     >
       <template #cell-status="{ item }">
-        <span
-          class="badge"
-          :class="(item as PromptSummary).status?.id === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
-        >{{ (item as PromptSummary).status?.id === 1 ? 'Enabled' : 'Disabled' }}</span>
+        <StatusBadge :status-id="(item as PromptSummary).status?.id" />
       </template>
       <template #cell-title="{ item }">
         <span class="font-medium text-gray-900">{{ (item as PromptSummary).title }}</span>
@@ -55,6 +52,9 @@ import { useCrud } from '../../composables/useCrud'
 import DataTable from '../../components/DataTable.vue'
 import Pagination from '../../components/Pagination.vue'
 import SearchBar from '../../components/SearchBar.vue'
+import VInput from '../../components/VInput.vue'
+import VSelect from '../../components/VSelect.vue'
+import StatusBadge from '../../components/StatusBadge.vue'
 
 const router = useRouter()
 const { items, total, loading, viewOps, search, load, setSort, setPage, applySearch } = useCrud(vtApi.prompt)

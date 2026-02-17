@@ -14,15 +14,15 @@
       <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
 
       <FormField label="Title" :error="fieldError('title')">
-        <input v-model="entity.title" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <VInput v-model="entity.title" type="text" />
       </FormField>
 
       <FormField label="Channel" :error="fieldError('channel')">
-        <input v-model="entity.channel" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="#channel-name" />
+        <VInput v-model="entity.channel" type="text" placeholder="#channel-name" />
       </FormField>
 
       <FormField label="Webhook URL" :error="fieldError('webhookURL')">
-        <input v-model="entity.webhookURL" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://hooks.slack.com/..." />
+        <VInput v-model="entity.webhookURL" type="text" placeholder="https://hooks.slack.com/..." />
       </FormField>
 
       <FormField label="Status" :error="fieldError('statusId')">
@@ -55,6 +55,7 @@ import vtApi, { type SlackChannel } from '../../../api/vt'
 import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
+import VInput from '../../components/VInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const props = defineProps<{ id?: string }>()
@@ -62,7 +63,7 @@ const router = useRouter()
 const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
-const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<SlackChannel>(vtApi.slackChannel, () => ({
+const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<SlackChannel>(vtApi.slackchannel, 'slackChannel', () => ({
   id: 0, title: '', channel: '', webhookURL: '', statusId: 1,
 }))
 

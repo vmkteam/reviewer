@@ -22,12 +22,11 @@
       <form @submit.prevent="handleChangePassword">
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-          <input
+          <VInput
             v-model="newPassword"
             type="password"
             required
             minlength="4"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <p v-if="error" class="text-sm text-red-600 mb-3">{{ error }}</p>
@@ -45,6 +44,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
+import VInput from '../components/VInput.vue'
 
 const { user, changePassword } = useAuth()
 
