@@ -6,7 +6,7 @@
     :placeholder="placeholder"
     :readonly="readonly"
     v-bind="$attrs"
-    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    class="w-full rounded-lg border border-edge-strong bg-surface text-fg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
   />
 </template>
 

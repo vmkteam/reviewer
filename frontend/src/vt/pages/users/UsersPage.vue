@@ -1,17 +1,17 @@
 <template>
   <div>
     <div class="flex items-center justify-between mb-6 gap-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Users</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-fg">Users</h1>
       <VButton size="sm" to="/users/new">Add User</VButton>
     </div>
 
     <SearchBar>
       <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Login</label>
+        <label class="block text-xs font-medium text-fg-muted mb-1">Login</label>
         <VInput v-model="search.login" @input="applySearch" type="text" placeholder="Search..." />
       </div>
       <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+        <label class="block text-xs font-medium text-fg-muted mb-1">Status</label>
         <VSelect v-model="search.statusId" @change="applySearch">
           <option :value="undefined">All</option>
           <option :value="1">Enabled</option>
@@ -30,7 +30,7 @@
       @row-click="(item: any) => router.push(`/users/${item.id}`)"
     >
       <template #cell-login="{ item }">
-        <span class="font-medium text-gray-900">{{ (item as UserSummary).login }}</span>
+        <span class="font-medium text-fg">{{ (item as UserSummary).login }}</span>
       </template>
       <template #cell-lastActivityAt="{ item }">
         {{ (item as UserSummary).lastActivityAt ?? '—' }}

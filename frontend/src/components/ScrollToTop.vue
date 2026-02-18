@@ -7,7 +7,7 @@
   >
     <button
       v-if="visible"
-      class="fixed bottom-6 right-6 z-40 md:hidden w-11 h-11 rounded-full bg-white border border-gray-200 shadow-lg flex items-center justify-center text-gray-500 active:scale-95 transition-transform"
+      class="fixed bottom-6 right-6 z-40 md:hidden w-11 h-11 rounded-full bg-surface border border-edge shadow-lg flex items-center justify-center text-fg-muted active:scale-95 transition-transform"
       aria-label="Scroll to top"
       @click="scrollToTop"
     >

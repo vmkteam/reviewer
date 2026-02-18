@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-4">Projects</h1>
+    <h1 class="text-2xl font-bold text-fg mb-4">Projects</h1>
 
     <div v-if="projects.length > 5" class="mb-6 flex items-center gap-3">
       <PInput
@@ -22,32 +22,32 @@
 
     <ErrorAlert v-else-if="error">{{ error }}</ErrorAlert>
 
-    <div v-else-if="filteredProjects.length === 0" class="text-gray-400 text-center py-16 text-sm">No projects found.</div>
+    <div v-else-if="filteredProjects.length === 0" class="text-fg-subtle text-center py-16 text-sm">No projects found.</div>
 
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       <router-link
         v-for="p in filteredProjects"
         :key="p.projectId"
         :to="{ name: 'reviews', params: { id: p.projectId } }"
-        class="block bg-white rounded-xl border border-gray-200 p-5 card-hover"
+        class="block bg-surface rounded-xl border border-edge p-5 card-hover"
       >
         <div class="flex items-start justify-between mb-4">
-          <h2 class="text-base font-semibold text-gray-900 leading-snug truncate">{{ p.title }}</h2>
+          <h2 class="text-base font-semibold text-fg leading-snug truncate">{{ p.title }}</h2>
           <InfoBadge class="ml-3 flex-shrink-0">{{ p.language }}</InfoBadge>
         </div>
 
-        <div class="text-sm text-gray-400 mb-4">
+        <div class="text-sm text-fg-subtle mb-4">
           {{ p.reviewCount }} review{{ p.reviewCount !== 1 ? 's' : '' }}
         </div>
 
-        <div v-if="p.lastReview" class="flex items-center gap-2.5 text-sm pt-3 border-t border-gray-100">
+        <div v-if="p.lastReview" class="flex items-center gap-2.5 text-sm pt-3 border-t border-edge-light">
           <TrafficLight :color="p.lastReview.trafficLight" />
-          <span class="text-gray-600 truncate">{{ p.lastReview.author }}</span>
-          <span class="text-gray-400 ml-auto text-xs">
+          <span class="text-fg-secondary truncate">{{ p.lastReview.author }}</span>
+          <span class="text-fg-subtle ml-auto text-xs">
             <TimeAgo :date="p.lastReview.createdAt" />
           </span>
         </div>
-        <div v-else class="text-xs text-gray-300 pt-3 border-t border-gray-100">No reviews yet</div>
+        <div v-else class="text-xs text-fg-faint pt-3 border-t border-edge-light">No reviews yet</div>
       </router-link>
     </div>
   </div>

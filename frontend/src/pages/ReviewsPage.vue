@@ -2,38 +2,38 @@
   <div>
     <!-- Back + Header -->
     <div class="mb-6">
-      <router-link to="/" class="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors mb-3">
+      <router-link to="/" class="inline-flex items-center gap-1 text-sm text-fg-subtle hover:text-accent transition-colors mb-3">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
         Projects
       </router-link>
       <div v-if="project" class="flex items-center gap-3 flex-wrap">
-        <h1 class="text-2xl font-bold text-gray-900">{{ project.title }}</h1>
+        <h1 class="text-2xl font-bold text-fg">{{ project.title }}</h1>
         <InfoBadge>{{ project.language }}</InfoBadge>
         <ExternalLink v-if="project.vcsURL" :href="project.vcsURL" class="ml-auto">VCS</ExternalLink>
       </div>
     </div>
 
     <!-- Tabs -->
-    <div class="flex border-b border-gray-200 mb-5">
+    <div class="flex border-b border-edge mb-5">
       <button
         @click="activeTab = 'reviews'"
         class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
         :class="activeTab === 'reviews'
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-gray-400 hover:text-gray-600'"
+          ? 'border-accent text-accent'
+          : 'border-transparent text-fg-subtle hover:text-fg-secondary'"
       >
         Reviews
-        <span v-if="totalCount !== null" class="ml-1 text-xs" :class="activeTab === 'reviews' ? 'text-blue-400' : 'text-gray-300'">({{ totalCount }})</span>
+        <span v-if="totalCount !== null" class="ml-1 text-xs" :class="activeTab === 'reviews' ? 'text-accent/70' : 'text-fg-faint'">({{ totalCount }})</span>
       </button>
       <button
         @click="switchToRisks"
         class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
         :class="activeTab === 'risks'
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-gray-400 hover:text-gray-600'"
+          ? 'border-accent text-accent'
+          : 'border-transparent text-fg-subtle hover:text-fg-secondary'"
       >
         Accepted Risks
-        <span v-if="risksCount !== null" class="ml-1 text-xs" :class="activeTab === 'risks' ? 'text-blue-400' : 'text-gray-300'">({{ risksCount }})</span>
+        <span v-if="risksCount !== null" class="ml-1 text-xs" :class="activeTab === 'risks' ? 'text-accent/70' : 'text-fg-faint'">({{ risksCount }})</span>
       </button>
     </div>
 
@@ -69,37 +69,37 @@
       <!-- Table -->
       <div v-else>
         <InfiniteScroll :loading="loadingMore" :has-more="hasMore" @load-more="loadMore">
-          <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+          <div class="bg-surface rounded-xl border border-edge overflow-x-auto shadow-sm">
             <table class="min-w-full">
               <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider w-10"></th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Title</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Author</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Branch</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">A/C/S/T</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Issues</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+                <tr class="border-b border-edge-light">
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider w-10"></th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Title</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Author</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden lg:table-cell">Branch</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">A/C/S/T</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Issues</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
               <tbody>
                 <tr
                   v-for="r in reviews"
                   :key="r.reviewId"
-                  class="border-b border-gray-50 last:border-b-0 hover:bg-blue-50/40 cursor-pointer transition-colors row-hover"
+                  class="border-b border-edge-light last:border-b-0 hover:bg-accent-light/40 cursor-pointer transition-colors row-hover"
                   @click="goToReview(r.reviewId)"
                 >
                   <td class="px-4 py-3.5">
                     <TrafficLight :color="r.trafficLight" />
                   </td>
                   <td class="px-4 py-3.5">
-                    <div class="text-sm font-medium" :class="r.lastVersionReviewId ? 'text-gray-400' : 'text-gray-900'">{{ r.title }}</div>
-                    <div class="text-xs text-gray-300 mt-0.5">
+                    <div class="text-sm font-medium" :class="r.lastVersionReviewId ? 'text-fg-subtle' : 'text-fg'">{{ r.title }}</div>
+                    <div class="text-xs text-fg-faint mt-0.5">
                       {{ r.externalId }}
                       <router-link
                         v-if="r.lastVersionReviewId"
                         :to="{ name: 'review', params: { id: r.lastVersionReviewId } }"
-                        class="ml-1 text-amber-500 hover:text-amber-700"
+                        class="ml-1 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
                         @click.stop
                         title="Go to latest version"
                       >
@@ -107,28 +107,28 @@
                       </router-link>
                     </div>
                   </td>
-                  <td class="px-4 py-3.5 text-sm text-gray-600">{{ r.author }}</td>
+                  <td class="px-4 py-3.5 text-sm text-fg-secondary">{{ r.author }}</td>
                   <td class="px-4 py-3.5 hidden lg:table-cell">
                     <div class="flex items-center gap-1 text-xs">
-                      <span class="font-mono text-gray-500 truncate max-w-[180px]">{{ r.sourceBranch }}</span>
-                      <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                      <span class="font-mono text-gray-500 truncate max-w-[180px]">{{ r.targetBranch }}</span>
+                      <span class="font-mono text-fg-muted truncate max-w-[180px]">{{ r.sourceBranch }}</span>
+                      <svg class="w-3 h-3 text-fg-faint flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                      <span class="font-mono text-fg-muted truncate max-w-[180px]">{{ r.targetBranch }}</span>
                     </div>
                   </td>
                   <td class="px-4 py-3.5">
                     <ReviewTypeDots :review-files="r.reviewFiles" />
                   </td>
                   <td class="px-4 py-3.5">
-                    <span class="text-sm tabular-nums" :class="totalIssues(r) > 0 ? 'text-gray-700 font-medium' : 'text-gray-300'">
+                    <span class="text-sm tabular-nums" :class="totalIssues(r) > 0 ? 'text-fg-secondary font-medium' : 'text-fg-faint'">
                       {{ totalIssues(r) || '—' }}
                     </span>
                   </td>
-                  <td class="px-4 py-3.5 text-xs text-gray-400">
+                  <td class="px-4 py-3.5 text-xs text-fg-subtle">
                     <TimeAgo :date="r.createdAt" />
                   </td>
                 </tr>
                 <tr v-if="reviews.length === 0">
-                  <td colspan="7" class="px-4 py-12 text-center text-sm text-gray-400">No reviews found.</td>
+                  <td colspan="7" class="px-4 py-12 text-center text-sm text-fg-subtle">No reviews found.</td>
                 </tr>
               </tbody>
             </table>

@@ -1,17 +1,17 @@
 <template>
   <div>
     <div class="flex items-center justify-between mb-6 gap-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Prompts</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-fg">Prompts</h1>
       <VButton size="sm" to="/prompts/new">Add Prompt</VButton>
     </div>
 
     <SearchBar>
       <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
+        <label class="block text-xs font-medium text-fg-muted mb-1">Title</label>
         <VInput v-model="search.title" @input="applySearch" type="text" placeholder="Search..." />
       </div>
       <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+        <label class="block text-xs font-medium text-fg-muted mb-1">Status</label>
         <VSelect v-model="search.statusId" @change="applySearch">
           <option :value="undefined">All</option>
           <option :value="1">Enabled</option>
@@ -33,7 +33,7 @@
         <StatusBadge :status-id="(item as PromptSummary).status?.id" />
       </template>
       <template #cell-title="{ item }">
-        <span class="font-medium text-gray-900">{{ (item as PromptSummary).title }}</span>
+        <span class="font-medium text-fg">{{ (item as PromptSummary).title }}</span>
       </template>
     </DataTable>
 

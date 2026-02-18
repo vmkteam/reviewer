@@ -3,7 +3,7 @@
     :value="modelValue"
     :rows="rows"
     :placeholder="placeholder"
-    class="flex-1 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors resize-none placeholder:text-gray-300"
+    class="flex-1 px-3 py-2 text-sm bg-surface border border-edge rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors resize-none placeholder:text-fg-faint"
     v-bind="$attrs"
     @input="onInput"
   />

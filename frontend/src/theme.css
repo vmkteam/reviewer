@@ -1,0 +1,52 @@
+/* Dark theme: class-based variant */
+@variant dark (&:where(.dark, .dark *));
+
+/* Semantic design tokens — light values (default) */
+@theme {
+  --color-surface: #ffffff;
+  --color-surface-alt: #f9fafb;
+
+  --color-fg: #111827;
+  --color-fg-secondary: #4b5563;
+  --color-fg-muted: #6b7280;
+  --color-fg-subtle: #9ca3af;
+  --color-fg-faint: #d1d5db;
+
+  --color-edge: #e5e7eb;
+  --color-edge-light: #f3f4f6;
+  --color-edge-strong: #d1d5db;
+
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-light: #eff6ff;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+
+  --color-overlay: rgba(0, 0, 0, 0.4);
+}
+
+/* Dark overrides */
+.dark {
+  --color-surface: #111827;
+  --color-surface-alt: #1f2937;
+
+  --color-fg: #f3f4f6;
+  --color-fg-secondary: #9ca3af;
+  --color-fg-muted: #9ca3af;
+  --color-fg-subtle: #6b7280;
+  --color-fg-faint: #4b5563;
+
+  --color-edge: #374151;
+  --color-edge-light: #1f2937;
+  --color-edge-strong: #4b5563;
+
+  --color-accent: #60a5fa;
+  --color-accent-hover: #3b82f6;
+  --color-accent-light: #172554;
+
+  --color-danger: #f87171;
+  --color-danger-hover: #ef4444;
+
+  --color-overlay: rgba(0, 0, 0, 0.6);
+}

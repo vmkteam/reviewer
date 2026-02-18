@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./theme.css";
 
 /* Base typography & body */
 body {
@@ -12,7 +13,7 @@ body {
   transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .card-hover:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px var(--color-overlay);
   transform: translateY(-1px);
 }
 
@@ -32,7 +33,7 @@ body {
   left: 0;
   right: 0;
   height: 2px;
-  background: #2563eb;
+  background: var(--color-accent);
   transform: scaleX(0);
   transition: transform 0.15s ease;
 }
@@ -47,8 +48,8 @@ body {
 .spinner {
   width: 24px;
   height: 24px;
-  border: 2.5px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  border: 2.5px solid var(--color-edge);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -60,18 +61,18 @@ body {
 /* Markdown content refinements */
 .markdown-body {
   line-height: 1.65;
-  color: #1f2937;
+  color: var(--color-fg);
 }
-.markdown-body h1 { font-size: 1.5em; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; color: #111827; }
-.markdown-body h2 { font-size: 1.25em; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; color: #111827; }
-.markdown-body h3 { font-size: 1.1em; font-weight: 600; margin-top: 1.25em; margin-bottom: 0.4em; color: #1f2937; }
+.markdown-body h1 { font-size: 1.5em; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; color: var(--color-fg); }
+.markdown-body h2 { font-size: 1.25em; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; color: var(--color-fg); }
+.markdown-body h3 { font-size: 1.1em; font-weight: 600; margin-top: 1.25em; margin-bottom: 0.4em; color: var(--color-fg); }
 .markdown-body p { margin: 0.6em 0; }
 .markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin: 0.5em 0; }
 .markdown-body li { margin: 0.25em 0; }
-.markdown-body li::marker { color: #9ca3af; }
+.markdown-body li::marker { color: var(--color-fg-subtle); }
 .markdown-body pre {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-edge);
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
@@ -83,10 +84,10 @@ body {
   font-size: 0.88em;
 }
 .markdown-body :not(pre) > code {
-  background: #f1f5f9;
+  background: var(--color-edge-light);
   padding: 0.15em 0.4em;
   border-radius: 4px;
-  color: #dc2626;
+  color: var(--color-danger);
 }
 .markdown-body pre code {
   padding: 0;
@@ -94,9 +95,9 @@ body {
   color: inherit;
 }
 .markdown-body blockquote {
-  border-left: 3px solid #d1d5db;
+  border-left: 3px solid var(--color-edge-strong);
   padding-left: 1em;
-  color: #6b7280;
+  color: var(--color-fg-muted);
   margin: 0.75em 0;
 }
 .markdown-body table {
@@ -106,18 +107,18 @@ body {
   font-size: 0.9em;
 }
 .markdown-body th {
-  background: #f8fafc;
+  background: var(--color-surface-alt);
   font-weight: 600;
   text-align: left;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-edge);
   padding: 8px 12px;
 }
 .markdown-body td {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-edge);
   padding: 8px 12px;
 }
 .markdown-body a {
-  color: #2563eb;
+  color: var(--color-accent);
   text-decoration: none;
 }
 .markdown-body a:hover {
@@ -125,7 +126,7 @@ body {
 }
 .markdown-body hr {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-edge);
   margin: 1.5em 0;
 }
 
@@ -150,5 +151,84 @@ body {
 
 /* Select / input reset for consistency */
 select, input[type="text"] {
-  background-color: white;
+  background-color: var(--color-surface);
+}
+
+/* Dark mode: hljs overrides (github-dark theme) */
+.dark .hljs {
+  color: #c9d1d9;
+  background: var(--color-surface-alt);
+}
+.dark .hljs-doctag,
+.dark .hljs-keyword,
+.dark .hljs-meta .hljs-keyword,
+.dark .hljs-template-tag,
+.dark .hljs-template-variable,
+.dark .hljs-type,
+.dark .hljs-variable.language_ {
+  color: #ff7b72;
+}
+.dark .hljs-title,
+.dark .hljs-title.class_,
+.dark .hljs-title.class_.inherited__,
+.dark .hljs-title.function_ {
+  color: #d2a8ff;
+}
+.dark .hljs-attr,
+.dark .hljs-attribute,
+.dark .hljs-literal,
+.dark .hljs-meta,
+.dark .hljs-number,
+.dark .hljs-operator,
+.dark .hljs-variable,
+.dark .hljs-selector-attr,
+.dark .hljs-selector-class,
+.dark .hljs-selector-id {
+  color: #79c0ff;
+}
+.dark .hljs-regexp,
+.dark .hljs-string,
+.dark .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+.dark .hljs-built_in,
+.dark .hljs-symbol {
+  color: #ffa657;
+}
+.dark .hljs-comment,
+.dark .hljs-code,
+.dark .hljs-formula {
+  color: #8b949e;
+}
+.dark .hljs-name,
+.dark .hljs-quote,
+.dark .hljs-selector-tag,
+.dark .hljs-selector-pseudo {
+  color: #7ee787;
+}
+.dark .hljs-subst {
+  color: #c9d1d9;
+}
+.dark .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+.dark .hljs-bullet {
+  color: #f2cc60;
+}
+.dark .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+.dark .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+.dark .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+.dark .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
 }

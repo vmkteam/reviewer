@@ -1,3 +1,3 @@
 <template>
-  <span class="badge bg-gray-100 text-gray-600"><slot /></span>
+  <span class="badge bg-edge-light text-fg-secondary"><slot /></span>
 </template>
