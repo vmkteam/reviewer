@@ -287,7 +287,7 @@ func TestReviewSearch_ToDB(t *testing.T) {
 		got := s.ToDB()
 		assert.NotNil(t, got)
 		assert.Equal(t, 10, *got.ProjectID)
-		assert.Equal(t, "john", *got.Author)
+		assert.Equal(t, "john", *got.AuthorILike)
 		assert.Equal(t, "green", *got.TrafficLight)
 		assert.Equal(t, 42, *got.IDLt)
 	})

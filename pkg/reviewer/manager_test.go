@@ -299,6 +299,7 @@ func TestDBReviewManager_SetFeedback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, iss.IsFalsePositive)
 		assert.True(t, *iss.IsFalsePositive)
+		assert.NotNil(t, iss.ProcessedAt)
 	})
 
 	t.Run("set false", func(t *testing.T) {
@@ -311,6 +312,18 @@ func TestDBReviewManager_SetFeedback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, iss.IsFalsePositive)
 		assert.False(t, *iss.IsFalsePositive)
+		assert.NotNil(t, iss.ProcessedAt)
+	})
+
+	t.Run("reset to nil", func(t *testing.T) {
+		ok, err := rm.SetFeedback(t.Context(), issueID, nil)
+		require.NoError(t, err)
+		assert.True(t, ok)
+
+		iss, err := rm.IssueByID(t.Context(), issueID)
+		require.NoError(t, err)
+		assert.Nil(t, iss.IsFalsePositive)
+		assert.Nil(t, iss.ProcessedAt)
 	})
 }
 

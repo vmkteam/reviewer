@@ -29,15 +29,11 @@
             <h1 class="text-xl font-bold text-gray-900 leading-snug">{{ review.title }}</h1>
             <p v-if="review.description" class="text-sm text-gray-500 mt-1 line-clamp-2">{{ review.description }}</p>
           </div>
-          <a
+          <ExternalLink
             v-if="review.externalId && review.externalId !== '0' && project?.vcsURL"
             :href="buildVcsMrURL(project.vcsURL, review.externalId)"
-            target="_blank"
-            class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-          >
-            {{ project.vcsURL.includes('github.com') ? 'PR' : 'MR' }} #{{ review.externalId }}
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-          </a>
+            class="flex-shrink-0"
+          >{{ project.vcsURL.includes('github.com') ? 'PR' : 'MR' }} #{{ review.externalId }}</ExternalLink>
           <router-link
             v-if="review.lastVersionReviewId"
             :to="{ name: 'review', params: { id: review.lastVersionReviewId } }"
@@ -186,125 +182,26 @@
             </div>
 
             <!-- Issues table -->
-            <div v-else class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <table class="min-w-full">
-                <thead>
-                  <tr class="border-b border-gray-100">
-                    <th
-                      class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-600 transition-colors"
-                      @click="toggleSort('severity')"
-                    >Severity {{ sortIcon('severity') }}</th>
-                    <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Title</th>
-                    <th
-                      class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-600 transition-colors hidden md:table-cell"
-                      @click="toggleSort('file')"
-                    >File {{ sortIcon('file') }}</th>
-                    <th
-                      class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-600 transition-colors"
-                      @click="toggleSort('issueType')"
-                    >Type {{ sortIcon('issueType') }}</th>
-                    <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">RT</th>
-                    <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Feedback</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-for="issue in sortedIssues" :key="issue.issueId">
-                    <tr
-                      :id="'issue-' + issue.issueId"
-                      class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors row-hover"
-                      :class="expandedIssueId === issue.issueId ? 'bg-blue-50/40' : ''"
-                      @click="toggleIssueDetail(issue.issueId)"
-                    >
-                      <td class="px-4 py-3">
-                        <SeverityBadge :severity="issue.severity" />
-                      </td>
-                      <td class="px-4 py-3 text-sm text-gray-800 max-w-xs">
-                        <span class="line-clamp-1">{{ issue.title }}</span>
-                      </td>
-                      <td class="px-4 py-3 hidden md:table-cell" @click.stop>
-                        <div class="text-xs font-mono text-gray-500">
-                          <a
-                            v-if="project?.vcsURL && issue.commitHash"
-                            :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
-                            target="_blank"
-                            class="text-blue-600 hover:text-blue-800 hover:underline"
-                          >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
-                          <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span></template>
-                        </div>
-                      </td>
-                      <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
-                      <td class="px-4 py-3">
-                        <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
-                      </td>
-                      <td class="px-4 py-3" @click.stop>
-                        <div class="flex items-center gap-1">
-                          <FeedbackButtons
-                            :is-false-positive="issue.isFalsePositive"
-                            @feedback="setFeedback(issue, $event)"
-                          />
-                          <button
-                            class="px-1.5 py-1 text-xs rounded-md border border-gray-200 text-gray-300 hover:text-gray-500 hover:border-gray-300 transition-all fb-btn ml-1"
-                            :title="copiedIssueId === issue.issueId ? 'Copied!' : 'Copy link'"
-                            @click="copyIssueLink(issue.issueId)"
-                          >
-                            <svg v-if="copiedIssueId !== issue.issueId" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                            <svg v-else class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    <!-- Inline expanded detail row -->
-                    <tr v-if="expandedIssueId === issue.issueId" class="bg-gray-50/60">
-                      <td colspan="6" class="px-0 py-0">
-                        <div class="px-6 py-5 border-t border-gray-100 space-y-3">
-                          <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                            <InfoBadge>{{ issue.issueType }}</InfoBadge>
-                            <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
-                            <span class="font-mono">
-                              <a
-                                v-if="project?.vcsURL && issue.commitHash"
-                                :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
-                                target="_blank"
-                                class="text-blue-600 hover:text-blue-800 hover:underline"
-                              >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
-                              <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
-                            </span>
-                          </div>
-                          <p v-if="issue.description" class="text-sm text-gray-600 leading-relaxed">{{ issue.description }}</p>
-                          <MarkdownContent v-if="issue.content" :content="issue.content" />
-                          <!-- Comment -->
-                          <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100" @click.stop>
-                            <PTextarea
-                              v-model="commentTexts[issue.issueId]"
-                              placeholder="Add comment..."
-                              maxlength="255"
-                            />
-                            <div class="flex items-start gap-2">
-                              <button
-                                class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                                :class="isCommentDirty(issue.issueId)
-                                  ? 'text-white bg-blue-600 hover:bg-blue-700'
-                                  : 'text-gray-400 bg-gray-100 cursor-default'"
-                                :disabled="commentSaving[issue.issueId] || !isCommentDirty(issue.issueId)"
-                                @click="saveComment(issue)"
-                              >{{ commentSaving[issue.issueId] ? 'Saving...' : 'Save' }}</button>
-                              <span v-if="commentErrors[issue.issueId]" class="text-xs text-red-600 py-2">{{ commentErrors[issue.issueId] }}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-if="sortedIssues.length === 0">
-                    <td colspan="6" class="px-4 py-12 text-center text-sm text-gray-400">No issues found.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <IssuesTable
+              v-else
+              :issues="filteredIssues"
+              :project="project"
+              :sortable="true"
+              :show-review-type="true"
+              :show-copy-link="true"
+              :copied-issue-id="copiedIssueId"
+              title-class="truncate"
+              :expanded-id="expandedIssueId"
+              @feedback="setFeedback"
+              @copy-link="copyIssueLink"
+              @update:expanded-id="onExpandedIdChange"
+            />
           </TabPanel>
         </TabPanels>
       </TabGroup>
     </template>
+
+    <ScrollToTop />
   </div>
 </template>
 
@@ -312,20 +209,18 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import api, { type Review, type Issue, type Project } from '../api/factory'
-import { ApiRpcError } from '../api/errors'
 import TrafficLight from '../components/TrafficLight.vue'
-import SeverityBadge from '../components/SeverityBadge.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
 import PSelect from '../components/PSelect.vue'
-import PTextarea from '../components/PTextarea.vue'
-import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
-import FeedbackButtons from '../components/FeedbackButtons.vue'
+import ExternalLink from '../components/ExternalLink.vue'
+import ScrollToTop from '../components/ScrollToTop.vue'
+import IssuesTable from '../components/IssuesTable.vue'
 import { useFormat } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 
-const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeLabel, reviewTypeFullName, compareSeverity, buildVcsCommitURL, buildVcsFileURL, buildVcsMrURL } = useFormat()
+const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeFullName, buildVcsCommitURL, buildVcsMrURL } = useFormat()
 const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumbs()
 
 const props = defineProps<{ id: string }>()
@@ -346,20 +241,6 @@ const issueFilters = reactive<{ severity: string; issueType: string; reviewType:
   issueType: '',
   reviewType: '',
 })
-
-const sortField = ref<'severity' | 'file' | 'issueType'>('severity')
-const sortAsc = ref(true)
-
-// Comments
-const commentTexts = reactive<Record<number, string>>({})
-const commentOriginals = reactive<Record<number, string>>({})
-const commentSaving = reactive<Record<number, boolean>>({})
-const commentErrors = reactive<Record<number, string>>({})
-
-function isCommentDirty(issueId: number): boolean {
-  return (commentTexts[issueId] ?? '') !== (commentOriginals[issueId] ?? '')
-}
-
 
 // Tabs
 const selectedTab = ref(0)
@@ -412,11 +293,6 @@ function downloadMarkdown(content: string, reviewType: string) {
 
 async function scrollToIssue(issueId: number) {
   expandedIssueId.value = issueId
-  const issue = allIssues.value.find(i => i.issueId === issueId)
-  if (issue && !(issueId in commentTexts)) {
-    commentTexts[issueId] = issue.comment ?? ''
-    commentOriginals[issueId] = issue.comment ?? ''
-  }
   // Wait for TabPanel switch + issue rows + expanded row to render
   await nextTick()
   await nextTick()
@@ -461,44 +337,12 @@ const filteredIssues = computed(() => {
 
 const issueCount = computed(() => filteredIssues.value.length)
 
-const sortedIssues = computed(() => {
-  const copy = [...filteredIssues.value]
-  copy.sort((a, b) => {
-    let cmp = 0
-    if (sortField.value === 'severity') cmp = compareSeverity(a.severity, b.severity)
-    else if (sortField.value === 'file') cmp = a.file.localeCompare(b.file)
-    else if (sortField.value === 'issueType') cmp = a.issueType.localeCompare(b.issueType)
-    return sortAsc.value ? cmp : -cmp
-  })
-  return copy
-})
-
-function toggleSort(field: 'severity' | 'file' | 'issueType') {
-  if (sortField.value === field) {
-    sortAsc.value = !sortAsc.value
-  } else {
-    sortField.value = field
-    sortAsc.value = true
-  }
-}
-
-function sortIcon(field: string): string {
-  if (sortField.value !== field) return ''
-  return sortAsc.value ? '\u25B2' : '\u25BC'
-}
-
-function toggleIssueDetail(id: number) {
-  if (expandedIssueId.value === id) {
-    expandedIssueId.value = null
+function onExpandedIdChange(id: number | null) {
+  expandedIssueId.value = id
+  if (id === null) {
     updateHash('issues')
   } else {
-    expandedIssueId.value = id
     updateHash('issues-' + id)
-    const issue = allIssues.value.find(i => i.issueId === id)
-    if (issue && !(id in commentTexts)) {
-      commentTexts[id] = issue.comment ?? ''
-      commentOriginals[id] = issue.comment ?? ''
-    }
   }
 }
 
@@ -520,22 +364,6 @@ async function setFeedback(issue: Issue, value: boolean | null) {
     issue.isFalsePositive = value ?? undefined
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to update feedback'
-  }
-}
-
-async function saveComment(issue: Issue) {
-  const id = issue.issueId
-  commentErrors[id] = ''
-  commentSaving[id] = true
-  try {
-    const text = commentTexts[id]?.trim() || ''
-    await api.review.setComment({ issueId: id, comment: text || undefined })
-    issue.comment = text || undefined
-    commentOriginals[id] = commentTexts[id] ?? ''
-  } catch (e) {
-    commentErrors[id] = e instanceof ApiRpcError ? e.message : 'Failed to save comment'
-  } finally {
-    commentSaving[id] = false
   }
 }
 

@@ -195,6 +195,7 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 // Issue — строка таблицы issues в табе Issues.
 type Issue struct {
 	ID              int     `json:"issueId"`
+	ReviewID        int     `json:"reviewId"`
 	Title           string  `json:"title"`
 	Severity        string  `json:"severity"`
 	Description     string  `json:"description"`
@@ -215,6 +216,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 
 	issue := &Issue{
 		ID:              in.ID,
+		ReviewID:        in.ReviewID,
 		Title:           in.Title,
 		Severity:        in.Severity,
 		Description:     in.Description,

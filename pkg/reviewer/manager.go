@@ -3,6 +3,7 @@ package reviewer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"reviewsrv/pkg/db"
 
@@ -303,9 +304,13 @@ func (rm *ReviewManager) SetComment(ctx context.Context, issueID int, comment *s
 	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(db.Columns.Issue.Comment))
 }
 
-// SetFeedback updates the isFalsePositive flag on an issue.
+// SetFeedback updates the isFalsePositive flag on an issue and sets processedAt accordingly.
 func (rm *ReviewManager) SetFeedback(ctx context.Context, issueID int, isFalsePositive *bool) (bool, error) {
 	issue := &db.Issue{ID: issueID, IsFalsePositive: isFalsePositive}
+	if isFalsePositive != nil {
+		now := time.Now()
+		issue.ProcessedAt = &now
+	}
 
-	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(db.Columns.Issue.IsFalsePositive))
+	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(db.Columns.Issue.IsFalsePositive, db.Columns.Issue.ProcessedAt))
 }

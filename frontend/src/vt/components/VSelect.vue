@@ -10,7 +10,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUpdated, nextTick } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -42,5 +42,6 @@ function onChange(e: Event) {
 }
 
 onMounted(syncSelected)
+onUpdated(syncSelected)
 watch(() => props.modelValue, () => nextTick(syncSelected))
 </script>

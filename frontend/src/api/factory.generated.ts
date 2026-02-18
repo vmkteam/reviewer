@@ -3,6 +3,7 @@
 /* eslint-disable */
 export interface IIssue {
   issueId: number,
+  reviewId: number,
   title: string,
   severity: string,
   description: string,
@@ -155,6 +156,7 @@ export class Issue implements IIssue {
   static entityName = "issue";
 
   issueId: number = 0;
+  reviewId: number = 0;
   title: string = null;
   severity: string = null;
   description: string = null;
