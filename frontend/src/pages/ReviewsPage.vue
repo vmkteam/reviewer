@@ -9,12 +9,7 @@
       <div v-if="project" class="flex items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">{{ project.title }}</h1>
         <InfoBadge>{{ project.language }}</InfoBadge>
-        <a
-          v-if="project.vcsURL"
-          :href="project.vcsURL"
-          target="_blank"
-          class="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-        >Open VCS</a>
+        <ExternalLink v-if="project.vcsURL" :href="project.vcsURL" class="ml-auto">VCS</ExternalLink>
       </div>
     </div>
 
@@ -74,7 +69,7 @@
       <!-- Table -->
       <div v-else>
         <InfiniteScroll :loading="loadingMore" :has-more="hasMore" @load-more="loadMore">
-          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
             <table class="min-w-full">
               <thead>
                 <tr class="border-b border-gray-100">
@@ -155,97 +150,18 @@
       <!-- Risks table -->
       <div v-else>
         <InfiniteScroll :loading="risksLoadingMore" :has-more="risksHasMore" @load-more="loadMoreRisks">
-          <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <table class="min-w-full">
-              <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Severity</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Title</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">File</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Type</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Feedback</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="issue in risks" :key="issue.issueId">
-                  <tr
-                    class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors"
-                    :class="expandedIssueId === issue.issueId ? 'bg-blue-50/40' : ''"
-                    @click="toggleIssueDetail(issue.issueId)"
-                  >
-                    <td class="px-4 py-3">
-                      <SeverityBadge :severity="issue.severity" />
-                    </td>
-                    <td class="px-4 py-3 text-sm text-gray-800 max-w-xs">
-                      <span class="line-clamp-1">{{ issue.title }}</span>
-                    </td>
-                    <td class="px-4 py-3 hidden md:table-cell" @click.stop>
-                      <div class="text-xs font-mono text-gray-500">
-                        <a
-                          v-if="project?.vcsURL && issue.commitHash"
-                          :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
-                          target="_blank"
-                          class="text-blue-600 hover:text-blue-800 hover:underline"
-                        >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
-                        <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span></template>
-                      </div>
-                    </td>
-                    <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
-                    <td class="px-4 py-3" @click.stop>
-                      <FeedbackButtons
-                        :is-false-positive="issue.isFalsePositive"
-                        @feedback="setRiskFeedback(issue, $event)"
-                      />
-                    </td>
-                  </tr>
-                  <!-- Expanded detail row -->
-                  <tr v-if="expandedIssueId === issue.issueId" class="bg-gray-50/60">
-                    <td colspan="5" class="px-0 py-0">
-                      <div class="px-6 py-5 border-t border-gray-100 space-y-3">
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <InfoBadge>{{ issue.issueType }}</InfoBadge>
-                          <InfoBadge>{{ issue.reviewType }}</InfoBadge>
-                          <span class="font-mono">
-                            <a
-                              v-if="project?.vcsURL && issue.commitHash"
-                              :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
-                              target="_blank"
-                              class="text-blue-600 hover:text-blue-800 hover:underline"
-                            >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
-                            <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
-                          </span>
-                        </div>
-                        <p v-if="issue.description" class="text-sm text-gray-600 leading-relaxed">{{ issue.description }}</p>
-                        <MarkdownContent v-if="issue.content" :content="issue.content" />
-                        <!-- Comment -->
-                        <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100" @click.stop>
-                          <PTextarea
-                            v-model="commentTexts[issue.issueId]"
-                            placeholder="Add comment..."
-                            maxlength="255"
-                          />
-                          <div class="flex items-start gap-2">
-                            <button
-                              class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                              :class="isCommentDirty(issue.issueId)
-                                ? 'text-white bg-blue-600 hover:bg-blue-700'
-                                : 'text-gray-400 bg-gray-100 cursor-default'"
-                              :disabled="commentSaving[issue.issueId] || !isCommentDirty(issue.issueId)"
-                              @click="saveComment(issue)"
-                            >{{ commentSaving[issue.issueId] ? 'Saving...' : 'Save' }}</button>
-                            <span v-if="commentErrors[issue.issueId]" class="text-xs text-red-600 py-2">{{ commentErrors[issue.issueId] }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                </template>
-                <tr v-if="risks.length === 0">
-                  <td colspan="5" class="px-4 py-12 text-center text-sm text-gray-400">No accepted risks found.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <IssuesTable
+            :issues="risks"
+            :project="project"
+            :sortable="false"
+            :show-review-type="false"
+            :show-copy-link="true"
+            :copied-issue-id="copiedIssueId"
+            empty-text="No accepted risks found."
+            v-model:expanded-id="expandedIssueId"
+            @feedback="setRiskFeedback"
+            @copy-link="copyIssueLink"
+          />
         </InfiniteScroll>
       </div>
     </div>
@@ -256,24 +172,19 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api, { type ReviewSummary, type Project, type ReviewFilters, type Issue } from '../api/factory'
-import { ApiRpcError } from '../api/errors'
 import TrafficLight from '../components/TrafficLight.vue'
 import ReviewTypeDots from '../components/ReviewTypeDots.vue'
 import TimeAgo from '../components/TimeAgo.vue'
 import InfiniteScroll from '../components/InfiniteScroll.vue'
-import SeverityBadge from '../components/SeverityBadge.vue'
-import MarkdownContent from '../components/MarkdownContent.vue'
 import PInput from '../components/PInput.vue'
 import PSelect from '../components/PSelect.vue'
-import PTextarea from '../components/PTextarea.vue'
 import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
-import FeedbackButtons from '../components/FeedbackButtons.vue'
+import ExternalLink from '../components/ExternalLink.vue'
+import IssuesTable from '../components/IssuesTable.vue'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
-import { useFormat } from '../composables/useFormat'
 
 const { setProject: setProjectCrumb } = useBreadcrumbs()
-const { buildVcsFileURL } = useFormat()
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -304,18 +215,21 @@ const risksHasMore = ref(true)
 const risksError = ref('')
 const risksLoaded = ref(false)
 const expandedIssueId = ref<number | null>(null)
-
-// Comments
-const commentTexts = reactive<Record<number, string>>({})
-const commentOriginals = reactive<Record<number, string>>({})
-const commentSaving = reactive<Record<number, boolean>>({})
-const commentErrors = reactive<Record<number, string>>({})
-
-function isCommentDirty(issueId: number): boolean {
-  return (commentTexts[issueId] ?? '') !== (commentOriginals[issueId] ?? '')
-}
+const copiedIssueId = ref<number | null>(null)
 
 const risksFilters = { isFalsePositive: true }
+
+function copyIssueLink(issueId: number) {
+  const issue = risks.value.find(i => i.issueId === issueId)
+  if (!issue) return
+  const route = router.resolve({ name: 'review', params: { id: issue.reviewId } })
+  const url = window.location.origin + route.href + '#issues-' + issueId
+  navigator.clipboard.writeText(url)
+  copiedIssueId.value = issueId
+  setTimeout(() => {
+    if (copiedIssueId.value === issueId) copiedIssueId.value = null
+  }, 1500)
+}
 
 function buildFilters(): ReviewFilters | undefined {
   const f: ReviewFilters = {}
@@ -437,35 +351,6 @@ async function setRiskFeedback(issue: Issue, value: boolean | null) {
 function switchToRisks() {
   activeTab.value = 'risks'
   if (!risksLoaded.value) loadRisks()
-}
-
-function toggleIssueDetail(id: number) {
-  if (expandedIssueId.value === id) {
-    expandedIssueId.value = null
-  } else {
-    expandedIssueId.value = id
-    const issue = risks.value.find(i => i.issueId === id)
-    if (issue && !(id in commentTexts)) {
-      commentTexts[id] = issue.comment ?? ''
-      commentOriginals[id] = issue.comment ?? ''
-    }
-  }
-}
-
-async function saveComment(issue: Issue) {
-  const id = issue.issueId
-  commentErrors[id] = ''
-  commentSaving[id] = true
-  try {
-    const text = commentTexts[id]?.trim() || ''
-    await api.review.setComment({ issueId: id, comment: text || undefined })
-    issue.comment = text || undefined
-    commentOriginals[id] = commentTexts[id] ?? ''
-  } catch (e) {
-    commentErrors[id] = e instanceof ApiRpcError ? e.message : 'Failed to save comment'
-  } finally {
-    commentSaving[id] = false
-  }
 }
 
 onMounted(async () => {

@@ -528,6 +528,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.Integer,
 								},
 								{
+									Name: "reviewId",
+									Type: smd.Integer,
+								},
+								{
 									Name: "title",
 									Type: smd.String,
 								},
@@ -684,6 +688,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 							Properties: smd.PropertyList{
 								{
 									Name: "issueId",
+									Type: smd.Integer,
+								},
+								{
+									Name: "reviewId",
 									Type: smd.Integer,
 								},
 								{

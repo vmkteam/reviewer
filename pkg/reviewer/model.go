@@ -202,7 +202,7 @@ func (s *ReviewSearch) ToDB() *db.ReviewSearch {
 
 	search := &db.ReviewSearch{
 		ProjectID:    &s.ProjectID,
-		Author:       s.Author,
+		AuthorILike:  s.Author,
 		TrafficLight: s.TrafficLight,
 		IDLt:         s.FromReviewID,
 	}
