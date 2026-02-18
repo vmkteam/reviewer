@@ -1,10 +1,10 @@
 <template>
   <div class="min-h-screen flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-sm">
-      <h1 class="text-2xl font-bold text-gray-900 mb-6 text-center">VT Admin</h1>
+    <div class="bg-surface rounded-xl shadow-sm border border-edge p-6 sm:p-8 w-full max-w-sm mx-4 sm:mx-0">
+      <h1 class="text-2xl font-bold text-fg mb-6 text-center">VT Admin</h1>
       <form @submit.prevent="handleLogin">
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Login</label>
+          <label class="block text-sm font-medium text-fg-secondary mb-1">Login</label>
           <VInput
             v-model="login"
             type="text"
@@ -14,7 +14,7 @@
           />
         </div>
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <label class="block text-sm font-medium text-fg-secondary mb-1">Password</label>
           <VInput
             v-model="password"
             type="password"
@@ -25,14 +25,14 @@
         <div class="mb-6">
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="remember" type="checkbox" class="accent-blue-600" />
-            <span class="text-sm text-gray-600">Remember me</span>
+            <span class="text-sm text-fg-secondary">Remember me</span>
           </label>
         </div>
-        <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
+        <p v-if="error" class="text-sm text-danger mb-4">{{ error }}</p>
         <button
           type="submit"
           :disabled="loading"
-          class="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          class="w-full py-2.5 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
         >
           <span v-if="loading" class="inline-block spinner w-4 h-4 border-2 border-white/30 border-t-white"></span>
           <span v-else>Sign In</span>

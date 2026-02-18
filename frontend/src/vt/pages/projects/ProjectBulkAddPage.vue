@@ -1,19 +1,19 @@
 <template>
   <div>
     <div class="flex items-center justify-between mb-6 gap-4">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Bulk Add Projects</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-fg">Bulk Add Projects</h1>
       <VButton variant="secondary" to="/projects">Cancel</VButton>
     </div>
 
-    <form @submit.prevent="handleAdd" class="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl mx-auto">
-      <p v-if="error" class="text-sm text-red-600 mb-4">{{ error }}</p>
+    <form @submit.prevent="handleAdd" class="bg-surface rounded-xl border border-edge p-6 max-w-3xl mx-auto">
+      <p v-if="error" class="text-sm text-danger mb-4">{{ error }}</p>
 
       <FormField label="VCS URLs (one per line)" :error="fieldErrors.vcsURLs">
         <textarea
           v-model="vcsURLs"
           rows="6"
           placeholder="https://github.com/org/repo1&#10;https://github.com/org/repo2"
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+          class="w-full rounded-lg border border-edge-strong px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-accent outline-none font-mono"
           :disabled="adding"
         ></textarea>
       </FormField>
@@ -45,23 +45,23 @@
 
     <!-- Results table -->
     <div v-if="results.length" class="max-w-3xl mx-auto mt-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-3">Results</h2>
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <h2 class="text-lg font-semibold text-fg mb-3">Results</h2>
+      <div class="bg-surface rounded-xl border border-edge overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 border-b border-gray-200">
-              <th class="text-left px-4 py-2 font-medium text-gray-600">VCS URL</th>
-              <th class="text-left px-4 py-2 font-medium text-gray-600">Title</th>
-              <th class="text-left px-4 py-2 font-medium text-gray-600">Status</th>
+            <tr class="bg-surface-alt border-b border-edge">
+              <th class="text-left px-4 py-2 font-medium text-fg-secondary">VCS URL</th>
+              <th class="text-left px-4 py-2 font-medium text-fg-secondary">Title</th>
+              <th class="text-left px-4 py-2 font-medium text-fg-secondary">Status</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in results" :key="r.url" class="border-b border-gray-100 last:border-0">
-              <td class="px-4 py-2 font-mono text-xs text-gray-700 break-all">{{ r.url }}</td>
-              <td class="px-4 py-2 text-gray-900">{{ r.title }}</td>
+            <tr v-for="r in results" :key="r.url" class="border-b border-edge-light last:border-0">
+              <td class="px-4 py-2 font-mono text-xs text-fg-secondary break-all">{{ r.url }}</td>
+              <td class="px-4 py-2 text-fg">{{ r.title }}</td>
               <td class="px-4 py-2">
-                <span v-if="r.ok" class="text-green-700 font-medium">OK</span>
-                <span v-else class="text-red-600">{{ r.error }}</span>
+                <span v-if="r.ok" class="text-green-700 dark:text-green-300 font-medium">OK</span>
+                <span v-else class="text-danger">{{ r.error }}</span>
               </td>
             </tr>
           </tbody>

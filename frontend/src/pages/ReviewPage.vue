@@ -4,7 +4,7 @@
     <router-link
       v-if="review"
       to="/"
-      class="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors mb-4"
+      class="inline-flex items-center gap-1 text-sm text-fg-subtle hover:text-accent transition-colors mb-4"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
       Back
@@ -20,14 +20,14 @@
 
     <template v-else-if="review">
       <!-- Header Card -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+      <div class="bg-surface rounded-xl border border-edge p-4 sm:p-6 mb-6 shadow-sm">
         <div class="flex items-start gap-4">
           <div class="mt-0.5">
             <TrafficLight :color="review.trafficLight" size="lg" />
           </div>
           <div class="flex-1 min-w-0">
-            <h1 class="text-xl font-bold text-gray-900 leading-snug">{{ review.title }}</h1>
-            <p v-if="review.description" class="text-sm text-gray-500 mt-1 line-clamp-2">{{ review.description }}</p>
+            <h1 class="text-xl font-bold text-fg leading-snug">{{ review.title }}</h1>
+            <p v-if="review.description" class="text-sm text-fg-muted mt-1 line-clamp-2">{{ review.description }}</p>
           </div>
           <ExternalLink
             v-if="review.externalId && review.externalId !== '0' && project?.vcsURL"
@@ -37,64 +37,64 @@
           <router-link
             v-if="review.lastVersionReviewId"
             :to="{ name: 'review', params: { id: review.lastVersionReviewId } }"
-            class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
+            class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-amber-600 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-950 rounded-lg transition-colors"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
             Latest version
           </router-link>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-gray-100">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-edge-light">
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Author</div>
-            <div class="text-sm font-medium text-gray-800">{{ review.author }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Author</div>
+            <div class="text-sm font-medium text-fg">{{ review.author }}</div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Branch</div>
-            <div class="flex items-center gap-1 text-xs font-mono text-gray-600">
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Branch</div>
+            <div class="flex items-center gap-1 text-xs font-mono text-fg-secondary min-w-0">
               <span class="truncate">{{ review.sourceBranch }}</span>
-              <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              <svg class="w-3 h-3 text-fg-faint flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
               <span class="truncate">{{ review.targetBranch }}</span>
             </div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Commit</div>
-            <div class="text-sm font-mono text-gray-600">
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Commit</div>
+            <div class="text-sm font-mono text-fg-secondary">
               <a
                 v-if="project?.vcsURL && review.commitHash"
                 :href="buildVcsCommitURL(project.vcsURL, review.commitHash)"
                 target="_blank"
-                class="text-blue-600 hover:text-blue-800 hover:underline"
+                class="text-accent hover:text-accent-hover hover:underline"
               >{{ shortHash(review.commitHash) }}</a>
               <template v-else>{{ shortHash(review.commitHash) }}</template>
             </div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Date</div>
-            <div class="text-sm text-gray-600">{{ formatDateTime(review.createdAt) }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Date</div>
+            <div class="text-sm text-fg-secondary">{{ formatDateTime(review.createdAt) }}</div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Duration</div>
-            <div class="text-sm text-gray-600">{{ formatDuration(review.durationMs) }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Duration</div>
+            <div class="text-sm text-fg-secondary">{{ formatDuration(review.durationMs) }}</div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Model</div>
-            <div class="text-sm text-gray-600">{{ review.modelInfo.model }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Model</div>
+            <div class="text-sm text-fg-secondary">{{ review.modelInfo.model }}</div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Tokens</div>
-            <div class="text-sm text-gray-600 tabular-nums">{{ review.modelInfo.inputTokens.toLocaleString() }} / {{ review.modelInfo.outputTokens.toLocaleString() }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Tokens</div>
+            <div class="text-sm text-fg-secondary tabular-nums">{{ review.modelInfo.inputTokens.toLocaleString() }} / {{ review.modelInfo.outputTokens.toLocaleString() }}</div>
           </div>
           <div>
-            <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Cost</div>
-            <div class="text-sm text-gray-600">{{ formatCost(review.modelInfo.costUsd) }}</div>
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Cost</div>
+            <div class="text-sm text-fg-secondary">{{ formatCost(review.modelInfo.costUsd) }}</div>
           </div>
         </div>
       </div>
 
       <!-- Tabs -->
       <TabGroup :selected-index="selectedTab" @change="onTabChange">
-        <TabList class="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
+        <TabList class="flex gap-1 border-b border-edge mb-6 overflow-x-auto">
           <Tab
             v-for="tab in tabs"
             :key="tab.key"
@@ -104,8 +104,8 @@
             <button
               class="relative px-4 py-2.5 text-sm font-medium rounded-t-lg focus:outline-none transition-colors whitespace-nowrap flex-shrink-0"
               :class="selected
-                ? 'text-blue-600 bg-blue-50/50'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'"
+                ? 'text-accent bg-accent-light/50'
+                : 'text-fg-subtle hover:text-fg-secondary hover:bg-surface-alt'"
             >
               <span class="flex items-center gap-2">
                 <TrafficLight v-if="tab.color" :color="tab.color" size="sm" />
@@ -113,7 +113,7 @@
               </span>
               <span
                 v-if="selected"
-                class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full"
+                class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full"
               />
             </button>
           </Tab>
@@ -122,15 +122,15 @@
         <TabPanels>
           <!-- Review file tabs (A/C/S/T) -->
           <TabPanel v-for="rf in orderedReviewFiles" :key="rf.reviewFileId">
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-surface rounded-xl border border-edge shadow-sm overflow-hidden">
               <!-- Summary header -->
-              <div class="px-6 py-5 border-b border-gray-100">
+              <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-edge-light">
                 <div class="flex items-start gap-3">
                   <div class="mt-0.5"><TrafficLight :color="rf.trafficLight" size="md" /></div>
-                  <p class="text-sm text-gray-600 leading-relaxed flex-1">{{ rf.summary }}</p>
+                  <p class="text-sm text-fg-secondary leading-relaxed flex-1">{{ rf.summary }}</p>
                   <button
                     @click="downloadMarkdown(rf.content, rf.reviewType)"
-                    class="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    class="shrink-0 p-1.5 text-fg-subtle hover:text-fg-secondary rounded-lg hover:bg-surface-alt transition-colors"
                     title="Download markdown"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -143,7 +143,7 @@
                 </div>
               </div>
               <!-- Content -->
-              <div class="px-6 py-5">
+              <div class="px-4 sm:px-6 py-4 sm:py-5">
                 <MarkdownContent :content="rf.content" />
               </div>
             </div>
@@ -171,7 +171,7 @@
                 <option value="security">Security</option>
                 <option value="tests">Tests</option>
               </PSelect>
-              <span v-if="issueCount !== null" class="ml-auto text-xs text-gray-400">
+              <span v-if="issueCount !== null" class="ml-auto text-xs text-fg-subtle">
                 {{ issueCount }} issue{{ issueCount !== 1 ? 's' : '' }}
               </span>
             </div>

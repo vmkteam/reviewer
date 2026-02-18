@@ -32,7 +32,7 @@ const rendered = computed(() => md.render(props.content || ''))
 
 <style>
 .markdown-body pre {
-  background: #f6f8fa;
+  background: var(--color-surface-alt);
   border-radius: 6px;
   padding: 16px;
   overflow-x: auto;
@@ -56,11 +56,11 @@ const rendered = computed(() => md.render(props.content || ''))
   width: 100%;
 }
 .markdown-body th, .markdown-body td {
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--color-edge);
   padding: 6px 13px;
 }
 .markdown-body th {
-  background: #f6f8fa;
+  background: var(--color-surface-alt);
   font-weight: 600;
 }
 </style>

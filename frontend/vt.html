@@ -5,8 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vt/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VT Admin</title>
+    <script>if(localStorage.getItem('app_theme')==='dark'||(!localStorage.getItem('app_theme')&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')</script>
   </head>
-  <body class="bg-gray-50 text-gray-900 antialiased">
+  <body class="bg-surface-alt text-fg antialiased">
     <div id="app"></div>
     <script type="module" src="/src/vt/main.ts"></script>
   </body>

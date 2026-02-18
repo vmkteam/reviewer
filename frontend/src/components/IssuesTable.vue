@@ -1,54 +1,54 @@
 <template>
-  <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+  <div class="bg-surface rounded-xl border border-edge shadow-sm overflow-x-auto">
     <table class="min-w-full">
       <thead>
-        <tr class="border-b border-gray-100">
+        <tr class="border-b border-edge-light">
           <th
-            class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap"
-            :class="sortable ? 'cursor-pointer select-none hover:text-gray-600 transition-colors' : ''"
+            class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider whitespace-nowrap"
+            :class="sortable ? 'cursor-pointer select-none hover:text-fg-secondary transition-colors' : ''"
             @click="sortable && toggleSort('severity')"
           >Severity {{ sortable ? sortIcon('severity') : '' }}</th>
-          <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Title</th>
+          <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Title</th>
           <th
-            class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell whitespace-nowrap"
-            :class="sortable ? 'cursor-pointer select-none hover:text-gray-600 transition-colors' : ''"
+            class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden md:table-cell whitespace-nowrap"
+            :class="sortable ? 'cursor-pointer select-none hover:text-fg-secondary transition-colors' : ''"
             @click="sortable && toggleSort('file')"
           >File {{ sortable ? sortIcon('file') : '' }}</th>
           <th
-            class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap"
-            :class="sortable ? 'cursor-pointer select-none hover:text-gray-600 transition-colors' : ''"
+            class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider whitespace-nowrap"
+            :class="sortable ? 'cursor-pointer select-none hover:text-fg-secondary transition-colors' : ''"
             @click="sortable && toggleSort('issueType')"
           >Type {{ sortable ? sortIcon('issueType') : '' }}</th>
-          <th v-if="showReviewType" class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">RT</th>
-          <th class="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Feedback</th>
+          <th v-if="showReviewType" class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">RT</th>
+          <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden sm:table-cell">Feedback</th>
         </tr>
       </thead>
       <tbody>
         <template v-for="issue in displayIssues" :key="issue.issueId">
           <tr
             :id="'issue-' + issue.issueId"
-            class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors row-hover"
-            :class="expandedId === issue.issueId ? 'bg-blue-50/40' : ''"
+            class="border-b border-edge-light hover:bg-accent-light/30 cursor-pointer transition-colors row-hover"
+            :class="expandedId === issue.issueId ? 'bg-accent-light/40' : ''"
             @click="onToggle(issue.issueId)"
           >
             <td class="px-4 py-3">
               <SeverityBadge :severity="issue.severity" />
             </td>
-            <td class="px-4 py-3 text-sm text-gray-800">
+            <td class="px-4 py-3 text-sm text-fg">
               <span class="block max-w-[150px] sm:max-w-xs" :class="titleClass" :title="issue.title">{{ issue.title }}</span>
             </td>
             <td class="px-4 py-3 hidden md:table-cell" @click.stop>
-              <div class="text-xs font-mono text-gray-500">
+              <div class="text-xs font-mono text-fg-muted">
                 <a
                   v-if="project?.vcsURL && issue.commitHash"
                   :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
                   target="_blank"
-                  class="text-blue-600 hover:text-blue-800 hover:underline"
-                >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
-                <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-gray-300">:{{ issue.lines }}</span></template>
+                  class="text-accent hover:text-accent-hover hover:underline"
+                >{{ issue.file }}<span v-if="issue.lines" class="text-fg-subtle">:{{ issue.lines }}</span></a>
+                <template v-else>{{ issue.file }}<span v-if="issue.lines" class="text-fg-faint">:{{ issue.lines }}</span></template>
               </div>
             </td>
-            <td class="px-4 py-3 text-xs text-gray-500">{{ issue.issueType }}</td>
+            <td class="px-4 py-3 text-xs text-fg-muted">{{ issue.issueType }}</td>
             <td v-if="showReviewType" class="px-4 py-3">
               <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
             </td>
@@ -60,7 +60,7 @@
                 />
                 <button
                   v-if="showCopyLink"
-                  class="px-1.5 py-1 text-xs rounded-md border border-gray-200 text-gray-300 hover:text-gray-500 hover:border-gray-300 transition-all fb-btn ml-1"
+                  class="px-1.5 py-1 text-xs rounded-md border border-edge text-fg-faint hover:text-fg-muted hover:border-edge-strong transition-all fb-btn ml-1"
                   :title="copiedIssueId === issue.issueId ? 'Copied!' : 'Copy link'"
                   @click="$emit('copyLink', issue.issueId)"
                 >
@@ -71,10 +71,10 @@
             </td>
           </tr>
           <!-- Expanded detail row -->
-          <tr v-if="expandedId === issue.issueId" class="bg-gray-50/60">
+          <tr v-if="expandedId === issue.issueId" class="bg-surface-alt/60">
             <td :colspan="colspan" class="px-0 py-0">
-              <div class="px-6 py-5 border-t border-gray-100 space-y-3">
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <div class="px-6 py-5 border-t border-edge-light space-y-3">
+                <div class="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                   <InfoBadge>{{ issue.issueType }}</InfoBadge>
                   <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
                   <span class="font-mono">
@@ -82,23 +82,23 @@
                       v-if="project?.vcsURL && issue.commitHash"
                       :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
                       target="_blank"
-                      class="text-blue-600 hover:text-blue-800 hover:underline"
-                    >{{ issue.file }}<span v-if="issue.lines" class="text-gray-400">:{{ issue.lines }}</span></a>
+                      class="text-accent hover:text-accent-hover hover:underline"
+                    >{{ issue.file }}<span v-if="issue.lines" class="text-fg-subtle">:{{ issue.lines }}</span></a>
                     <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                   </span>
                 </div>
-                <p v-if="issue.description" class="text-sm text-gray-600 leading-relaxed">{{ issue.description }}</p>
+                <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed">{{ issue.description }}</p>
                 <MarkdownContent v-if="issue.content" :content="issue.content" />
                 <!-- Feedback (mobile) -->
-                <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-gray-100" @click.stop>
-                  <span class="text-xs text-gray-400">Feedback</span>
+                <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
+                  <span class="text-xs text-fg-subtle">Feedback</span>
                   <FeedbackButtons
                     :is-false-positive="issue.isFalsePositive"
                     @feedback="$emit('feedback', issue, $event)"
                   />
                 </div>
                 <!-- Comment -->
-                <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100" @click.stop>
+                <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-edge-light" @click.stop>
                   <PTextarea
                     v-model="commentTexts[issue.issueId]"
                     placeholder="Add comment..."
@@ -108,12 +108,12 @@
                     <button
                       class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                       :class="isCommentDirty(issue.issueId)
-                        ? 'text-white bg-blue-600 hover:bg-blue-700'
-                        : 'text-gray-400 bg-gray-100 cursor-default'"
+                        ? 'text-white bg-accent hover:bg-accent-hover'
+                        : 'text-fg-subtle bg-edge-light cursor-default'"
                       :disabled="commentSaving[issue.issueId] || !isCommentDirty(issue.issueId)"
                       @click="saveComment(issue)"
                     >{{ commentSaving[issue.issueId] ? 'Saving...' : 'Save' }}</button>
-                    <span v-if="commentErrors[issue.issueId]" class="text-xs text-red-600 py-2">{{ commentErrors[issue.issueId] }}</span>
+                    <span v-if="commentErrors[issue.issueId]" class="text-xs text-danger py-2">{{ commentErrors[issue.issueId] }}</span>
                   </div>
                 </div>
               </div>
@@ -121,7 +121,7 @@
           </tr>
         </template>
         <tr v-if="displayIssues.length === 0">
-          <td :colspan="colspan" class="px-4 py-12 text-center text-sm text-gray-400">{{ emptyText }}</td>
+          <td :colspan="colspan" class="px-4 py-12 text-center text-sm text-fg-subtle">{{ emptyText }}</td>
         </tr>
       </tbody>
     </table>

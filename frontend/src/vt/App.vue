@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <div class="min-h-screen bg-surface-alt">
     <NavHeader v-if="isAuthenticated" />
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <router-view />
@@ -11,8 +11,10 @@
 import { onMounted } from 'vue'
 import NavHeader from './components/NavHeader.vue'
 import { useAuth } from './composables/useAuth'
+import { useTheme } from '../composables/useTheme'
 
 const { isAuthenticated, loadProfile } = useAuth()
+useTheme()
 
 onMounted(() => {
   if (isAuthenticated.value) {
