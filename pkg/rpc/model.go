@@ -177,6 +177,7 @@ type ReviewFile struct {
 	ReviewType   string     `json:"reviewType"`
 	TrafficLight string     `json:"trafficLight"`
 	Summary      string     `json:"summary"`
+	IsAccepted   bool       `json:"isAccepted"`
 	IssueStats   IssueStats `json:"issueStats"`
 	Content      string     `json:"content"`
 }
@@ -187,6 +188,7 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 		ReviewType:   in.ReviewType,
 		TrafficLight: in.TrafficLight,
 		Summary:      in.Summary,
+		IsAccepted:   in.IsAccepted,
 		IssueStats:   newIssueStats(in.IssueStats),
 		Content:      in.Content,
 	}

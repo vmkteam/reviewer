@@ -432,6 +432,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "isAccepted",
+									Type: smd.Boolean,
+								},
+								{
 									Name: "issueStats",
 									Ref:  "#/definitions/IssueStats",
 									Type: smd.Object,

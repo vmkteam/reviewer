@@ -29,6 +29,7 @@ type ReviewDraft struct {
 	Files []struct {
 		ReviewType string `json:"reviewType"`
 		Summary    string `json:"summary"`
+		IsAccepted bool   `json:"isAccepted"`
 	} `json:"files"`
 	Issues []struct {
 		Severity    string `json:"severity"`
@@ -103,6 +104,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 			ReviewFile: db.ReviewFile{
 				ReviewType: f.ReviewType,
 				Summary:    f.Summary,
+				IsAccepted: f.IsAccepted,
 			},
 			Issues: issuesByType[f.ReviewType],
 		}

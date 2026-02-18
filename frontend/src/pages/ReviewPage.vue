@@ -32,6 +32,7 @@
           <ExternalLink
             v-if="review.externalId && review.externalId !== '0' && project?.vcsURL"
             :href="buildVcsMrURL(project.vcsURL, review.externalId)"
+            :variant="allAccepted ? 'success' : 'default'"
             class="flex-shrink-0"
           >{{ project.vcsURL.includes('github.com') ? 'PR' : 'MR' }} #{{ review.externalId }}</ExternalLink>
           <router-link
@@ -47,7 +48,10 @@
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-4 mt-6 pt-5 border-t border-edge-light">
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Author</div>
-            <div class="text-sm font-medium text-fg">{{ review.author }}</div>
+            <router-link
+              :to="{ name: 'reviews', params: { id: review.projectId }, query: { author: review.author } }"
+              class="text-sm font-medium text-accent hover:text-accent-hover hover:underline cursor-pointer"
+            >{{ review.author }}</router-link>
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Branch</div>
@@ -102,7 +106,7 @@
             as="template"
           >
             <button
-              class="relative px-4 py-2.5 text-sm font-medium rounded-t-lg focus:outline-none transition-colors whitespace-nowrap flex-shrink-0"
+              class="relative px-4 py-2.5 text-sm font-medium rounded-t-lg focus:outline-none transition-colors whitespace-nowrap flex-shrink-0 cursor-pointer"
               :class="selected
                 ? 'text-accent bg-accent-light/50'
                 : 'text-fg-subtle hover:text-fg-secondary hover:bg-surface-alt'"
@@ -304,6 +308,11 @@ async function scrollToIssue(issueId: number) {
   // Fallback: HeadlessUI may need extra frames to render panel content
   setTimeout(tryScroll, 100)
 }
+
+const allAccepted = computed(() => {
+  if (!review.value || review.value.reviewFiles.length === 0) return false
+  return review.value.reviewFiles.every(rf => rf.isAccepted)
+})
 
 const orderedReviewFiles = computed(() => {
   if (!review.value) return []

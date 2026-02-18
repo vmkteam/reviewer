@@ -77,9 +77,9 @@
                   <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Title</th>
                   <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Author</th>
                   <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden lg:table-cell">Branch</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">A/C/S/T</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Reviews</th>
                   <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Issues</th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Date</th>
+                  <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider whitespace-nowrap">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,7 +123,7 @@
                       {{ totalIssues(r) || '—' }}
                     </span>
                   </td>
-                  <td class="px-4 py-3.5 text-xs text-fg-subtle">
+                  <td class="px-4 py-3.5 text-xs text-fg-subtle whitespace-nowrap">
                     <TimeAgo :date="r.createdAt" />
                   </td>
                 </tr>
@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api, { type ReviewSummary, type Project, type ReviewFilters, type Issue } from '../api/factory'
 import TrafficLight from '../components/TrafficLight.vue'
 import ReviewTypeDots from '../components/ReviewTypeDots.vue'
@@ -188,6 +188,7 @@ const { setProject: setProjectCrumb } = useBreadcrumbs()
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
+const route = useRoute()
 
 const projectId = parseInt(props.id, 10)
 const project = ref<Project | null>(null)
@@ -200,7 +201,7 @@ const error = ref('')
 const activeTab = ref<'reviews' | 'risks'>('reviews')
 
 const filters = reactive<{ author: string; trafficLight: string }>({
-  author: '',
+  author: typeof route.query.author === 'string' ? route.query.author : '',
   trafficLight: '',
 })
 
