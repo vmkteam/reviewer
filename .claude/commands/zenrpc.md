@@ -70,7 +70,7 @@ go generate ./pkg/rpc    # → генерирует pkg/rpc/rpc_zenrpc.go
 go generate ./pkg/vt     # → генерирует pkg/vt/vt_zenrpc.go
 ```
 
-**ВАЖНО:** После любых изменений в API (добавление/изменение методов, параметров, аннотаций) необходимо запускать `make generate`. Эта команда также обновляет файлы фронтенда.
+**ВАЖНО:** После любых изменений в API (добавление/изменение методов, параметров, аннотаций) необходимо запускать `make generate`.
 
 ### TypeScript-клиенты
 
@@ -79,10 +79,12 @@ make type-script-client
 ```
 
 Генерирует:
-- `frontend/src/api/factory.generated.ts` — клиент для VT API
-- `frontend/src/api/vt.generated.ts` — клиент для Review API
+- `frontend/src/api/factory.generated.ts` — клиент для Review API (rpc)
+- `frontend/src/api/vt.generated.ts` — клиент для VT Admin API (vt)
 
 Зависит от `make generate` (запускается автоматически).
+
+**ВАЖНО:** После генерации TypeScript-клиентов необходимо вручную добавить `// @ts-nocheck` на третью строку каждого сгенерированного файла (после `/* eslint-disable */`), иначе фронтенд не скомпилируется.
 
 ## Определение сервиса
 

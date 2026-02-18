@@ -94,7 +94,8 @@ review.json — структурированные данные по всем з
   "files": [
     {
       "reviewType": "architecture | code | security | tests",
-      "summary": "Краткий вывод по этому типу ревью"
+      "summary": "Краткий вывод по этому типу ревью",
+      "isAccepted": true
     }
   ],
   "issues": [
@@ -118,6 +119,7 @@ review.json — структурированные данные по всем з
 - review.externalId, review.commitHash — из контекста git и VCS
 - issues в JSON должны точно соответствовать замечаниям в MD-файлах
 - в issues должны попадать только открытые замечания, не исправленные
+- isAccepted — true, если MR допустим с точки зрения данного аспекта (нет critical/high замечаний), false — если есть серьёзные проблемы
 - trafficLight и issuesStats — НЕ заполняй, рассчитываются на сервере
 - description — краткий, информативный, на русском
 - поставь оценочные значения в modelInfo из claude code сессии, так как точных значений у тебя нет

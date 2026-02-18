@@ -1,6 +1,6 @@
-// @ts-nocheck
 /* Code generated from jsonrpc schema by rpcgen v2.5.x with typescript v1.0.0; DO NOT EDIT. */
 /* eslint-disable */
+// @ts-nocheck
 export interface IIssue {
   issueId: number,
   reviewId: number,
@@ -98,6 +98,7 @@ export interface IReviewFile {
   reviewType: string,
   trafficLight: string,
   summary: string,
+  isAccepted: boolean,
   issueStats: IIssueStats,
   content: string
 }
@@ -273,6 +274,7 @@ export class ReviewFile implements IReviewFile {
   reviewType: string = null;
   trafficLight: string = null;
   summary: string = null;
+  isAccepted: boolean = false;
   issueStats: IIssueStats = null;
   content: string = null;
 }
