@@ -131,7 +131,16 @@
               <div class="px-6 py-5 border-b border-gray-100">
                 <div class="flex items-start gap-3">
                   <div class="mt-0.5"><TrafficLight :color="rf.trafficLight" size="md" /></div>
-                  <p class="text-sm text-gray-600 leading-relaxed">{{ rf.summary }}</p>
+                  <p class="text-sm text-gray-600 leading-relaxed flex-1">{{ rf.summary }}</p>
+                  <button
+                    @click="downloadMarkdown(rf.content, rf.reviewType)"
+                    class="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    title="Download markdown"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                  </button>
                 </div>
                 <div class="mt-3 ml-6">
                   <IssueStatsBar :stats="rf.issueStats" />
@@ -389,6 +398,16 @@ function copyIssueLink(issueId: number) {
   setTimeout(() => {
     if (copiedIssueId.value === issueId) copiedIssueId.value = null
   }, 1500)
+}
+
+function downloadMarkdown(content: string, reviewType: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${review.value?.title ?? 'review'}-${reviewType}.md`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 async function scrollToIssue(issueId: number) {

@@ -59,7 +59,7 @@ export class ApiConnectionError extends Error {
   constructor(event: any) {
     super()
     this.name = 'ApiConnectionError'
-    this.message = 'Api connection error'
+    this.message = 'API Connection Error'
     this.event = event
   }
 }

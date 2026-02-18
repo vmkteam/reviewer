@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-6 gap-4">
       <h1 class="text-xl sm:text-2xl font-bold text-gray-900">{{ isEdit ? 'Edit Prompt' : 'New Prompt' }}</h1>
       <div class="flex gap-2">
-        <button v-if="!isEdit" type="button" @click="fillExample" class="px-4 py-2 text-sm font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors">Fill Example</button>
+        <FillExampleSelect v-if="!isEdit" :presets="languagePresets" @select="fillExample" />
         <button v-if="isEdit" @click="showConfirm = true" class="p-2 text-gray-400 hover:text-red-600 transition-colors" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
         <VButton variant="secondary" to="/prompts">Cancel</VButton>
       </div>
@@ -68,6 +68,7 @@ import VInput from '../../components/VInput.vue'
 import VTextarea from '../../components/VTextarea.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
+import FillExampleSelect from '../../components/FillExampleSelect.vue'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -91,13 +92,24 @@ async function handleDelete() {
   if (props.id && await remove(parseInt(props.id))) router.push('/prompts')
 }
 
-function fillExample() {
-  entity.title = 'Go Review'
+const languagePresets: Record<string, { title: string; code: string; architecture: string; security: string; tests: string }> = {
+  'Go': { title: 'Go Review', code: 'Rob Pike', architecture: 'Dave Cheney', security: 'Filippo Valsorda', tests: 'Mitchell Hashimoto' },
+  'Swift / iOS': { title: 'Swift Review', code: 'Chris Lattner', architecture: 'Krzysztof Zabłocki', security: 'Philippe De Ryck', tests: 'John Sundell' },
+  'Kotlin / Android': { title: 'Kotlin Review', code: 'Roman Elizarov', architecture: 'Yigit Boyar', security: 'Maddie Stone', tests: 'Jake Wharton' },
+  'Vue + Nuxt': { title: 'Vue Review', code: 'Evan You', architecture: 'Daniel Roe', security: 'Liran Tal', tests: 'Jessica Sachs' },
+  'Python': { title: 'Python Review', code: 'Raymond Hettinger', architecture: 'Sebastián Ramírez', security: 'Anthony Shaw', tests: 'Brian Okken' },
+}
+
+function fillExample(lang: string) {
+  const preset = languagePresets[lang]
+  if (!preset) return
+
+  entity.title = preset.title
   entity.common = 'Дополнительно проверь текст задачи на предмет фикса.\nЕсли были исправлены ошибки, предположи, что к ним привело и где еще могут быть потенциальные ошибки.'
-  entity.architecture = 'Dave Cheney. Есть ли ошибки в бизнес логике?'
-  entity.code = 'Rob Pike. Обязательно расскажи, что можно улучшить и упросить в данном коде.'
-  entity.security = 'Filippo Valsorda. Проведи ревью безопасности этого MR.'
-  entity.tests = 'Mitchell Hashimoto. Проведи ревью тестов этого MR. Если тестов нет — укажи, какие нужно добавить и почему.'
+  entity.architecture = `${preset.architecture}. Есть ли ошибки в бизнес логике?`
+  entity.code = `${preset.code}. Обязательно расскажи, что можно улучшить и упросить в данном коде.`
+  entity.security = `${preset.security}. Проведи ревью безопасности этого MR.`
+  entity.tests = `${preset.tests}. Проведи ревью тестов этого MR. Если тестов нет — укажи, какие нужно добавить и почему.`
   entity.statusId = 1
 }
 </script>
