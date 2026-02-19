@@ -19,10 +19,9 @@ CREATE INDEX "IX_issues_reviewId" ON "issues" ("reviewId");
 CREATE INDEX "IX_issues_reviewFileId" ON "issues" ("reviewFileId");
 
 
-ALTER TABLE "issues"
-    ADD CONSTRAINT "Ref_issues_to_reviews" FOREIGN KEY ("reviewId")
-        REFERENCES "reviews" ("reviewId")
-            MATCH SIMPLE
-        ON DELETE NO ACTION
-        ON UPDATE NO ACTION
-        NOT DEFERRABLE;
+ALTER TABLE "issues" ADD CONSTRAINT "Ref_issues_to_reviews" FOREIGN KEY ("reviewId")
+    REFERENCES "reviews"("reviewId")
+        MATCH SIMPLE
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+    NOT DEFERRABLE;

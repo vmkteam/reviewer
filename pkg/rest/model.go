@@ -32,6 +32,7 @@ type ReviewDraft struct {
 		IsAccepted bool   `json:"isAccepted"`
 	} `json:"files"`
 	Issues []struct {
+		LocalID     string `json:"localId"`
 		Severity    string `json:"severity"`
 		Title       string `json:"title"`
 		Description string `json:"description"`
@@ -87,6 +88,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 	for _, iss := range rd.Issues {
 		issuesByType[iss.FileType] = append(issuesByType[iss.FileType], reviewer.Issue{
 			Issue: db.Issue{
+				LocalID:     ptrString(iss.LocalID),
 				IssueType:   iss.IssueType,
 				Title:       iss.Title,
 				Severity:    iss.Severity,
@@ -111,4 +113,11 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 	}
 
 	return rv
+}
+
+func ptrString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

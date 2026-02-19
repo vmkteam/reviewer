@@ -206,6 +206,7 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 type Issue struct {
 	ID              int     `json:"issueId"`
 	ReviewID        int     `json:"reviewId"`
+	LocalID         *string `json:"localId"`
 	Title           string  `json:"title"`
 	Severity        string  `json:"severity"`
 	Description     string  `json:"description"`
@@ -227,6 +228,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 	issue := &Issue{
 		ID:              in.ID,
 		ReviewID:        in.ReviewID,
+		LocalID:         in.LocalID,
 		Title:           in.Title,
 		Severity:        in.Severity,
 		Description:     in.Description,

@@ -4,6 +4,7 @@
 export interface IIssue {
   issueId: number,
   reviewId: number,
+  localId?: string,
   title: string,
   severity: string,
   description: string,
@@ -163,6 +164,7 @@ export class Issue implements IIssue {
 
   issueId: number = 0;
   reviewId: number = 0;
+  localId?: string = null;
   title: string = null;
   severity: string = null;
   description: string = null;

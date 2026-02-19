@@ -1,6 +1,6 @@
 ﻿-- =============================================================================
 -- Diagram Name: reviewsrv
--- Created on: 2/19/2026 1:13:40 AM
+-- Created on: 2/19/2026 12:58:43 PM
 -- Diagram Version: 
 -- =============================================================================
 
@@ -265,8 +265,8 @@ ALTER TABLE "issues" ADD CONSTRAINT "Ref_issues_to_users" FOREIGN KEY ("userId")
 ALTER TABLE "issues" ADD CONSTRAINT "Ref_issues_to_reviews" FOREIGN KEY ("reviewId")
 	REFERENCES "reviews"("reviewId")
 	MATCH SIMPLE
-	ON DELETE NO ACTION
-	ON UPDATE NO ACTION
+	ON DELETE RESTRICT
+	ON UPDATE RESTRICT
 	NOT DEFERRABLE;
 
 ALTER TABLE "users" ADD CONSTRAINT "Ref_users_to_statuses" FOREIGN KEY ("statusId")

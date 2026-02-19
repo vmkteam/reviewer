@@ -158,6 +158,7 @@
             :project="project"
             :sortable="false"
             :show-review-type="false"
+            :show-local-id="false"
             :show-copy-link="true"
             :copied-issue-id="copiedIssueId"
             empty-text="No accepted risks found."

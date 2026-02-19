@@ -618,6 +618,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.Integer,
 								},
 								{
+									Name:     "localId",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
 									Name: "title",
 									Type: smd.String,
 								},
@@ -779,6 +784,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								{
 									Name: "reviewId",
 									Type: smd.Integer,
+								},
+								{
+									Name:     "localId",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "title",
