@@ -250,8 +250,10 @@ func newIssue(in *reviewer.Issue) *Issue {
 
 // ReviewFilters — фильтры для списка ревью.
 type ReviewFilters struct {
+	Title        *string `json:"title"`
 	Author       *string `json:"author"`
 	TrafficLight *string `json:"trafficLight"`
+	ExternalID   *string `json:"externalId"`
 }
 
 // ToDomain converts RPC filters to a domain ReviewSearch with pagination cursor.
@@ -261,8 +263,10 @@ func (f *ReviewFilters) ToDomain(projectID int, fromReviewID *int) *reviewer.Rev
 		FromReviewID: fromReviewID,
 	}
 	if f != nil {
+		s.Title = f.Title
 		s.Author = f.Author
 		s.TrafficLight = f.TrafficLight
+		s.ExternalID = f.ExternalID
 	}
 	return s
 }

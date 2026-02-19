@@ -112,8 +112,10 @@ export interface IReviewFileSummary {
 }
 
 export interface IReviewFilters {
+  title?: string,
   author?: string,
-  trafficLight?: string
+  trafficLight?: string,
+  externalId?: string
 }
 
 export interface IReviewGetByIDParams {
@@ -298,8 +300,10 @@ export class ReviewFileSummary implements IReviewFileSummary {
 export class ReviewFilters implements IReviewFilters {
   static entityName = "reviewfilters";
 
+  title?: string = null;
   author?: string = null;
   trafficLight?: string = null;
+  externalId?: string = null;
 }
 
 export class ReviewGetByIDParams implements IReviewGetByIDParams {

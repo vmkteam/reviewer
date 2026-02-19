@@ -206,6 +206,19 @@
               @update:expanded-id="onExpandedIdChange"
             />
           </TabPanel>
+
+          <!-- Previous Reviews tab -->
+          <TabPanel v-if="previousCount >= 2">
+            <div v-if="previousLoading" class="flex justify-center py-12">
+              <div class="spinner" />
+            </div>
+            <ReviewsTable
+              v-else
+              :reviews="previousReviews"
+              :current-review-id="reviewId"
+              @click="goToPreviousReview"
+            />
+          </TabPanel>
         </TabPanels>
       </TabGroup>
     </template>
@@ -217,7 +230,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
-import api, { type Review, type Issue, type Project } from '../api/factory'
+import { useRouter } from 'vue-router'
+import api, { type Review, type Issue, type Project, type ReviewSummary } from '../api/factory'
 import TrafficLight from '../components/TrafficLight.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
@@ -227,12 +241,14 @@ import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
 import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
+import ReviewsTable from '../components/ReviewsTable.vue'
 import { useFormat } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 import { linkifyTaskIds } from '../composables/useTaskLink'
 
 const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeFullName, buildVcsCommitURL, buildVcsMrURL } = useFormat()
 const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumbs()
+const router = useRouter()
 
 const props = defineProps<{ id: string }>()
 
@@ -259,6 +275,12 @@ const selectedTab = ref(0)
 const typeOrder = ['architecture', 'code', 'security', 'tests']
 const targetIssueId = ref<number | null>(null)
 const copiedIssueId = ref<number | null>(null)
+
+// Previous Reviews
+const previousCount = ref(0)
+const previousReviews = ref<ReviewSummary[]>([])
+const previousLoading = ref(false)
+const previousLoaded = ref(false)
 
 function parseHash(): { tabKey: string | null; issueId: number | null } {
   const hash = window.location.hash.replace('#', '')
@@ -335,7 +357,11 @@ const tabs = computed(() => {
     label: reviewTypeFullName(rf.reviewType),
     color: rf.trafficLight,
   }))
-  return [...rfTabs, { key: 'issues', label: 'Issues', color: '' }]
+  const allTabs = [...rfTabs, { key: 'issues', label: 'Issues', color: '' }]
+  if (previousCount.value >= 2) {
+    allTabs.push({ key: 'previous', label: 'Previous Reviews', color: '' })
+  }
+  return allTabs
 })
 
 const issueTypes = computed(() => {
@@ -375,6 +401,26 @@ async function loadIssues() {
   }
 }
 
+async function loadPreviousReviews() {
+  if (previousLoaded.value || previousLoading.value) return
+  previousLoading.value = true
+  try {
+    previousReviews.value = await api.review.get({
+      projectId: review.value!.projectId,
+      filters: { externalId: review.value!.externalId },
+    })
+    previousLoaded.value = true
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to load previous reviews'
+  } finally {
+    previousLoading.value = false
+  }
+}
+
+function goToPreviousReview(reviewId: number) {
+  router.push({ name: 'review', params: { id: reviewId } })
+}
+
 async function setFeedback(issue: Issue, value: boolean | null) {
   try {
     await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
@@ -396,7 +442,8 @@ function issuesForReviewFile(reviewType: string): IssueBadgeInfo[] {
 }
 
 function navigateToIssue(issueId: number) {
-  const issuesTabIndex = tabs.value.length - 1
+  const issuesTabIndex = tabs.value.findIndex(t => t.key === 'issues')
+  if (issuesTabIndex < 0) return
   selectedTab.value = issuesTabIndex
   history.pushState(null, '', '#issues-' + issueId)
   scrollToIssue(issueId)
@@ -406,8 +453,10 @@ function onTabChange(index: number) {
   selectedTab.value = index
   const tab = tabs.value[index]
   if (tab) updateHash(tab.key)
-  if (index === orderedReviewFiles.value.length) {
+  if (tab?.key === 'issues') {
     loadIssues()
+  } else if (tab?.key === 'previous') {
+    loadPreviousReviews()
   }
 }
 
@@ -439,6 +488,13 @@ onMounted(async () => {
     document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
+    // Load previous reviews count in parallel with issues
+    if (review.value.externalId && review.value.externalId !== '0') {
+      api.review.count({
+        projectId: review.value.projectId,
+        filters: { externalId: review.value.externalId },
+      }).then(c => { previousCount.value = c }).catch(() => {})
+    }
     await loadIssues()
     // Apply hash after data is loaded — sets selectedTab and targetIssueId
     applyHash()
@@ -463,12 +519,21 @@ onUnmounted(() => {
 watch(() => props.id, async () => {
   loading.value = true
   error.value = ''
+  previousCount.value = 0
+  previousReviews.value = []
+  previousLoaded.value = false
   try {
     review.value = await api.review.getByID({ reviewId: reviewId.value })
     document.title = `${review.value.title} — reviewer`
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
     selectedTab.value = 0
+    if (review.value.externalId && review.value.externalId !== '0') {
+      api.review.count({
+        projectId: review.value.projectId,
+        filters: { externalId: review.value.externalId },
+      }).then(c => { previousCount.value = c }).catch(() => {})
+    }
     await loadIssues()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load review'
