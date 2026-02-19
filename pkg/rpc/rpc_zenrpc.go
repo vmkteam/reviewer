@@ -230,12 +230,22 @@ func (ReviewService) SMD() smd.ServiceInfo {
 						TypeName:    "ReviewFilters",
 						Properties: smd.PropertyList{
 							{
+								Name:     "title",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "author",
 								Optional: true,
 								Type:     smd.String,
 							},
 							{
 								Name:     "trafficLight",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "externalId",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -370,12 +380,22 @@ func (ReviewService) SMD() smd.ServiceInfo {
 						TypeName:    "ReviewFilters",
 						Properties: smd.PropertyList{
 							{
+								Name:     "title",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "author",
 								Optional: true,
 								Type:     smd.String,
 							},
 							{
 								Name:     "trafficLight",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "externalId",
 								Optional: true,
 								Type:     smd.String,
 							},

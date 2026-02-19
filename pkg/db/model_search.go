@@ -371,6 +371,7 @@ type ReviewSearch struct {
 	PromptID     *int
 	IDs          []int
 	IDLt         *int
+	TitleILike   *string
 	AuthorILike  *string
 }
 
@@ -425,6 +426,9 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if rs.IDLt != nil {
 		Filter{Columns.Review.ID, *rs.IDLt, SearchTypeLess, false}.Apply(query)
+	}
+	if rs.TitleILike != nil {
+		Filter{Columns.Review.Title, *rs.TitleILike, SearchTypeILike, false}.Apply(query)
 	}
 	if rs.AuthorILike != nil {
 		Filter{Columns.Review.Author, *rs.AuthorILike, SearchTypeILike, false}.Apply(query)

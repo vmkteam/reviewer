@@ -189,8 +189,10 @@ type ProjectStats struct {
 // ReviewSearch contains search params for listing reviews.
 type ReviewSearch struct {
 	ProjectID    int
+	Title        *string
 	Author       *string
 	TrafficLight *string
+	ExternalID   *string
 	FromReviewID *int
 }
 
@@ -202,8 +204,10 @@ func (s *ReviewSearch) ToDB() *db.ReviewSearch {
 
 	search := &db.ReviewSearch{
 		ProjectID:    &s.ProjectID,
+		TitleILike:   s.Title,
 		AuthorILike:  s.Author,
 		TrafficLight: s.TrafficLight,
+		ExternalID:   s.ExternalID,
 		IDLt:         s.FromReviewID,
 	}
 	return search
