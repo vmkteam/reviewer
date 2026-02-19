@@ -26,8 +26,8 @@
             <TrafficLight :color="review.trafficLight" size="lg" />
           </div>
           <div class="flex-1 min-w-0">
-            <h1 class="text-xl font-bold text-fg leading-snug">{{ review.title }}</h1>
-            <p v-if="review.description" class="text-sm text-fg-muted mt-1 line-clamp-2">{{ review.description }}</p>
+            <h1 class="text-xl font-bold text-fg leading-snug" v-html="linkifyTaskIds(review.title, taskTrackerURL)" />
+            <p v-if="review.description" class="text-sm text-fg-muted mt-1 line-clamp-2" v-html="linkifyTaskIds(review.description, taskTrackerURL)" />
           </div>
           <ExternalLink
             v-if="review.externalId && review.externalId !== '0' && project?.vcsURL"
@@ -131,7 +131,7 @@
               <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-edge-light">
                 <div class="flex items-start gap-3">
                   <div class="mt-0.5"><TrafficLight :color="rf.trafficLight" size="md" /></div>
-                  <p class="text-sm text-fg-secondary leading-relaxed flex-1">{{ rf.summary }}</p>
+                  <p class="text-sm text-fg-secondary leading-relaxed flex-1" v-html="linkifyTaskIds(rf.summary, taskTrackerURL)" />
                   <button
                     @click="downloadMarkdown(rf.content, rf.reviewType)"
                     class="shrink-0 p-1.5 text-fg-subtle hover:text-fg-secondary rounded-lg hover:bg-surface-alt transition-colors"
@@ -148,7 +148,7 @@
               </div>
               <!-- Content -->
               <div class="px-4 sm:px-6 py-4 sm:py-5">
-                <MarkdownContent :content="rf.content" />
+                <MarkdownContent :content="rf.content" :task-tracker-url="taskTrackerURL" />
               </div>
             </div>
           </TabPanel>
@@ -223,6 +223,7 @@ import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
 import { useFormat } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
+import { linkifyTaskIds } from '../composables/useTaskLink'
 
 const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeFullName, buildVcsCommitURL, buildVcsMrURL } = useFormat()
 const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumbs()
@@ -230,6 +231,7 @@ const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumb
 const props = defineProps<{ id: string }>()
 
 const reviewId = computed(() => parseInt(props.id, 10))
+const taskTrackerURL = computed(() => project.value?.taskTrackerURL ?? null)
 const review = ref<Review | null>(null)
 const project = ref<Project | null>(null)
 const loading = ref(true)
@@ -387,14 +389,11 @@ function onTabChange(index: number) {
 
 async function loadProjectCrumb(projectId: number, rv: { reviewId: number; title: string }) {
   try {
-    const projects = await api.review.projects()
-    const p = projects.find(p => p.projectId === projectId)
-    if (p) {
-      project.value = p
-      setProjectCrumb(p.projectId, p.title)
-      // Re-set review crumb because setProjectCrumb clears it
-      setReviewCrumb(rv.reviewId, rv.title)
-    }
+    const p = await api.review.projectByID({ projectId })
+    project.value = p
+    setProjectCrumb(p.projectId, p.title)
+    // Re-set review crumb because setProjectCrumb clears it
+    setReviewCrumb(rv.reviewId, rv.title)
   } catch {
     // breadcrumb is non-critical, ignore errors
   }

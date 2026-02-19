@@ -35,7 +35,7 @@
               <SeverityBadge :severity="issue.severity" />
             </td>
             <td class="px-4 py-3 text-sm text-fg">
-              <span class="block max-w-[150px] sm:max-w-xs" :class="titleClass" :title="issue.title">{{ issue.title }}</span>
+              <span class="block max-w-[150px] sm:max-w-xs" :class="titleClass" :title="issue.title" v-html="linkifyTaskIds(issue.title, taskTrackerURL)" />
             </td>
             <td class="px-4 py-3 hidden md:table-cell" @click.stop>
               <div class="text-xs font-mono text-fg-muted">
@@ -87,8 +87,8 @@
                     <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                   </span>
                 </div>
-                <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed">{{ issue.description }}</p>
-                <MarkdownContent v-if="issue.content" :content="issue.content" />
+                <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed" v-html="linkifyTaskIds(issue.description, taskTrackerURL)" />
+                <MarkdownContent v-if="issue.content" :content="issue.content" :task-tracker-url="taskTrackerURL" />
                 <!-- Feedback (mobile) -->
                 <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
                   <span class="text-xs text-fg-subtle">Feedback</span>
@@ -138,8 +138,10 @@ import PTextarea from './PTextarea.vue'
 import InfoBadge from './InfoBadge.vue'
 import FeedbackButtons from './FeedbackButtons.vue'
 import { useFormat } from '../composables/useFormat'
+import { linkifyTaskIds } from '../composables/useTaskLink'
 
 const { reviewTypeLabel, buildVcsFileURL, compareSeverity } = useFormat()
+const taskTrackerURL = computed(() => props.project?.taskTrackerURL ?? null)
 
 const props = withDefaults(defineProps<{
   issues: Issue[]

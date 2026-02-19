@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID string
 	}
 	Issue struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
 
 		ReviewFile, Review, User string
 	}
@@ -28,7 +28,7 @@ var Columns = struct {
 		Project, Prompt string
 	}
 	Project struct {
-		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID string
+		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions string
 
 		Prompt, TaskTracker, SlackChannel string
 	}
@@ -39,7 +39,7 @@ var Columns = struct {
 		ID, Title, Channel, WebhookURL, StatusID string
 	}
 	TaskTracker struct {
-		ID, Title, AuthToken, FetchPrompt, CreatedAt, StatusID string
+		ID, Title, AuthToken, FetchPrompt, CreatedAt, StatusID, URL string
 	}
 }{
 	User: struct {
@@ -54,7 +54,7 @@ var Columns = struct {
 		StatusID:       "statusId",
 	},
 	Issue: struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
 
 		ReviewFile, Review, User string
 	}{
@@ -74,6 +74,7 @@ var Columns = struct {
 		CreatedAt:       "createdAt",
 		UserID:          "userId",
 		StatusID:        "statusId",
+		LocalID:         "localId",
 
 		ReviewFile: "ReviewFile",
 		Review:     "Review",
@@ -122,7 +123,7 @@ var Columns = struct {
 		Prompt:  "Prompt",
 	},
 	Project: struct {
-		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID string
+		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions string
 
 		Prompt, TaskTracker, SlackChannel string
 	}{
@@ -136,6 +137,7 @@ var Columns = struct {
 		SlackChannelID: "slackChannelId",
 		CreatedAt:      "createdAt",
 		StatusID:       "statusId",
+		Instructions:   "instructions",
 
 		Prompt:       "Prompt",
 		TaskTracker:  "TaskTracker",
@@ -164,7 +166,7 @@ var Columns = struct {
 		StatusID:   "statusId",
 	},
 	TaskTracker: struct {
-		ID, Title, AuthToken, FetchPrompt, CreatedAt, StatusID string
+		ID, Title, AuthToken, FetchPrompt, CreatedAt, StatusID, URL string
 	}{
 		ID:          "taskTrackerId",
 		Title:       "title",
@@ -172,6 +174,7 @@ var Columns = struct {
 		FetchPrompt: "fetchPrompt",
 		CreatedAt:   "createdAt",
 		StatusID:    "statusId",
+		URL:         "url",
 	},
 }
 
@@ -282,6 +285,7 @@ type Issue struct {
 	CreatedAt       time.Time  `pg:"createdAt,use_zero"`
 	UserID          *int       `pg:"userId"`
 	StatusID        int        `pg:"statusId,use_zero"`
+	LocalID         *string    `pg:"localId"`
 
 	ReviewFile *ReviewFile `pg:"fk:reviewFileId,rel:has-one"`
 	Review     *Review     `pg:"fk:reviewId,rel:has-one"`
@@ -341,6 +345,7 @@ type Project struct {
 	SlackChannelID *int      `pg:"slackChannelId"`
 	CreatedAt      time.Time `pg:"createdAt,use_zero"`
 	StatusID       int       `pg:"statusId,use_zero"`
+	Instructions   *string   `pg:"instructions"`
 
 	Prompt       *Prompt       `pg:"fk:promptId,rel:has-one"`
 	TaskTracker  *TaskTracker  `pg:"fk:taskTrackerId,rel:has-one"`
@@ -376,8 +381,9 @@ type TaskTracker struct {
 
 	ID          int       `pg:"taskTrackerId,pk"`
 	Title       string    `pg:"title,use_zero"`
-	AuthToken   string    `pg:"authToken,use_zero"`
+	AuthToken   *string   `pg:"authToken"`
 	FetchPrompt string    `pg:"fetchPrompt,use_zero"`
 	CreatedAt   time.Time `pg:"createdAt,use_zero"`
 	StatusID    int       `pg:"statusId,use_zero"`
+	URL         string    `pg:"url,use_zero"`
 }

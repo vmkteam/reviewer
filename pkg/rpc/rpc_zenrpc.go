@@ -12,13 +12,14 @@ import (
 
 var RPC = struct {
 	AppService    struct{ Version string }
-	ReviewService struct{ Projects, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }
+	ReviewService struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }
 }{
 	AppService: struct{ Version string }{
 		Version: "version",
 	},
-	ReviewService: struct{ Projects, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }{
+	ReviewService: struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }{
 		Projects:             "projects",
+		ProjectByID:          "projectbyid",
 		Get:                  "get",
 		Count:                "count",
 		GetByID:              "getbyid",
@@ -90,6 +91,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name:     "taskTrackerURL",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
 									Name: "language",
 									Type: smd.String,
 								},
@@ -130,6 +136,82 @@ func (ReviewService) SMD() smd.ServiceInfo {
 				},
 				Errors: map[int]string{
 					500: "Internal Error",
+				},
+			},
+			"ProjectByID": {
+				Description: `ProjectByID returns a single project by ID.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "projectId",
+						Description: `Project ID`,
+						Type:        smd.Integer,
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `Project`,
+					Optional:    true,
+					Type:        smd.Object,
+					TypeName:    "Project",
+					Properties: smd.PropertyList{
+						{
+							Name: "projectId",
+							Type: smd.Integer,
+						},
+						{
+							Name: "title",
+							Type: smd.String,
+						},
+						{
+							Name: "vcsURL",
+							Type: smd.String,
+						},
+						{
+							Name:     "taskTrackerURL",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name: "language",
+							Type: smd.String,
+						},
+						{
+							Name: "createdAt",
+							Type: smd.String,
+						},
+						{
+							Name: "reviewCount",
+							Type: smd.Integer,
+						},
+						{
+							Name:     "lastReview",
+							Optional: true,
+							Ref:      "#/definitions/LastReview",
+							Type:     smd.Object,
+						},
+					},
+					Definitions: map[string]smd.Definition{
+						"LastReview": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "createdAt",
+									Type: smd.String,
+								},
+								{
+									Name: "author",
+									Type: smd.String,
+								},
+								{
+									Name: "trafficLight",
+									Type: smd.String,
+								},
+							},
+						},
+					},
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+					404: "Not Found",
 				},
 			},
 			"Get": {
@@ -861,6 +943,25 @@ func (s ReviewService) Invoke(ctx context.Context, method string, params json.Ra
 	switch method {
 	case RPC.ReviewService.Projects:
 		resp.Set(s.Projects(ctx))
+
+	case RPC.ReviewService.ProjectByID:
+		var args = struct {
+			ProjectId int `json:"projectId"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"projectId"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.ProjectByID(ctx, args.ProjectId))
 
 	case RPC.ReviewService.Get:
 		var args = struct {

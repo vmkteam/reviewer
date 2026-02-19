@@ -49,6 +49,7 @@ export interface IProject {
   projectId: number,
   title: string,
   vcsURL: string,
+  taskTrackerURL?: string,
   language: string,
   createdAt: string,
   reviewCount: number,
@@ -135,6 +136,10 @@ export interface IReviewIssuesParams {
   filters?: IIssueFilters
 }
 
+export interface IReviewProjectByIDParams {
+  projectId: number
+}
+
 export interface IReviewSetCommentParams {
   issueId: number,
   comment?: string
@@ -213,6 +218,7 @@ export class Project implements IProject {
   projectId: number = 0;
   title: string = null;
   vcsURL: string = null;
+  taskTrackerURL?: string = null;
   language: string = null;
   createdAt: string = null;
   reviewCount: number = 0;
@@ -323,6 +329,12 @@ export class ReviewIssuesParams implements IReviewIssuesParams {
   filters?: IIssueFilters = null;
 }
 
+export class ReviewProjectByIDParams implements IReviewProjectByIDParams {
+  static entityName = "reviewprojectbyidparams";
+
+  projectId: number = 0;
+}
+
 export class ReviewSetCommentParams implements IReviewSetCommentParams {
   static entityName = "reviewsetcommentparams";
 
@@ -402,6 +414,12 @@ export const factory = (send: any) => ({
      */
     issuesByProject(params: IReviewIssuesByProjectParams): Promise<Array<IIssue>> {
       return send('review.IssuesByProject', params)
+    },
+    /**
+     * ProjectByID returns a single project by ID.
+     */
+    projectByID(params: IReviewProjectByIDParams): Promise<IProject> {
+      return send('review.ProjectByID', params)
     },
     /**
      * Projects returns list of all projects with review stats.

@@ -28,7 +28,7 @@ func TestDBLoad(t *testing.T) {
 
 	t1, _ := test.TaskTracker(t, dbc, &db.TaskTracker{
 		Title:     "Ютека YouTrack",
-		AuthToken: "xxx",
+		AuthToken: Ptr("xxx"),
 		FetchPrompt: `Как получить текст задачи? Номер задачи есть в коммите. Пример номера PLF-731. Как получить по нему информацию.
 curl -X GET "https://youtrack/api/issues/PLF-731?fields=\$type,id,summary,description,comments" -H 'Accept: application/json' -H 'Authorization: Bearer {{TOKEN}}' -H 'Cache-Control: no-cache' -H 'Content-Type: application/json'
 Ты можешь получить до 10 связанных задач (родительских или в тексте, если нужно больше контекста) по API.`,

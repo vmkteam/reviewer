@@ -8,6 +8,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hide scrollbar but keep scroll */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Card hover lift */
 .card-hover {
   transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
@@ -122,6 +131,13 @@ body {
   text-decoration: none;
 }
 .markdown-body a:hover {
+  text-decoration: underline;
+}
+.task-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.task-link:hover {
   text-decoration: underline;
 }
 .markdown-body hr {

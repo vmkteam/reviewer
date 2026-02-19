@@ -5,10 +5,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
+import type StateCore from 'markdown-it/lib/rules_core/state_core.mjs'
+import type Token from 'markdown-it/lib/token.mjs'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
+import { buildTaskURL, getTaskPattern } from '../composables/useTaskLink'
 
-const props = defineProps<{ content: string }>()
+const props = defineProps<{
+  content: string
+  taskTrackerUrl?: string | null
+}>()
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -27,7 +33,71 @@ const md: MarkdownIt = new MarkdownIt({
   },
 })
 
-const rendered = computed(() => md.render(props.content || ''))
+md.core.ruler.push('task_link', (state: StateCore) => {
+  const trackerURL = state.env?.taskTrackerURL as string | undefined
+  if (!trackerURL) return
+
+  const pattern = getTaskPattern(trackerURL)
+
+  for (const blockToken of state.tokens) {
+    if (blockToken.type !== 'inline' || !blockToken.children) continue
+
+    const newChildren: Token[] = []
+    let insideLink = false
+
+    for (const token of blockToken.children) {
+      if (token.type === 'link_open') { insideLink = true; newChildren.push(token); continue }
+      if (token.type === 'link_close') { insideLink = false; newChildren.push(token); continue }
+      if (token.type !== 'text' || insideLink || !pattern.test(token.content)) {
+        newChildren.push(token)
+        continue
+      }
+
+      // Split text by task pattern
+      pattern.lastIndex = 0
+      let lastIndex = 0
+      let match: RegExpExecArray | null
+
+      while ((match = pattern.exec(token.content)) !== null) {
+        // Text before match
+        if (match.index > lastIndex) {
+          const textToken = new state.Token('text', '', 0)
+          textToken.content = token.content.slice(lastIndex, match.index)
+          newChildren.push(textToken)
+        }
+
+        // link_open
+        const linkOpen = new state.Token('link_open', 'a', 1)
+        linkOpen.attrSet('href', buildTaskURL(trackerURL, match[1]))
+        linkOpen.attrSet('target', '_blank')
+        linkOpen.attrSet('class', 'task-link')
+        newChildren.push(linkOpen)
+
+        // link text
+        const linkText = new state.Token('text', '', 0)
+        linkText.content = match[0]
+        newChildren.push(linkText)
+
+        // link_close
+        const linkClose = new state.Token('link_close', 'a', -1)
+        newChildren.push(linkClose)
+
+        lastIndex = pattern.lastIndex
+      }
+
+      // Remaining text
+      if (lastIndex < token.content.length) {
+        const textToken = new state.Token('text', '', 0)
+        textToken.content = token.content.slice(lastIndex)
+        newChildren.push(textToken)
+      }
+    }
+
+    blockToken.children = newChildren
+  }
+})
+
+const rendered = computed(() => md.render(props.content || '', { taskTrackerURL: props.taskTrackerUrl }))
 </script>
 
 <style>

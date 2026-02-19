@@ -14,6 +14,12 @@ const promptTmpl = `# Сначала сделай ревью в виде MD фа
 {{.Common}}
 {{- end}}
 
+{{- if .Instructions}}
+
+## Инструкции по проекту
+{{.Instructions}}
+{{- end}}
+
 {{- range .Types}}
 {{- if .Text}}
 {{.Num}}. файл R{{.Num}}.<TASK>.ru.md как {{.Text}}

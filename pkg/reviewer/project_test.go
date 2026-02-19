@@ -120,7 +120,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 
 		tt, clTT := test.TaskTracker(t, dbc, &db.TaskTracker{
 			Title:       "TestTracker",
-			AuthToken:   "secret-token-123",
+			AuthToken:   Ptr("secret-token-123"),
 			FetchPrompt: "curl -H 'Bearer {{TOKEN}}' https://api/issues",
 			StatusID:    db.StatusEnabled,
 		})
@@ -136,6 +136,39 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		result, err := pm.Prompt(t.Context(), pr.ProjectKey)
 		require.NoError(t, err)
 		assert.Contains(t, result, "secret-token-123")
+		assert.NotContains(t, result, "{{TOKEN}}")
+	})
+
+	t.Run("with task tracker URL substitution", func(t *testing.T) {
+		prompt, clPrompt := test.Prompt(t, dbc, &db.Prompt{
+			Title:    "Prompt with URL",
+			Common:   "Common",
+			Code:     "Code review",
+			StatusID: db.StatusEnabled,
+		})
+		t.Cleanup(clPrompt)
+
+		tt, clTT := test.TaskTracker(t, dbc, &db.TaskTracker{
+			Title:       "URLTracker",
+			URL:         "https://youtrack.example.com",
+			AuthToken:   Ptr("token-456"),
+			FetchPrompt: "curl -X GET \"{{URL}}/api/issues/PLF-731\" -H 'Authorization: Bearer {{TOKEN}}'",
+			StatusID:    db.StatusEnabled,
+		})
+		t.Cleanup(clTT)
+
+		pr, clPr := test.Project(t, dbc, &db.Project{
+			PromptID:      prompt.ID,
+			TaskTrackerID: Ptr(tt.ID),
+			StatusID:      db.StatusEnabled,
+		}, test.WithProjectRelations, test.WithFakeProject)
+		t.Cleanup(clPr)
+
+		result, err := pm.Prompt(t.Context(), pr.ProjectKey)
+		require.NoError(t, err)
+		assert.Contains(t, result, "https://youtrack.example.com")
+		assert.NotContains(t, result, "{{URL}}")
+		assert.Contains(t, result, "token-456")
 		assert.NotContains(t, result, "{{TOKEN}}")
 	})
 

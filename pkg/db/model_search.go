@@ -151,6 +151,7 @@ type IssueSearch struct {
 	CreatedAt            *time.Time
 	UserID               *int
 	StatusID             *int
+	LocalID              *string
 	IDs                  []int
 	IssueTypeILike       *string
 	TitleILike           *string
@@ -215,6 +216,9 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if is.StatusID != nil {
 		is.where(query, Tables.Issue.Alias, Columns.Issue.StatusID, is.StatusID)
+	}
+	if is.LocalID != nil {
+		is.where(query, Tables.Issue.Alias, Columns.Issue.LocalID, is.LocalID)
 	}
 	if len(is.IDs) > 0 {
 		Filter{Columns.Issue.ID, is.IDs, SearchTypeArray, false}.Apply(query)
@@ -453,6 +457,7 @@ type ProjectSearch struct {
 	SlackChannelID  *int
 	CreatedAt       *time.Time
 	StatusID        *int
+	Instructions    *string
 	IDs             []int
 	TitleILike      *string
 	VcsURLILike     *string
@@ -493,6 +498,9 @@ func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.StatusID != nil {
 		ps.where(query, Tables.Project.Alias, Columns.Project.StatusID, ps.StatusID)
+	}
+	if ps.Instructions != nil {
+		ps.where(query, Tables.Project.Alias, Columns.Project.Instructions, ps.Instructions)
 	}
 	if len(ps.IDs) > 0 {
 		Filter{Columns.Project.ID, ps.IDs, SearchTypeArray, false}.Apply(query)
@@ -681,6 +689,7 @@ type TaskTrackerSearch struct {
 	FetchPrompt      *string
 	CreatedAt        *time.Time
 	StatusID         *int
+	URL              *string
 	IDs              []int
 	TitleILike       *string
 	AuthTokenILike   *string
@@ -708,6 +717,9 @@ func (tts *TaskTrackerSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if tts.StatusID != nil {
 		tts.where(query, Tables.TaskTracker.Alias, Columns.TaskTracker.StatusID, tts.StatusID)
+	}
+	if tts.URL != nil {
+		tts.where(query, Tables.TaskTracker.Alias, Columns.TaskTracker.URL, tts.URL)
 	}
 	if len(tts.IDs) > 0 {
 		Filter{Columns.TaskTracker.ID, tts.IDs, SearchTypeArray, false}.Apply(query)
