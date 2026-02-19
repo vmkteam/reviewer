@@ -148,7 +148,12 @@
               </div>
               <!-- Content -->
               <div class="px-4 sm:px-6 py-4 sm:py-5">
-                <MarkdownContent :content="rf.content" :task-tracker-url="taskTrackerURL" />
+                <MarkdownContent
+                  :content="rf.content"
+                  :task-tracker-url="taskTrackerURL"
+                  :issues="issuesForReviewFile(rf.reviewType)"
+                  @goto-issue="navigateToIssue"
+                />
               </div>
             </div>
           </TabPanel>
@@ -210,12 +215,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import api, { type Review, type Issue, type Project } from '../api/factory'
 import TrafficLight from '../components/TrafficLight.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
+import type { IssueBadgeInfo } from '../components/MarkdownContent.vue'
 import PSelect from '../components/PSelect.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
@@ -378,6 +384,24 @@ async function setFeedback(issue: Issue, value: boolean | null) {
   }
 }
 
+function issuesForReviewFile(reviewType: string): IssueBadgeInfo[] {
+  return allIssues.value
+    .filter(i => i.localId && i.reviewType === reviewType)
+    .map(i => ({
+      issueId: i.issueId,
+      localId: i.localId!,
+      isFalsePositive: i.isFalsePositive ?? null,
+      comment: i.comment,
+    }))
+}
+
+function navigateToIssue(issueId: number) {
+  const issuesTabIndex = tabs.value.length - 1
+  selectedTab.value = issuesTabIndex
+  history.pushState(null, '', '#issues-' + issueId)
+  scrollToIssue(issueId)
+}
+
 function onTabChange(index: number) {
   selectedTab.value = index
   const tab = tabs.value[index]
@@ -399,7 +423,17 @@ async function loadProjectCrumb(projectId: number, rv: { reviewId: number; title
   }
 }
 
+function onPopState() {
+  applyHash()
+  // If hash points to an issue, scroll to it
+  const { tabKey, issueId } = parseHash()
+  if (tabKey === 'issues' && issueId) {
+    scrollToIssue(issueId)
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('popstate', onPopState)
   try {
     review.value = await api.review.getByID({ reviewId: reviewId.value })
     document.title = `${review.value.title} — reviewer`
@@ -420,6 +454,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', onPopState)
 })
 
 watch(() => props.id, async () => {

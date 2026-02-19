@@ -3,9 +3,9 @@
     <span
       v-for="rt in ordered"
       :key="rt.type"
-      class="inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-semibold leading-none"
+      class="inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-semibold leading-none review-type-dot"
       :class="rt.cssClass"
-      :title="`${rt.fullName}: ${rt.color}`"
+      :title="rt.active ? `${rt.fullName}: ${rt.color}` : rt.fullName"
     >
       {{ rt.label }}
     </span>
@@ -31,20 +31,20 @@ const colorClasses: Record<string, string> = {
 
 const ordered = computed(() => {
   const byType = new Map(props.reviewFiles.map(f => [f.reviewType, f]))
-  const result = []
-  for (const t of typeOrder) {
+  return typeOrder.map(t => {
     const rf = byType.get(t)
     const color = rf?.trafficLight
-    if (color && color !== 'none') {
-      result.push({
-        type: t,
-        label: reviewTypeLabel(t),
-        fullName: reviewTypeFullName(t),
-        color,
-        cssClass: colorClasses[color] ?? 'bg-edge-light text-fg-muted',
-      })
+    const active = !!color && color !== 'none'
+    return {
+      type: t,
+      label: reviewTypeLabel(t),
+      fullName: reviewTypeFullName(t),
+      color: color ?? '',
+      active,
+      cssClass: active
+        ? (colorClasses[color!] ?? 'bg-edge-light text-fg-muted')
+        : 'review-type-inactive',
     }
-  }
-  return result
+  })
 })
 </script>
