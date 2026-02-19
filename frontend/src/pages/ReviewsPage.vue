@@ -6,10 +6,13 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
         Projects
       </router-link>
-      <div v-if="project" class="flex items-center gap-3 flex-wrap">
-        <h1 class="text-2xl font-bold text-fg">{{ project.title }}</h1>
+      <div v-if="project" class="flex items-center gap-3 overflow-x-auto scrollbar-hide">
+        <h1 class="text-2xl font-bold text-fg whitespace-nowrap">{{ project.title }}</h1>
         <InfoBadge>{{ project.language }}</InfoBadge>
-        <ExternalLink v-if="project.vcsURL" :href="project.vcsURL" class="ml-auto">VCS</ExternalLink>
+        <div class="flex gap-1 ml-auto shrink-0">
+          <ExternalLink v-if="project.taskTrackerURL?.trim()" :href="project.taskTrackerURL">Tracker</ExternalLink>
+          <ExternalLink v-if="project.vcsURL" :href="project.vcsURL">VCS</ExternalLink>
+        </div>
       </div>
     </div>
 
@@ -155,6 +158,7 @@
             :project="project"
             :sortable="false"
             :show-review-type="false"
+            :show-local-id="false"
             :show-copy-link="true"
             :copied-issue-id="copiedIssueId"
             empty-text="No accepted risks found."
@@ -246,12 +250,12 @@ async function loadInitial() {
   reviews.value = []
   hasMore.value = true
   try {
-    const [projects, items, count] = await Promise.all([
-      api.review.projects(),
+    const [projectData, items, count] = await Promise.all([
+      api.review.projectByID({ projectId }),
       api.review.get({ projectId, filters: buildFilters() }),
       api.review.count({ projectId, filters: buildFilters() }),
     ])
-    project.value = projects.find(p => p.projectId === projectId) ?? null
+    project.value = projectData ?? null
     if (project.value) {
       setProjectCrumb(project.value.projectId, project.value.title)
       document.title = `${project.value.title} — reviewer`

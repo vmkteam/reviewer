@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"strings"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -45,13 +46,14 @@ func newModelInfo(in db.ReviewModelInfo) ModelInfo {
 
 // Project — карточка проекта для /reviews/.
 type Project struct {
-	ID          int         `json:"projectId"`
-	Title       string      `json:"title"`
-	VcsURL      string      `json:"vcsURL"`
-	Language    string      `json:"language"`
-	CreatedAt   time.Time   `json:"createdAt"`
-	ReviewCount int         `json:"reviewCount"`
-	LastReview  *LastReview `json:"lastReview"`
+	ID             int         `json:"projectId"`
+	Title          string      `json:"title"`
+	VcsURL         string      `json:"vcsURL"`
+	TaskTrackerURL *string     `json:"taskTrackerURL"`
+	Language       string      `json:"language"`
+	CreatedAt      time.Time   `json:"createdAt"`
+	ReviewCount    int         `json:"reviewCount"`
+	LastReview     *LastReview `json:"lastReview"`
 }
 
 // LastReview — краткая информация о последнем ревью проекта.
@@ -66,13 +68,19 @@ func newProject(in *reviewer.Project) *Project {
 		return nil
 	}
 
-	return &Project{
+	p := &Project{
 		ID:        in.ID,
 		Title:     in.Title,
 		VcsURL:    in.VcsURL,
 		Language:  in.Language,
 		CreatedAt: in.CreatedAt,
 	}
+
+	if in.TaskTracker != nil && strings.TrimSpace(in.TaskTracker.URL) != "" {
+		p.TaskTrackerURL = &in.TaskTracker.URL
+	}
+
+	return p
 }
 
 // ReviewSummary — строка таблицы ревью для /reviews/project/<projectId>/.
@@ -198,6 +206,7 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 type Issue struct {
 	ID              int     `json:"issueId"`
 	ReviewID        int     `json:"reviewId"`
+	LocalID         *string `json:"localId"`
 	Title           string  `json:"title"`
 	Severity        string  `json:"severity"`
 	Description     string  `json:"description"`
@@ -219,6 +228,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 	issue := &Issue{
 		ID:              in.ID,
 		ReviewID:        in.ReviewID,
+		LocalID:         in.LocalID,
 		Title:           in.Title,
 		Severity:        in.Severity,
 		Description:     in.Description,

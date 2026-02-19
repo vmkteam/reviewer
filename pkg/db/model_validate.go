@@ -59,6 +59,10 @@ func (i Issue) Validate() (errors map[string]string, valid bool) {
 		errors[Columns.Issue.Comment] = ErrMaxLength
 	}
 
+	if i.LocalID != nil && utf8.RuneCountInString(*i.LocalID) > 16 {
+		errors[Columns.Issue.LocalID] = ErrMaxLength
+	}
+
 	return errors, len(errors) == 0
 }
 
@@ -171,8 +175,12 @@ func (tt TaskTracker) Validate() (errors map[string]string, valid bool) {
 		errors[Columns.TaskTracker.Title] = ErrMaxLength
 	}
 
-	if utf8.RuneCountInString(tt.AuthToken) > 255 {
+	if tt.AuthToken != nil && utf8.RuneCountInString(*tt.AuthToken) > 255 {
 		errors[Columns.TaskTracker.AuthToken] = ErrMaxLength
+	}
+
+	if utf8.RuneCountInString(tt.URL) > 255 {
+		errors[Columns.TaskTracker.URL] = ErrMaxLength
 	}
 
 	return errors, len(errors) == 0

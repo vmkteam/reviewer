@@ -23,7 +23,7 @@ func NewProjectManager(dbc db.DB) *ProjectManager {
 
 // GetByID returns a project by its ID.
 func (pm *ProjectManager) GetByID(ctx context.Context, id int) (*Project, error) {
-	p, err := pm.repo.ProjectByID(ctx, id)
+	p, err := pm.repo.ProjectByID(ctx, id, db.WithColumns(db.TableColumns, db.Columns.Project.TaskTracker))
 
 	return NewProject(p), err
 }
@@ -37,7 +37,7 @@ func (pm *ProjectManager) GetByKey(ctx context.Context, projectKey string) (*Pro
 
 // List returns all enabled projects.
 func (pm *ProjectManager) List(ctx context.Context) (Projects, error) {
-	projects, err := pm.repo.ProjectsByFilters(ctx, nil, db.PagerNoLimit, pm.repo.DefaultProjectSort())
+	projects, err := pm.repo.ProjectsByFilters(ctx, nil, db.PagerNoLimit, pm.repo.DefaultProjectSort(), db.WithColumns(db.TableColumns, db.Columns.Project.TaskTracker))
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +63,7 @@ func (pm *ProjectManager) Prompt(ctx context.Context, projectKey string) (string
 // promptData is the data structure for the prompt template.
 type promptData struct {
 	Common        string
+	Instructions  string
 	Types         []promptType
 	FetchPrompt   string
 	AcceptedRisks Issues
@@ -89,8 +90,17 @@ func (pm *ProjectManager) createPrompt(ctx context.Context, pr *Project) (string
 		},
 	}
 
+	if pr.Instructions != nil {
+		data.Instructions = *pr.Instructions
+	}
+
 	if pr.TaskTracker != nil && pr.TaskTracker.FetchPrompt != "" {
-		data.FetchPrompt = strings.ReplaceAll(pr.TaskTracker.FetchPrompt, "{{TOKEN}}", pr.TaskTracker.AuthToken)
+		fp := pr.TaskTracker.FetchPrompt
+		if pr.TaskTracker.AuthToken != nil {
+			fp = strings.ReplaceAll(fp, "{{TOKEN}}", *pr.TaskTracker.AuthToken)
+		}
+		fp = strings.ReplaceAll(fp, "{{URL}}", pr.TaskTracker.URL)
+		data.FetchPrompt = fp
 	}
 
 	risks, err := pm.acceptedRisks(ctx, pr.ID)

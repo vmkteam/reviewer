@@ -336,8 +336,13 @@ func WithFakeTaskTracker(t *testing.T, dbo orm.DB, in *db.TaskTracker) Cleaner {
 		in.Title = cutS(gofakeit.Sentence(10), 255)
 	}
 
-	if in.AuthToken == "" {
-		in.AuthToken = cutS(gofakeit.Sentence(10), 255)
+	if in.URL == "" {
+		in.URL = cutS(gofakeit.URL(), 255)
+	}
+
+	if in.AuthToken == nil {
+		v := cutS(gofakeit.Sentence(10), 255)
+		in.AuthToken = &v
 	}
 
 	if in.FetchPrompt == "" {

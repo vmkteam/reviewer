@@ -382,8 +382,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "authToken",
+									Name: "url",
 									Type: smd.String,
+								},
+								{
+									Name:     "authToken",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "fetchPrompt",
@@ -484,6 +489,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Type: smd.Integer,
 						},
 						{
+							Name:     "instructions",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
 							Name:     "prompt",
 							Optional: true,
 							Ref:      "#/definitions/PromptSummary",
@@ -577,8 +587,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "authToken",
+									Name: "url",
 									Type: smd.String,
+								},
+								{
+									Name:     "authToken",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "fetchPrompt",
@@ -674,6 +689,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type: smd.Integer,
 							},
 							{
+								Name:     "instructions",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "prompt",
 								Optional: true,
 								Ref:      "#/definitions/PromptSummary",
@@ -767,8 +787,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "authToken",
+										Name: "url",
 										Type: smd.String,
+									},
+									{
+										Name:     "authToken",
+										Optional: true,
+										Type:     smd.String,
 									},
 									{
 										Name: "fetchPrompt",
@@ -855,6 +880,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 						{
 							Name: "statusId",
 							Type: smd.Integer,
+						},
+						{
+							Name:     "instructions",
+							Optional: true,
+							Type:     smd.String,
 						},
 						{
 							Name:     "prompt",
@@ -950,8 +980,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "authToken",
+									Name: "url",
 									Type: smd.String,
+								},
+								{
+									Name:     "authToken",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "fetchPrompt",
@@ -1044,6 +1079,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							{
 								Name: "statusId",
 								Type: smd.Integer,
+							},
+							{
+								Name:     "instructions",
+								Optional: true,
+								Type:     smd.String,
 							},
 							{
 								Name:     "prompt",
@@ -1139,8 +1179,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "authToken",
+										Name: "url",
 										Type: smd.String,
+									},
+									{
+										Name:     "authToken",
+										Optional: true,
+										Type:     smd.String,
 									},
 									{
 										Name: "fetchPrompt",
@@ -1279,6 +1324,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type: smd.Integer,
 							},
 							{
+								Name:     "instructions",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "prompt",
 								Optional: true,
 								Ref:      "#/definitions/PromptSummary",
@@ -1372,8 +1422,13 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "authToken",
+										Name: "url",
 										Type: smd.String,
+									},
+									{
+										Name:     "authToken",
+										Optional: true,
+										Type:     smd.String,
 									},
 									{
 										Name: "fetchPrompt",
@@ -3188,6 +3243,11 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:     "url",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "authToken",
 								Optional: true,
 								Type:     smd.String,
@@ -3237,6 +3297,11 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "title",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "url",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -3314,8 +3379,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "authToken",
+									Name: "url",
 									Type: smd.String,
+								},
+								{
+									Name:     "authToken",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "fetchPrompt",
@@ -3376,8 +3446,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "authToken",
+							Name: "url",
 							Type: smd.String,
+						},
+						{
+							Name:     "authToken",
+							Optional: true,
+							Type:     smd.String,
 						},
 						{
 							Name: "fetchPrompt",
@@ -3437,8 +3512,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "authToken",
+								Name: "url",
 								Type: smd.String,
+							},
+							{
+								Name:     "authToken",
+								Optional: true,
+								Type:     smd.String,
 							},
 							{
 								Name: "fetchPrompt",
@@ -3491,8 +3571,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "authToken",
+							Name: "url",
 							Type: smd.String,
+						},
+						{
+							Name:     "authToken",
+							Optional: true,
+							Type:     smd.String,
 						},
 						{
 							Name: "fetchPrompt",
@@ -3551,8 +3636,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "authToken",
+								Name: "url",
 								Type: smd.String,
+							},
+							{
+								Name:     "authToken",
+								Optional: true,
+								Type:     smd.String,
 							},
 							{
 								Name: "fetchPrompt",
@@ -3638,8 +3728,13 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "authToken",
+								Name: "url",
 								Type: smd.String,
+							},
+							{
+								Name:     "authToken",
+								Optional: true,
+								Type:     smd.String,
 							},
 							{
 								Name: "fetchPrompt",

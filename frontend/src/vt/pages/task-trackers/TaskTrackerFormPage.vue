@@ -18,6 +18,10 @@
         <VInput v-model="entity.title" type="text" />
       </FormField>
 
+      <FormField label="URL" :error="fieldError('url')">
+        <VInput v-model="entity.url" type="text" placeholder="https://youtrack.company.org" />
+      </FormField>
+
       <FormField label="Auth Token" :error="fieldError('authToken')">
         <VInput v-model="entity.authToken" type="text" />
       </FormField>
@@ -64,7 +68,7 @@ const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<TaskTracker>(vtApi.tasktracker, 'taskTracker', () => ({
-  id: 0, title: '', authToken: '', fetchPrompt: '', statusId: 1,
+  id: 0, title: '', url: '', authToken: '', fetchPrompt: '', statusId: 1,
 }))
 
 onMounted(() => {
@@ -80,12 +84,13 @@ async function handleDelete() {
   if (props.id && await remove(parseInt(props.id))) router.push('/task-trackers')
 }
 
-const trackerPresets: Record<string, { title: string; fetchPrompt: string }> = {
+const trackerPresets: Record<string, { title: string; url?: string; fetchPrompt: string }> = {
   'YouTrack': {
     title: 'YouTrack',
+    url: 'https://youtrack.instance',
     fetchPrompt: `Номер задачи есть в коммите. Пример номера PLF-731. Как получить по нему информацию.
 \`\`\`
-curl -X GET "https://youtrack.instance/api/issues/PLF-731?fields=\\$type,id,summary,description,comments" -H 'Accept: application/json' -H 'Authorization: Bearer {{TOKEN}}' -H 'Cache-Control: no-cache' -H 'Content-Type: application/json'
+curl -X GET "{{URL}}/api/issues/PLF-731?fields=\\$type,id,summary,description,comments" -H 'Accept: application/json' -H 'Authorization: Bearer {{TOKEN}}' -H 'Cache-Control: no-cache' -H 'Content-Type: application/json'
 \`\`\`
 
 Ты можешь получить до 10 связанных задач (родительских или в тексте, если нужно больше контекста) по API.
@@ -97,6 +102,7 @@ function fillExample(name: string) {
   const preset = trackerPresets[name]
   if (!preset) return
   entity.title = preset.title
+  if (preset.url) entity.url = preset.url
   entity.fetchPrompt = preset.fetchPrompt
   entity.statusId = 1
 }

@@ -19,6 +19,7 @@ func NewProject(in *db.Project) *Project {
 		TaskTrackerID:  in.TaskTrackerID,
 		SlackChannelID: in.SlackChannelID,
 		StatusID:       in.StatusID,
+		Instructions:   in.Instructions,
 
 		Prompt:       NewPromptSummary(in.Prompt),
 		TaskTracker:  NewTaskTrackerSummary(in.TaskTracker),
@@ -131,6 +132,7 @@ func NewTaskTracker(in *db.TaskTracker) *TaskTracker {
 	taskTracker := &TaskTracker{
 		ID:          in.ID,
 		Title:       in.Title,
+		URL:         in.URL,
 		AuthToken:   in.AuthToken,
 		FetchPrompt: in.FetchPrompt,
 		StatusID:    in.StatusID,
@@ -149,6 +151,7 @@ func NewTaskTrackerSummary(in *db.TaskTracker) *TaskTrackerSummary {
 	return &TaskTrackerSummary{
 		ID:          in.ID,
 		Title:       in.Title,
+		URL:         in.URL,
 		AuthToken:   in.AuthToken,
 		FetchPrompt: in.FetchPrompt,
 

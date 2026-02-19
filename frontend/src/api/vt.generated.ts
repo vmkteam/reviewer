@@ -32,6 +32,7 @@ export interface IProject {
   taskTrackerId?: number,
   slackChannelId?: number,
   statusId: number,
+  instructions?: string,
   prompt?: IPromptSummary,
   taskTracker?: ITaskTrackerSummary,
   slackChannel?: ISlackChannelSummary,
@@ -227,7 +228,8 @@ export interface IStatus {
 export interface ITaskTracker {
   id: number,
   title: string,
-  authToken: string,
+  url: string,
+  authToken?: string,
   fetchPrompt: string,
   statusId: number,
   status?: IStatus
@@ -236,6 +238,7 @@ export interface ITaskTracker {
 export interface ITaskTrackerSearch {
   id?: number,
   title?: string,
+  url?: string,
   authToken?: string,
   fetchPrompt?: string,
   statusId?: number,
@@ -245,7 +248,8 @@ export interface ITaskTrackerSearch {
 export interface ITaskTrackerSummary {
   id: number,
   title: string,
-  authToken: string,
+  url: string,
+  authToken?: string,
   fetchPrompt: string,
   status?: IStatus
 }
@@ -392,6 +396,7 @@ export class Project implements IProject {
   taskTrackerId?: number = 0;
   slackChannelId?: number = 0;
   statusId: number = 0;
+  instructions?: string = null;
   prompt?: IPromptSummary = null;
   taskTracker?: ITaskTrackerSummary = null;
   slackChannel?: ISlackChannelSummary = null;
@@ -651,7 +656,8 @@ export class TaskTracker implements ITaskTracker {
 
   id: number = 0;
   title: string = null;
-  authToken: string = null;
+  url: string = null;
+  authToken?: string = null;
   fetchPrompt: string = null;
   statusId: number = 0;
   status?: IStatus = null;
@@ -662,6 +668,7 @@ export class TaskTrackerSearch implements ITaskTrackerSearch {
 
   id?: number = 0;
   title?: string = "";
+  url?: string = "";
   authToken?: string = "";
   fetchPrompt?: string = "";
   statusId?: number = 0;
@@ -673,7 +680,8 @@ export class TaskTrackerSummary implements ITaskTrackerSummary {
 
   id: number = 0;
   title: string = null;
-  authToken: string = null;
+  url: string = null;
+  authToken?: string = null;
   fetchPrompt: string = null;
   status?: IStatus = null;
 }

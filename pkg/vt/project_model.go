@@ -6,15 +6,16 @@ import (
 )
 
 type Project struct {
-	ID             int    `json:"id"`
-	Title          string `json:"title" validate:"required,max=255"`
-	VcsURL         string `json:"vcsURL" validate:"required,http_url,max=255"`
-	Language       string `json:"language" validate:"required,max=32"`
-	ProjectKey     string `json:"projectKey"`
-	PromptID       int    `json:"promptId" validate:"required"`
-	TaskTrackerID  *int   `json:"taskTrackerId"`
-	SlackChannelID *int   `json:"slackChannelId"`
-	StatusID       int    `json:"statusId" validate:"required,status"`
+	ID             int     `json:"id"`
+	Title          string  `json:"title" validate:"required,max=255"`
+	VcsURL         string  `json:"vcsURL" validate:"required,http_url,max=255"`
+	Language       string  `json:"language" validate:"required,max=32"`
+	ProjectKey     string  `json:"projectKey"`
+	PromptID       int     `json:"promptId" validate:"required"`
+	TaskTrackerID  *int    `json:"taskTrackerId"`
+	SlackChannelID *int    `json:"slackChannelId"`
+	StatusID       int     `json:"statusId" validate:"required,status"`
+	Instructions   *string `json:"instructions"`
 
 	Prompt       *PromptSummary       `json:"prompt"`
 	TaskTracker  *TaskTrackerSummary  `json:"taskTracker"`
@@ -37,6 +38,7 @@ func (p *Project) ToDB() *db.Project {
 		TaskTrackerID:  p.TaskTrackerID,
 		SlackChannelID: p.SlackChannelID,
 		StatusID:       p.StatusID,
+		Instructions:   p.Instructions,
 	}
 
 	return project
@@ -224,11 +226,12 @@ type SlackChannelSummary struct {
 }
 
 type TaskTracker struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title" validate:"required,max=255"`
-	AuthToken   string `json:"authToken" validate:"required,max=255"`
-	FetchPrompt string `json:"fetchPrompt" validate:"required"`
-	StatusID    int    `json:"statusId" validate:"required,status"`
+	ID          int     `json:"id"`
+	Title       string  `json:"title" validate:"required,max=255"`
+	URL         string  `json:"url" validate:"required,max=255"`
+	AuthToken   *string `json:"authToken" validate:"omitempty,max=255"`
+	FetchPrompt string  `json:"fetchPrompt" validate:"required"`
+	StatusID    int     `json:"statusId" validate:"required,status"`
 
 	Status *Status `json:"status"`
 }
@@ -241,6 +244,7 @@ func (tt *TaskTracker) ToDB() *db.TaskTracker {
 	taskTracker := &db.TaskTracker{
 		ID:          tt.ID,
 		Title:       tt.Title,
+		URL:         tt.URL,
 		AuthToken:   tt.AuthToken,
 		FetchPrompt: tt.FetchPrompt,
 		StatusID:    tt.StatusID,
@@ -252,6 +256,7 @@ func (tt *TaskTracker) ToDB() *db.TaskTracker {
 type TaskTrackerSearch struct {
 	ID          *int    `json:"id"`
 	Title       *string `json:"title"`
+	URL         *string `json:"url"`
 	AuthToken   *string `json:"authToken"`
 	FetchPrompt *string `json:"fetchPrompt"`
 	StatusID    *int    `json:"statusId"`
@@ -266,6 +271,7 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 	return &db.TaskTrackerSearch{
 		ID:               tts.ID,
 		TitleILike:       tts.Title,
+		URL:              tts.URL,
 		AuthTokenILike:   tts.AuthToken,
 		FetchPromptILike: tts.FetchPrompt,
 		StatusID:         tts.StatusID,
@@ -274,10 +280,11 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 }
 
 type TaskTrackerSummary struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	AuthToken   string `json:"authToken"`
-	FetchPrompt string `json:"fetchPrompt"`
+	ID          int     `json:"id"`
+	Title       string  `json:"title"`
+	URL         string  `json:"url"`
+	AuthToken   *string `json:"authToken"`
+	FetchPrompt string  `json:"fetchPrompt"`
 
 	Status *Status `json:"status"`
 }

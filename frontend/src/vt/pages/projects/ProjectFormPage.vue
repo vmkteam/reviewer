@@ -13,37 +13,50 @@
     <form v-else @submit.prevent="handleSave" class="bg-surface rounded-xl border border-edge p-6 max-w-3xl mx-auto">
       <p v-if="error" class="text-sm text-danger mb-4">{{ error }}</p>
 
-      <FormField label="Title" :error="fieldError('title')">
-        <VInput v-model="entity.title" type="text" />
-      </FormField>
+      <div class="flex gap-4 mb-6 border-b border-edge">
+        <button type="button" @click="activeTab = 'general'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'general' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">General</button>
+        <button type="button" @click="activeTab = 'instructions'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'instructions' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">Instructions</button>
+      </div>
 
-      <FormField label="VCS URL" :error="fieldError('vcsURL')">
-        <VInput v-model="entity.vcsURL" @change="onVcsURLChange" type="text" placeholder="https://github.com/..." />
-      </FormField>
+      <div v-show="activeTab === 'general'">
+        <FormField label="Title" :error="fieldError('title')">
+          <VInput v-model="entity.title" type="text" />
+        </FormField>
 
-      <FormField label="Language" :error="fieldError('language')">
-        <VInput v-model="entity.language" type="text" placeholder="Go, TypeScript, etc." />
-      </FormField>
+        <FormField label="VCS URL" :error="fieldError('vcsURL')">
+          <VInput v-model="entity.vcsURL" @change="onVcsURLChange" type="text" placeholder="https://github.com/..." />
+        </FormField>
 
-      <FormField v-if="isEdit" label="Project Key">
-        <VInput :model-value="entity.projectKey" type="text" readonly class="border-edge bg-surface-alt text-fg-muted" />
-      </FormField>
+        <FormField label="Language" :error="fieldError('language')">
+          <VInput v-model="entity.language" type="text" placeholder="Go, TypeScript, etc." />
+        </FormField>
 
-      <FormField label="Prompt" :error="fieldError('promptId')">
-        <FKSelect v-model="entity.promptId" :load-fn="loadPrompts" />
-      </FormField>
+        <FormField v-if="isEdit" label="Project Key">
+          <VInput :model-value="entity.projectKey" type="text" readonly class="border-edge bg-surface-alt text-fg-muted" />
+        </FormField>
 
-      <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
-        <FKSelect v-model="entity.taskTrackerId" :load-fn="loadTaskTrackers" nullable />
-      </FormField>
+        <FormField label="Prompt" :error="fieldError('promptId')">
+          <FKSelect v-model="entity.promptId" :load-fn="loadPrompts" />
+        </FormField>
 
-      <FormField label="Slack Channel" :error="fieldError('slackChannelId')">
-        <FKSelect v-model="entity.slackChannelId" :load-fn="loadSlackChannels" nullable />
-      </FormField>
+        <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
+          <FKSelect v-model="entity.taskTrackerId" :load-fn="loadTaskTrackers" nullable />
+        </FormField>
 
-      <FormField label="Status" :error="fieldError('statusId')">
-        <StatusRadio v-model="entity.statusId" name="statusId" />
-      </FormField>
+        <FormField label="Slack Channel" :error="fieldError('slackChannelId')">
+          <FKSelect v-model="entity.slackChannelId" :load-fn="loadSlackChannels" nullable />
+        </FormField>
+
+        <FormField label="Status" :error="fieldError('statusId')">
+          <StatusRadio v-model="entity.statusId" name="statusId" />
+        </FormField>
+      </div>
+
+      <div v-show="activeTab === 'instructions'">
+        <FormField label="Instructions" :error="fieldError('instructions')">
+          <VTextarea v-model="entity.instructions" :rows="10" placeholder="Project-specific instructions for the reviewer..." />
+        </FormField>
+      </div>
 
       <div class="flex justify-end mt-6">
         <VButton type="submit" :disabled="saving">{{ saving ? 'Saving...' : 'Save' }}</VButton>
@@ -70,6 +83,7 @@ import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import FKSelect from '../../components/FKSelect.vue'
 import VInput from '../../components/VInput.vue'
+import VTextarea from '../../components/VTextarea.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
 
@@ -77,9 +91,10 @@ const props = defineProps<{ id?: string }>()
 const router = useRouter()
 const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
+const activeTab = ref('general')
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
-  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1,
+  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1, instructions: '',
 }))
 
 async function loadPrompts() {

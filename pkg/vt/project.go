@@ -628,7 +628,7 @@ func (s TaskTrackerService) dbSort(ops *ViewOps) db.OpFunc {
 	}
 
 	switch ops.SortColumn {
-	case db.Columns.TaskTracker.ID, db.Columns.TaskTracker.Title, db.Columns.TaskTracker.AuthToken, db.Columns.TaskTracker.FetchPrompt, db.Columns.TaskTracker.StatusID:
+	case db.Columns.TaskTracker.ID, db.Columns.TaskTracker.Title, db.Columns.TaskTracker.URL, db.Columns.TaskTracker.AuthToken, db.Columns.TaskTracker.FetchPrompt, db.Columns.TaskTracker.StatusID:
 		v = db.WithSort(db.NewSortField(ops.SortColumn, ops.SortDesc))
 	}
 

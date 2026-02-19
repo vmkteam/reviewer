@@ -75,6 +75,24 @@ func (s ReviewService) Projects(ctx context.Context) ([]Project, error) {
 	return result, nil
 }
 
+// ProjectByID returns a single project by ID.
+//
+//zenrpc:projectId Project ID
+//zenrpc:return Project
+//zenrpc:500 Internal Error
+//zenrpc:404 Not Found
+func (s ReviewService) ProjectByID(ctx context.Context, projectId int) (*Project, error) {
+	project, err := s.pm.GetByID(ctx, projectId)
+	if err != nil {
+		return nil, newInternalError(err)
+	}
+	if project == nil {
+		return nil, ErrNotFound
+	}
+
+	return newProject(project), nil
+}
+
 // Get returns list of reviews for a project.
 //
 //zenrpc:projectId Project ID
