@@ -128,7 +128,7 @@ review.json — структурированные данные по всем з
 - review.createdAt, review.durationMs, review.modelInfo (model, inputTokens, outputTokens, costUsd) — заполни из данных текущей сессии Claude Code
 - review.externalId, review.commitHash — из контекста git и VCS
 - issues в JSON должны точно соответствовать замечаниям в MD-файлах
-- localId — уникальный идентификатор замечания (A1, C2, S1, T3), должен совпадать с заголовком в MD файле
+- localId — уникальный идентификатор замечания (A1, C2, S1, T3), должен совпадать с заголовком в MD файле, A/C/S/T определяются по типу ревью fileType
 - в issues должны попадать только открытые замечания, не исправленные
 - isAccepted — true, если MR допустим с точки зрения данного аспекта (нет critical/high замечаний), false — если есть серьёзные проблемы
 - trafficLight и issuesStats — НЕ заполняй, рассчитываются на сервере
