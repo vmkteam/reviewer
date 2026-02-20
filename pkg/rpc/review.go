@@ -3,6 +3,8 @@ package rpc
 
 import (
 	"context"
+	"net/http"
+	"unicode/utf8"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer"
@@ -263,8 +265,8 @@ func (s ReviewService) Feedback(ctx context.Context, issueId int, isFalsePositiv
 //zenrpc:404 Not Found
 //zenrpc:500 Internal Error
 func (s ReviewService) SetComment(ctx context.Context, issueId int, comment *string) (bool, error) {
-	if comment != nil && len(*comment) > 255 {
-		return false, ErrBadRequest
+	if comment != nil && utf8.RuneCountInString(*comment) > 255 {
+		return false, zenrpc.NewStringError(http.StatusBadRequest, "comment > 255")
 	}
 	if err := s.checkIssue(ctx, issueId); err != nil {
 		return false, err

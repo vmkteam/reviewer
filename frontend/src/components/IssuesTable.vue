@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import api, { type Issue, type Project } from '../api/factory'
 import { ApiRpcError } from '../api/errors'
 import SeverityBadge from './SeverityBadge.vue'
@@ -238,16 +238,29 @@ async function saveComment(issue: Issue) {
   }
 }
 
+function initializeComment(id: number) {
+  const issue = props.issues.find(i => i.issueId === id)
+  if (issue) {
+    commentTexts[id] = issue.comment ?? ''
+    commentOriginals[id] = issue.comment ?? ''
+  }
+}
+
 function onToggle(id: number) {
   if (props.expandedId === id) {
     emit('update:expandedId', null)
   } else {
     emit('update:expandedId', id)
-    const issue = props.issues.find(i => i.issueId === id)
-    if (issue && !(id in commentTexts)) {
-      commentTexts[id] = issue.comment ?? ''
-      commentOriginals[id] = issue.comment ?? ''
+    if (!(id in commentTexts)) {
+      initializeComment(id)
     }
   }
 }
+
+// Инициализировать комментарий при изменении expandedId извне (например, при навигации по хешу)
+watch(() => props.expandedId, (newId) => {
+  if (newId !== null && !(newId in commentTexts)) {
+    initializeComment(newId)
+  }
+}, { immediate: true })
 </script>
