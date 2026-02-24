@@ -134,4 +134,6 @@ review.json — структурированные данные по всем з
 - trafficLight и issuesStats — НЕ заполняй, рассчитываются на сервере
 - description — краткий, информативный, на русском
 - поставь оценочные значения в modelInfo из claude code сессии, так как точных значений у тебя нет
+- review.externalId, review.title, review.sourceBranch, review.targetBranch в оригинальном json определены как переменные "%EXTERNAL_ID%", "%TITLE%", "%SOURCE_BRANCH%", "%TARGET_BRANCH%",
+  если в json эти данные уже стоят, значит они были заменены на CI и менять их не нужно.
 `
