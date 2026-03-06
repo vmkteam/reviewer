@@ -11,6 +11,11 @@ export interface IAuthLoginParams {
   remember: boolean
 }
 
+export interface ICIFile {
+  name: string,
+  content: string
+}
+
 export interface IFieldError {
   field: string,
   error: string,
@@ -58,10 +63,6 @@ export interface IProjectGetByIDParams {
 export interface IProjectGetParams {
   search?: IProjectSearch,
   viewOps?: IViewOps
-}
-
-export interface IProjectGitlabCIParams {
-  targetBranch: string
 }
 
 export interface IProjectSearch {
@@ -372,6 +373,13 @@ export class AuthLoginParams implements IAuthLoginParams {
   remember: boolean = false;
 }
 
+export class CIFile implements ICIFile {
+  static entityName = "cifile";
+
+  name: string = null;
+  content: string = null;
+}
+
 export class FieldError implements IFieldError {
   static entityName = "fielderror";
 
@@ -435,12 +443,6 @@ export class ProjectGetParams implements IProjectGetParams {
 
   search?: IProjectSearch = null;
   viewOps?: IViewOps = null;
-}
-
-export class ProjectGitlabCIParams implements IProjectGitlabCIParams {
-  static entityName = "projectgitlabciparams";
-
-  targetBranch: string = null;
 }
 
 export class ProjectSearch implements IProjectSearch {
@@ -896,10 +898,10 @@ export const factory = (send: any) => ({
       return send('project.GetByID', params)
     },
     /**
-     * GitlabCI returns a generated GitLab CI YAML fragment.
+     * GitlabCI returns CI configuration files for GitLab CI integration.
      */
-    gitlabCI(params: IProjectGitlabCIParams): Promise<string> {
-      return send('project.GitlabCI', params)
+    gitlabCI(): Promise<Array<ICIFile>> {
+      return send('project.GitlabCI')
     },
     /**
      * Update updates the Project data identified by id from the query.
