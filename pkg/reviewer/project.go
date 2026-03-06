@@ -120,10 +120,10 @@ func (pm *ProjectManager) createPrompt(ctx context.Context, pr *Project) (string
 	return b.String(), nil
 }
 
-// acceptedRisks returns false positive issues for the project.
+// acceptedRisks returns dismissed issues (false positive + ignored) for the project.
 func (pm *ProjectManager) acceptedRisks(ctx context.Context, projectID int) (Issues, error) {
 	search := &db.IssueSearch{
-		StatusIDs:       []int{db.StatusFalsePositive},
+		StatusIDs:       []int{db.StatusFalsePositive, db.StatusIgnored},
 		ReviewProjectID: &projectID,
 	}
 

@@ -295,6 +295,8 @@ function applyHash() {
     selectedTab.value = idx
     if (tabKey === 'issues') {
       targetIssueId.value = issueId
+    } else if (tabKey === 'previous') {
+      loadPreviousReviews()
     }
   }
 }
@@ -486,14 +488,14 @@ onMounted(async () => {
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
     // Load previous reviews count in parallel with issues
-    if (review.value.externalId && review.value.externalId !== '0') {
-      api.review.count({
-        projectId: review.value.projectId,
-        filters: { externalId: review.value.externalId },
-      }).then(c => { previousCount.value = c }).catch(() => {})
-    }
-    await loadIssues()
-    // Apply hash after data is loaded — sets selectedTab and targetIssueId
+    const prevCountPromise = (review.value.externalId && review.value.externalId !== '0')
+      ? api.review.count({
+          projectId: review.value.projectId,
+          filters: { externalId: review.value.externalId },
+        }).then(c => { previousCount.value = c }).catch(() => {})
+      : Promise.resolve()
+    await Promise.all([loadIssues(), prevCountPromise])
+    // Apply hash after all data is loaded — sets selectedTab and targetIssueId
     applyHash()
     // Wait for tab panel switch to render
     await nextTick()

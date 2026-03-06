@@ -127,7 +127,7 @@ import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
 import IssuesTable from '../components/IssuesTable.vue'
-import { StatusFalsePositive } from '../constants/status'
+import { StatusFalsePositive, StatusIgnored } from '../constants/status'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 
 const { setProject: setProjectCrumb } = useBreadcrumbs()
@@ -165,7 +165,7 @@ const risksLoaded = ref(false)
 const expandedIssueId = ref<number | null>(null)
 const copiedIssueId = ref<number | null>(null)
 
-const risksFilters = { statusIds: [StatusFalsePositive] }
+const risksFilters = { statusIds: [StatusFalsePositive, StatusIgnored] }
 
 function copyIssueLink(issueId: number) {
   const issue = risks.value.find(i => i.issueId === issueId)
