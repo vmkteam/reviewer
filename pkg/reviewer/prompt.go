@@ -135,7 +135,11 @@ review.json — структурированные данные по всем з
   2. Перед записью review.json выполни ` + "`date +%s%3N`" + ` ещё раз
   3. durationMs = END_MS - START_MS
   4. createdAt = текущее время в ISO 8601 (получи через ` + "`date -u +%Y-%m-%dT%H:%M:%SZ`" + `)
-- review.modelInfo (model, inputTokens, outputTokens, costUsd) — заполни из данных текущей сессии Claude Code
+- review.modelInfo — заполни так:
+  - model: точное имя модели из твоей сессии (например claude-opus-4-6, claude-sonnet-4-6)
+  - inputTokens: примерный текущий context usage в токенах
+  - outputTokens: оценочно, обычно 15-30% от inputTokens
+  - costUsd: рассчитай по формуле (inputTokens * inputPrice + outputTokens * outputPrice) / 1000000, цены за 1M токенов: opus — $5/$25, sonnet — $3/$15, haiku — $1/$5
 - review.externalId, review.commitHash — из контекста git и VCS
 - issues в JSON должны точно соответствовать замечаниям в MD-файлах
 - localId — уникальный идентификатор замечания (A1, C2, S1, T3, O1), должен совпадать с заголовком в MD файле, A/C/S/T/O определяются по типу ревью fileType
@@ -143,7 +147,6 @@ review.json — структурированные данные по всем з
 - isAccepted — true, если MR допустим с точки зрения данного аспекта (нет critical/high замечаний), false — если есть серьёзные проблемы
 - trafficLight и issuesStats — НЕ заполняй, рассчитываются на сервере
 - description — краткий, информативный, на русском
-- поставь оценочные значения в modelInfo из claude code сессии, так как точных значений у тебя нет
 - review.externalId, review.title, review.sourceBranch, review.targetBranch в оригинальном json определены как переменные "EXTERNAL_ID", "TITLE", "SOURCE_BRANCH", "TARGET_BRANCH",
   если в json эти данные уже стоят и они не пустые (и не переменные), значит они были заменены на CI и менять их не нужно.
 `
