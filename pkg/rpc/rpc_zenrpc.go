@@ -611,9 +611,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "isFalsePositive",
-								Optional: true,
-								Type:     smd.Boolean,
+								Name: "statusIds",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
 							},
 						},
 					},
@@ -679,9 +681,8 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "isFalsePositive",
-									Optional: true,
-									Type:     smd.Boolean,
+									Name: "statusId",
+									Type: smd.Integer,
 								},
 								{
 									Name:     "comment",
@@ -727,9 +728,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "isFalsePositive",
-								Optional: true,
-								Type:     smd.Boolean,
+								Name: "statusIds",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
 							},
 						},
 					},
@@ -773,9 +776,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "isFalsePositive",
-								Optional: true,
-								Type:     smd.Boolean,
+								Name: "statusIds",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
 							},
 						},
 					},
@@ -847,9 +852,8 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "isFalsePositive",
-									Optional: true,
-									Type:     smd.Boolean,
+									Name: "statusId",
+									Type: smd.Integer,
 								},
 								{
 									Name:     "comment",
@@ -896,9 +900,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "isFalsePositive",
-								Optional: true,
-								Type:     smd.Boolean,
+								Name: "statusIds",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
 							},
 						},
 					},
@@ -913,7 +919,7 @@ func (ReviewService) SMD() smd.ServiceInfo {
 				},
 			},
 			"Feedback": {
-				Description: `Feedback updates false positive flag for an issue.`,
+				Description: `Feedback updates resolution status for an issue.`,
 				Parameters: []smd.JSONSchema{
 					{
 						Name:        "issueId",
@@ -921,10 +927,9 @@ func (ReviewService) SMD() smd.ServiceInfo {
 						Type:        smd.Integer,
 					},
 					{
-						Name:        "isFalsePositive",
-						Optional:    true,
-						Description: `False positive flag (true = false positive, false = confirmed, null = unprocessed)`,
-						Type:        smd.Boolean,
+						Name:        "statusId",
+						Description: `Resolution (1 = unprocessed, 4 = valid, 5 = false positive, 6 = ignored)`,
+						Type:        smd.Integer,
 					},
 				},
 				Returns: smd.JSONSchema{
@@ -1136,12 +1141,12 @@ func (s ReviewService) Invoke(ctx context.Context, method string, params json.Ra
 
 	case RPC.ReviewService.Feedback:
 		var args = struct {
-			IssueId         int   `json:"issueId"`
-			IsFalsePositive *bool `json:"isFalsePositive"`
+			IssueId  int `json:"issueId"`
+			StatusId int `json:"statusId"`
 		}{}
 
 		if zenrpc.IsArray(params) {
-			if params, err = zenrpc.ConvertToObject([]string{"issueId", "isFalsePositive"}, params); err != nil {
+			if params, err = zenrpc.ConvertToObject([]string{"issueId", "statusId"}, params); err != nil {
 				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
 			}
 		}
@@ -1152,7 +1157,7 @@ func (s ReviewService) Invoke(ctx context.Context, method string, params json.Ra
 			}
 		}
 
-		resp.Set(s.Feedback(ctx, args.IssueId, args.IsFalsePositive))
+		resp.Set(s.Feedback(ctx, args.IssueId, args.StatusId))
 
 	case RPC.ReviewService.SetComment:
 		var args = struct {

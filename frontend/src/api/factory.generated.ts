@@ -14,7 +14,7 @@ export interface IIssue {
   issueType: string,
   reviewType: string,
   commitHash: string,
-  isFalsePositive?: boolean,
+  statusId: number,
   comment?: string
 }
 
@@ -22,7 +22,7 @@ export interface IIssueFilters {
   severity?: string,
   issueType?: string,
   reviewType?: string,
-  isFalsePositive?: boolean
+  statusIds: Array<number>
 }
 
 export interface IIssueStats {
@@ -92,7 +92,7 @@ export interface IReviewCountParams {
 
 export interface IReviewFeedbackParams {
   issueId: number,
-  isFalsePositive?: boolean
+  statusId: number
 }
 
 export interface IReviewFile {
@@ -176,7 +176,7 @@ export class Issue implements IIssue {
   issueType: string = null;
   reviewType: string = null;
   commitHash: string = null;
-  isFalsePositive?: boolean = false;
+  statusId: number = 0;
   comment?: string = null;
 }
 
@@ -186,7 +186,7 @@ export class IssueFilters implements IIssueFilters {
   severity?: string = null;
   issueType?: string = null;
   reviewType?: string = null;
-  isFalsePositive?: boolean = false;
+  statusIds: Array<number> = null;
 }
 
 export class IssueStats implements IIssueStats {
@@ -274,7 +274,7 @@ export class ReviewFeedbackParams implements IReviewFeedbackParams {
   static entityName = "reviewfeedbackparams";
 
   issueId: number = 0;
-  isFalsePositive?: boolean = false;
+  statusId: number = 0;
 }
 
 export class ReviewFile implements IReviewFile {
@@ -392,7 +392,7 @@ export const factory = (send: any) => ({
       return send('review.CountIssuesByProject', params)
     },
     /**
-     * Feedback updates false positive flag for an issue.
+     * Feedback updates resolution status for an issue.
      */
     feedback(params: IReviewFeedbackParams): Promise<boolean> {
       return send('review.Feedback', params)

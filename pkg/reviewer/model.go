@@ -216,13 +216,13 @@ func (s *ReviewSearch) ToDB() *db.ReviewSearch {
 
 // IssueSearch contains search params for listing issues.
 type IssueSearch struct {
-	ReviewID        int
-	ProjectID       *int
-	IsFalsePositive *bool
-	FromIssueID     *int
-	Severity        *string
-	IssueType       *string
-	ReviewType      *string
+	ReviewID    int
+	ProjectID   *int
+	StatusIDs   []int
+	FromIssueID *int
+	Severity    *string
+	IssueType   *string
+	ReviewType  *string
 }
 
 // ToDB converts domain search params to the database layer representation.
@@ -235,7 +235,7 @@ func (s *IssueSearch) ToDB() *db.IssueSearch {
 		Severity:             s.Severity,
 		IssueType:            s.IssueType,
 		ReviewFileReviewType: s.ReviewType,
-		IsFalsePositive:      s.IsFalsePositive,
+		StatusIDs:            s.StatusIDs,
 		ReviewProjectID:      s.ProjectID,
 	}
 	if s.ReviewID != 0 {

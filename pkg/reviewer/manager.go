@@ -19,7 +19,7 @@ type ReviewManager struct {
 func NewReviewManager(dbc db.DB) *ReviewManager {
 	return &ReviewManager{
 		TxManager: db.NewTxManager(&dbc),
-		repo:      db.NewReviewRepo(dbc).WithEnabledOnly(),
+		repo:      db.NewReviewRepo(dbc).WithEnabledAndIssueFilters(),
 	}
 }
 
@@ -304,13 +304,29 @@ func (rm *ReviewManager) SetComment(ctx context.Context, issueID int, comment *s
 	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(db.Columns.Issue.Comment))
 }
 
-// SetFeedback updates the isFalsePositive flag on an issue and sets processedAt accordingly.
-func (rm *ReviewManager) SetFeedback(ctx context.Context, issueID int, isFalsePositive *bool) (bool, error) {
-	issue := &db.Issue{ID: issueID, IsFalsePositive: isFalsePositive}
-	if isFalsePositive != nil {
-		now := time.Now()
-		issue.ProcessedAt = &now
+// SetFeedback updates the statusId on an issue and sets processedAt.
+func (rm *ReviewManager) SetFeedback(ctx context.Context, issueID int, statusID int) (bool, error) {
+	if !isValidIssueResolution(statusID) {
+		return false, fmt.Errorf("invalid statusId: %d", statusID)
 	}
 
-	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(db.Columns.Issue.IsFalsePositive, db.Columns.Issue.ProcessedAt))
+	issue := &db.Issue{ID: issueID, StatusID: statusID}
+	if statusID != db.StatusEnabled {
+		now := time.Now()
+		issue.ProcessedAt = &now
+	} else {
+		issue.ProcessedAt = nil
+	}
+	return rm.repo.UpdateIssue(ctx, issue, db.WithColumns(
+		db.Columns.Issue.StatusID, db.Columns.Issue.ProcessedAt,
+	))
+}
+
+// isValidIssueResolution checks that statusID is a valid issue resolution value.
+func isValidIssueResolution(statusID int) bool {
+	switch statusID {
+	case db.StatusEnabled, db.StatusValid, db.StatusFalsePositive, db.StatusIgnored:
+		return true
+	}
+	return false
 }

@@ -59,7 +59,7 @@
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center gap-1">
                   <FeedbackButtons
-                    :is-false-positive="issue.isFalsePositive"
+                    :status-id="issue.statusId"
                     @feedback="onFeedback(issue, $event)"
                   />
                   <button
@@ -136,7 +136,7 @@
                 <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
                   <span class="text-xs text-fg-subtle">Feedback</span>
                   <FeedbackButtons
-                    :is-false-positive="issue.isFalsePositive"
+                    :status-id="issue.statusId"
                     @feedback="onFeedback(issue, $event)"
                   />
                 </div>
@@ -161,6 +161,7 @@ import MarkdownContent from './MarkdownContent.vue'
 import PTextarea from './PTextarea.vue'
 import InfoBadge from './InfoBadge.vue'
 import FeedbackButtons from './FeedbackButtons.vue'
+import { StatusFalsePositive } from '../constants/status'
 import { useFormat } from '../composables/useFormat'
 import { linkifyTaskIds } from '../composables/useTaskLink'
 
@@ -190,7 +191,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  feedback: [issue: Issue, value: boolean | null]
+  feedback: [issue: Issue, statusId: number]
   copyLink: [issueId: number]
   'update:expandedId': [id: number | null]
 }>()
@@ -270,9 +271,9 @@ function initializeComment(id: number) {
 const inlineCommentId = ref<number | null>(null)
 const inlineInput = ref<HTMLInputElement | null>(null)
 
-function onFeedback(issue: Issue, value: boolean | null) {
-  emit('feedback', issue, value)
-  if (value === true) {
+function onFeedback(issue: Issue, statusId: number) {
+  emit('feedback', issue, statusId)
+  if (statusId === StatusFalsePositive) {
     if (!(issue.issueId in commentTexts)) {
       initializeComment(issue.issueId)
     }

@@ -418,10 +418,10 @@ function goToPreviousReview(reviewId: number) {
   router.push({ name: 'review', params: { id: reviewId } })
 }
 
-async function setFeedback(issue: Issue, value: boolean | null) {
+async function setFeedback(issue: Issue, statusId: number) {
   try {
-    await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
-    issue.isFalsePositive = value ?? undefined
+    await api.review.feedback({ issueId: issue.issueId, statusId })
+    issue.statusId = statusId
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to update feedback'
   }
@@ -433,7 +433,7 @@ function issuesForReviewFile(reviewType: string): IssueBadgeInfo[] {
     .map(i => ({
       issueId: i.issueId,
       localId: i.localId!,
-      isFalsePositive: i.isFalsePositive ?? null,
+      statusId: i.statusId,
       comment: i.comment,
     }))
 }

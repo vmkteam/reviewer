@@ -17,7 +17,7 @@ type ProjectManager struct {
 func NewProjectManager(dbc db.DB) *ProjectManager {
 	return &ProjectManager{
 		repo:       db.NewProjectRepo(dbc).WithEnabledOnly(),
-		reviewRepo: db.NewReviewRepo(dbc).WithEnabledOnly(),
+		reviewRepo: db.NewReviewRepo(dbc).WithEnabledAndIssueFilters(),
 	}
 }
 
@@ -122,9 +122,8 @@ func (pm *ProjectManager) createPrompt(ctx context.Context, pr *Project) (string
 
 // acceptedRisks returns false positive issues for the project.
 func (pm *ProjectManager) acceptedRisks(ctx context.Context, projectID int) (Issues, error) {
-	isFP := true
 	search := &db.IssueSearch{
-		IsFalsePositive: &isFP,
+		StatusIDs:       []int{db.StatusFalsePositive},
 		ReviewProjectID: &projectID,
 	}
 
