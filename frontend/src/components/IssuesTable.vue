@@ -20,7 +20,7 @@
             @click="sortable && toggleSort('issueType')"
           >Type {{ sortable ? sortIcon('issueType') : '' }}</th>
           <th v-if="showReviewType" class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">RT</th>
-          <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden sm:table-cell">Feedback</th>
+          <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden sm:table-cell md:min-w-[180px]">Feedback</th>
         </tr>
       </thead>
       <tbody>
@@ -40,8 +40,8 @@
                 <span v-html="linkifyTaskIds(issue.title, taskTrackerURL)" />
               </span>
             </td>
-            <td class="px-4 py-3 hidden md:table-cell" @click.stop>
-              <div class="text-xs font-mono text-fg-muted">
+            <td class="px-4 py-3 hidden md:table-cell max-w-[200px] lg:max-w-xs" @click.stop>
+              <div class="text-xs font-mono text-fg-muted truncate" :title="issue.file + (issue.lines ? ':' + issue.lines : '')">
                 <a
                   v-if="project?.vcsURL && issue.commitHash"
                   :href="buildVcsFileURL(project.vcsURL, issue.commitHash, issue.file, issue.lines)"
@@ -56,20 +56,40 @@
               <InfoBadge>{{ reviewTypeLabel(issue.reviewType) }}</InfoBadge>
             </td>
             <td class="px-4 py-3 hidden sm:table-cell" @click.stop>
-              <div class="flex items-center gap-1">
-                <FeedbackButtons
-                  :is-false-positive="issue.isFalsePositive"
-                  @feedback="$emit('feedback', issue, $event)"
-                />
-                <button
-                  v-if="showCopyLink"
-                  class="px-1.5 py-1 text-xs rounded-md border border-edge text-fg-faint hover:text-fg-muted hover:border-edge-strong transition-all fb-btn ml-1"
-                  :title="copiedIssueId === issue.issueId ? 'Copied!' : 'Copy link'"
-                  @click="$emit('copyLink', issue.issueId)"
-                >
-                  <svg v-if="copiedIssueId !== issue.issueId" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                  <svg v-else class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                </button>
+              <div class="flex flex-col gap-1.5">
+                <div class="flex items-center gap-1">
+                  <FeedbackButtons
+                    :is-false-positive="issue.isFalsePositive"
+                    @feedback="onFeedback(issue, $event)"
+                  />
+                  <button
+                    v-if="showCopyLink"
+                    class="px-1.5 py-1 text-xs rounded-md border border-edge text-fg-faint hover:text-fg-muted hover:border-edge-strong transition-all fb-btn ml-1"
+                    :title="copiedIssueId === issue.issueId ? 'Copied!' : 'Copy link'"
+                    @click="$emit('copyLink', issue.issueId)"
+                  >
+                    <svg v-if="copiedIssueId !== issue.issueId" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    <svg v-else class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </button>
+                </div>
+                <!-- Inline comment -->
+                <div v-if="inlineCommentId === issue.issueId" class="flex items-center gap-1">
+                  <input
+                    ref="inlineInput"
+                    v-model="commentTexts[issue.issueId]"
+                    type="text"
+                    maxlength="255"
+                    placeholder="Comment..."
+                    class="w-full min-w-[120px] px-2 py-1 text-xs rounded-md border border-edge bg-surface text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent"
+                    @keydown.enter="saveInlineComment(issue)"
+                    @keydown.escape="closeInlineComment()"
+                  />
+                  <button
+                    class="p-1 text-fg-subtle hover:text-accent transition-colors shrink-0"
+                    :disabled="commentSaving[issue.issueId]"
+                    @click="saveInlineComment(issue)"
+                  ><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></button>
+                </div>
               </div>
             </td>
           </tr>
@@ -91,17 +111,7 @@
                     <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                   </span>
                 </div>
-                <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed" v-html="linkifyTaskIds(issue.description, taskTrackerURL)" />
-                <MarkdownContent v-if="issue.content" :content="issue.content" :task-tracker-url="taskTrackerURL" />
-                <!-- Feedback (mobile) -->
-                <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
-                  <span class="text-xs text-fg-subtle">Feedback</span>
-                  <FeedbackButtons
-                    :is-false-positive="issue.isFalsePositive"
-                    @feedback="$emit('feedback', issue, $event)"
-                  />
-                </div>
-                <!-- Comment -->
+                <!-- Comment (moved up) -->
                 <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-edge-light" @click.stop>
                   <PTextarea
                     v-model="commentTexts[issue.issueId]"
@@ -120,6 +130,16 @@
                     <span v-if="commentErrors[issue.issueId]" class="text-xs text-danger py-2">{{ commentErrors[issue.issueId] }}</span>
                   </div>
                 </div>
+                <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed" v-html="linkifyTaskIds(issue.description, taskTrackerURL)" />
+                <MarkdownContent v-if="issue.content" :content="issue.content" :task-tracker-url="taskTrackerURL" />
+                <!-- Feedback (mobile) -->
+                <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
+                  <span class="text-xs text-fg-subtle">Feedback</span>
+                  <FeedbackButtons
+                    :is-false-positive="issue.isFalsePositive"
+                    @feedback="onFeedback(issue, $event)"
+                  />
+                </div>
               </div>
             </td>
           </tr>
@@ -133,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import api, { type Issue, type Project } from '../api/factory'
 import { ApiRpcError } from '../api/errors'
 import SeverityBadge from './SeverityBadge.vue'
@@ -246,7 +266,34 @@ function initializeComment(id: number) {
   }
 }
 
+// Inline comment in Feedback cell
+const inlineCommentId = ref<number | null>(null)
+const inlineInput = ref<HTMLInputElement | null>(null)
+
+function onFeedback(issue: Issue, value: boolean | null) {
+  emit('feedback', issue, value)
+  if (value === true) {
+    if (!(issue.issueId in commentTexts)) {
+      initializeComment(issue.issueId)
+    }
+    inlineCommentId.value = issue.issueId
+    nextTick(() => inlineInput.value?.focus())
+  } else if (inlineCommentId.value === issue.issueId) {
+    inlineCommentId.value = null
+  }
+}
+
+async function saveInlineComment(issue: Issue) {
+  await saveComment(issue)
+  inlineCommentId.value = null
+}
+
+function closeInlineComment() {
+  inlineCommentId.value = null
+}
+
 function onToggle(id: number) {
+  inlineCommentId.value = null
   if (props.expandedId === id) {
     emit('update:expandedId', null)
   } else {
