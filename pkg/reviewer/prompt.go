@@ -29,10 +29,15 @@ const promptTmpl = `# Сначала сделай ревью в виде MD фа
 Каждое открытое замечание в MD файле оформляй заголовком с localId: ` + "`### C1. Заголовок замечания`" + `
 Префикс: A — architecture, C — code, S — security, T — tests, O — operability. Нумерация с 1 для каждого типа.
 
+Создавай замечание ТОЛЬКО если ты уверен, что это реальная проблема. Если при анализе понял, что проблемы нет — НЕ создавай замечание, даже если начал его описывать.
+НЕ создавай замечания вида "это не проблема", "это допустимо", "это нормально".
+
 {{- if .FetchPrompt}}
 
 ## Как получить текст задачи?
 {{.FetchPrompt}}
+
+В начале КАЖДОГО MD-файла напиши строку: "Задачи: TASK-1, TASK-2, ..." с ID всех проанализированных задач через запятую.
 {{- end}}
 
 {{- if .AcceptedRisks}}
@@ -125,7 +130,12 @@ review.json — структурированные данные по всем з
 
 Важно:
 - все ключи JSON в lowerCamelCase
-- review.createdAt, review.durationMs, review.modelInfo (model, inputTokens, outputTokens, costUsd) — заполни из данных текущей сессии Claude Code
+- review.durationMs, review.createdAt — замерь точное время:
+  1. В самом начале работы выполни ` + "`date +%s%3N`" + ` через Bash и сохрани результат как START_MS
+  2. Перед записью review.json выполни ` + "`date +%s%3N`" + ` ещё раз
+  3. durationMs = END_MS - START_MS
+  4. createdAt = текущее время в ISO 8601 (получи через ` + "`date -u +%Y-%m-%dT%H:%M:%SZ`" + `)
+- review.modelInfo (model, inputTokens, outputTokens, costUsd) — заполни из данных текущей сессии Claude Code
 - review.externalId, review.commitHash — из контекста git и VCS
 - issues в JSON должны точно соответствовать замечаниям в MD-файлах
 - localId — уникальный идентификатор замечания (A1, C2, S1, T3, O1), должен совпадать с заголовком в MD файле, A/C/S/T/O определяются по типу ревью fileType
