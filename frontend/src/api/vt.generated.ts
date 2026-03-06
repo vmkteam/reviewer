@@ -108,6 +108,7 @@ export interface IPrompt {
   code: string,
   security: string,
   tests: string,
+  operability: string,
   statusId: number,
   status?: IStatus
 }
@@ -141,6 +142,7 @@ export interface IPromptSearch {
   code?: string,
   security?: string,
   tests?: string,
+  operability?: string,
   statusId?: number,
   ids: Array<number>
 }
@@ -153,6 +155,7 @@ export interface IPromptSummary {
   code: string,
   security: string,
   tests: string,
+  operability: string,
   status?: IStatus
 }
 
@@ -494,6 +497,7 @@ export class Prompt implements IPrompt {
   code: string = null;
   security: string = null;
   tests: string = null;
+  operability: string = null;
   statusId: number = 0;
   status?: IStatus = null;
 }
@@ -539,6 +543,7 @@ export class PromptSearch implements IPromptSearch {
   code?: string = "";
   security?: string = "";
   tests?: string = "";
+  operability?: string = "";
   statusId?: number = 0;
   ids: Array<number> = [0];
 }
@@ -553,6 +558,7 @@ export class PromptSummary implements IPromptSummary {
   code: string = null;
   security: string = null;
   tests: string = null;
+  operability: string = null;
   status?: IStatus = null;
 }
 

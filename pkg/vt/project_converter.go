@@ -65,6 +65,7 @@ func NewPrompt(in *db.Prompt) *Prompt {
 		Code:         in.Code,
 		Security:     in.Security,
 		Tests:        in.Tests,
+		Operability:  in.Operability,
 		StatusID:     in.StatusID,
 
 		Status: NewStatus(in.StatusID),
@@ -86,6 +87,7 @@ func NewPromptSummary(in *db.Prompt) *PromptSummary {
 		Code:         in.Code,
 		Security:     in.Security,
 		Tests:        in.Tests,
+		Operability:  in.Operability,
 
 		Status: NewStatus(in.StatusID),
 	}

@@ -15,13 +15,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ReviewFileSummary } from '../api/factory'
-import { useFormat } from '../composables/useFormat'
+import { useFormat, reviewTypes } from '../composables/useFormat'
 
 const { reviewTypeLabel, reviewTypeFullName } = useFormat()
 
 const props = defineProps<{ reviewFiles: ReviewFileSummary[] }>()
 
-const typeOrder = ['architecture', 'code', 'security', 'tests']
+const typeOrder = reviewTypes
 
 const colorClasses: Record<string, string> = {
   red: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',

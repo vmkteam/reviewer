@@ -81,8 +81,9 @@
 		<COLUMN ID="4" Name="code" Pos="4" Datatype="25" Type="text" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
 		<COLUMN ID="5" Name="security" Pos="5" Datatype="25" Type="text" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
 		<COLUMN ID="6" Name="tests" Pos="6" Datatype="25" Type="text" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
-		<COLUMN ID="7" Name="createdAt" Pos="7" Datatype="1184" Type="timestamp with time zone" Width="-1" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="now()" QuoteDefault="0" Comments=""></COLUMN>
-		<COLUMN ID="26" Name="statusId" Pos="8" Datatype="23" Type="int4" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="1" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
+		<COLUMN ID="83" Name="operability" Pos="7" Datatype="25" Type="text" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
+		<COLUMN ID="7" Name="createdAt" Pos="8" Datatype="1184" Type="timestamp with time zone" Width="-1" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="0" DefaultValue="now()" QuoteDefault="0" Comments=""></COLUMN>
+		<COLUMN ID="26" Name="statusId" Pos="9" Datatype="23" Type="int4" Width="0" Prec="0" NotNull="1" AutoInc="0" Collation="" PrimaryKey="0" IsFKey="1" DefaultValue="" QuoteDefault="0" Comments=""></COLUMN>
 	</COLUMNS>
 	<REFERENCES_BEGIN>
 		<REFERENCE_BEGIN ID="11" />

@@ -27,7 +27,7 @@ const promptTmpl = `# Сначала сделай ревью в виде MD фа
 {{- end}}
 
 Каждое открытое замечание в MD файле оформляй заголовком с localId: ` + "`### C1. Заголовок замечания`" + `
-Префикс: A — architecture, C — code, S — security, T — tests. Нумерация с 1 для каждого типа.
+Префикс: A — architecture, C — code, S — security, T — tests, O — operability. Нумерация с 1 для каждого типа.
 
 {{- if .FetchPrompt}}
 
@@ -102,7 +102,7 @@ review.json — структурированные данные по всем з
   },
   "files": [
     {
-      "reviewType": "architecture | code | security | tests",
+      "reviewType": "architecture | code | security | tests | operability",
       "summary": "Краткий вывод по этому типу ревью",
       "isAccepted": true
     }
@@ -117,7 +117,7 @@ review.json — структурированные данные по всем з
       "file": "path/to/file.go",
       "lines": "121-156",
       "issueType": "error-handling",
-      "fileType": "architecture | code | security | tests"
+      "fileType": "architecture | code | security | tests | operability"
     }
   ]
 }
@@ -128,12 +128,12 @@ review.json — структурированные данные по всем з
 - review.createdAt, review.durationMs, review.modelInfo (model, inputTokens, outputTokens, costUsd) — заполни из данных текущей сессии Claude Code
 - review.externalId, review.commitHash — из контекста git и VCS
 - issues в JSON должны точно соответствовать замечаниям в MD-файлах
-- localId — уникальный идентификатор замечания (A1, C2, S1, T3), должен совпадать с заголовком в MD файле, A/C/S/T определяются по типу ревью fileType
-- в issues должны попадать только открытые замечания, не исправленные
+- localId — уникальный идентификатор замечания (A1, C2, S1, T3, O1), должен совпадать с заголовком в MD файле, A/C/S/T/O определяются по типу ревью fileType
+- в issues и сами ревью должны попадать только открытые замечания, не исправленные 
 - isAccepted — true, если MR допустим с точки зрения данного аспекта (нет critical/high замечаний), false — если есть серьёзные проблемы
 - trafficLight и issuesStats — НЕ заполняй, рассчитываются на сервере
 - description — краткий, информативный, на русском
 - поставь оценочные значения в modelInfo из claude code сессии, так как точных значений у тебя нет
-- review.externalId, review.title, review.sourceBranch, review.targetBranch в оригинальном json определены как переменные "%EXTERNAL_ID%", "%TITLE%", "%SOURCE_BRANCH%", "%TARGET_BRANCH%",
-  если в json эти данные уже стоят, значит они были заменены на CI и менять их не нужно.
+- review.externalId, review.title, review.sourceBranch, review.targetBranch в оригинальном json определены как переменные "EXTERNAL_ID", "TITLE", "SOURCE_BRANCH", "TARGET_BRANCH",
+  если в json эти данные уже стоят и они не пустые (и не переменные), значит они были заменены на CI и менять их не нужно.
 `

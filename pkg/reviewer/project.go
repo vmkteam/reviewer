@@ -87,6 +87,7 @@ func (pm *ProjectManager) createPrompt(ctx context.Context, pr *Project) (string
 			{2, prompt.Code},
 			{3, prompt.Security},
 			{4, prompt.Tests},
+			{5, prompt.Operability},
 		},
 	}
 

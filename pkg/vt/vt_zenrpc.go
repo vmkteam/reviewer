@@ -346,6 +346,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -551,6 +555,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -751,6 +759,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
+										Name: "operability",
+										Type: smd.String,
+									},
+									{
 										Name:     "status",
 										Optional: true,
 										Ref:      "#/definitions/Status",
@@ -941,6 +953,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "tests",
+									Type: smd.String,
+								},
+								{
+									Name: "operability",
 									Type: smd.String,
 								},
 								{
@@ -1140,6 +1156,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "tests",
+										Type: smd.String,
+									},
+									{
+										Name: "operability",
 										Type: smd.String,
 									},
 									{
@@ -1383,6 +1403,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "tests",
+										Type: smd.String,
+									},
+									{
+										Name: "operability",
 										Type: smd.String,
 									},
 									{
@@ -1740,6 +1764,11 @@ func (PromptService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:     "operability",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "statusId",
 								Optional: true,
 								Type:     smd.Integer,
@@ -1804,6 +1833,11 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "tests",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "operability",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -1891,6 +1925,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -1962,6 +2000,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "tests",
+							Type: smd.String,
+						},
+						{
+							Name: "operability",
 							Type: smd.String,
 						},
 						{
@@ -2038,6 +2080,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
+								Name: "operability",
+								Type: smd.String,
+							},
+							{
 								Name: "statusId",
 								Type: smd.Integer,
 							},
@@ -2101,6 +2147,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "tests",
+							Type: smd.String,
+						},
+						{
+							Name: "operability",
 							Type: smd.String,
 						},
 						{
@@ -2173,6 +2223,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "tests",
+								Type: smd.String,
+							},
+							{
+								Name: "operability",
 								Type: smd.String,
 							},
 							{
@@ -2272,6 +2326,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "tests",
+								Type: smd.String,
+							},
+							{
+								Name: "operability",
 								Type: smd.String,
 							},
 							{

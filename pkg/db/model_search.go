@@ -546,6 +546,7 @@ type PromptSearch struct {
 	Code              *string
 	Security          *string
 	Tests             *string
+	Operability       *string
 	CreatedAt         *time.Time
 	StatusID          *int
 	IDs               []int
@@ -555,6 +556,7 @@ type PromptSearch struct {
 	CodeILike         *string
 	SecurityILike     *string
 	TestsILike        *string
+	OperabilityILike  *string
 }
 
 func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
@@ -582,6 +584,9 @@ func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
 	if ps.Tests != nil {
 		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.Tests, ps.Tests)
 	}
+	if ps.Operability != nil {
+		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.Operability, ps.Operability)
+	}
 	if ps.CreatedAt != nil {
 		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.CreatedAt, ps.CreatedAt)
 	}
@@ -608,6 +613,9 @@ func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.TestsILike != nil {
 		Filter{Columns.Prompt.Tests, *ps.TestsILike, SearchTypeILike, false}.Apply(query)
+	}
+	if ps.OperabilityILike != nil {
+		Filter{Columns.Prompt.Operability, *ps.OperabilityILike, SearchTypeILike, false}.Apply(query)
 	}
 
 	ps.apply(query)

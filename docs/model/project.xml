@@ -32,6 +32,7 @@
                 <Attribute Name="Code" DBName="code" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="Security" DBName="security" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="Tests" DBName="tests" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="Operability" DBName="operability" DBType="text" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
             </Attributes>
@@ -43,6 +44,7 @@
                 <Search Name="CodeILike" AttrName="Code" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="SecurityILike" AttrName="Security" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="TestsILike" AttrName="Tests" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="OperabilityILike" AttrName="Operability" SearchType="SEARCHTYPE_ILIKE"></Search>
             </Searches>
         </Entity>
         <Entity Name="SlackChannel" Namespace="project" Table="slackChannels">

@@ -100,6 +100,7 @@ type Prompt struct {
 	Code         string `json:"code" validate:"required"`
 	Security     string `json:"security" validate:"required"`
 	Tests        string `json:"tests" validate:"required"`
+	Operability  string `json:"operability"`
 	StatusID     int    `json:"statusId" validate:"required,status"`
 
 	Status *Status `json:"status"`
@@ -118,6 +119,7 @@ func (p *Prompt) ToDB() *db.Prompt {
 		Code:         p.Code,
 		Security:     p.Security,
 		Tests:        p.Tests,
+		Operability:  p.Operability,
 		StatusID:     p.StatusID,
 	}
 
@@ -132,6 +134,7 @@ type PromptSearch struct {
 	Code         *string `json:"code"`
 	Security     *string `json:"security"`
 	Tests        *string `json:"tests"`
+	Operability  *string `json:"operability"`
 	StatusID     *int    `json:"statusId"`
 	IDs          []int   `json:"ids"`
 }
@@ -149,6 +152,7 @@ func (ps *PromptSearch) ToDB() *db.PromptSearch {
 		CodeILike:         ps.Code,
 		SecurityILike:     ps.Security,
 		TestsILike:        ps.Tests,
+		OperabilityILike:  ps.Operability,
 		StatusID:          ps.StatusID,
 		IDs:               ps.IDs,
 	}
@@ -162,6 +166,7 @@ type PromptSummary struct {
 	Code         string `json:"code"`
 	Security     string `json:"security"`
 	Tests        string `json:"tests"`
+	Operability  string `json:"operability"`
 
 	Status *Status `json:"status"`
 }

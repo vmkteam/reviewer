@@ -33,7 +33,7 @@ var Columns = struct {
 		Prompt, TaskTracker, SlackChannel string
 	}
 	Prompt struct {
-		ID, Title, Common, Architecture, Code, Security, Tests, CreatedAt, StatusID string
+		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
 	}
 	SlackChannel struct {
 		ID, Title, Channel, WebhookURL, StatusID string
@@ -144,7 +144,7 @@ var Columns = struct {
 		SlackChannel: "SlackChannel",
 	},
 	Prompt: struct {
-		ID, Title, Common, Architecture, Code, Security, Tests, CreatedAt, StatusID string
+		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
 	}{
 		ID:           "promptId",
 		Title:        "title",
@@ -153,6 +153,7 @@ var Columns = struct {
 		Code:         "code",
 		Security:     "security",
 		Tests:        "tests",
+		Operability:  "operability",
 		CreatedAt:    "createdAt",
 		StatusID:     "statusId",
 	},
@@ -362,6 +363,7 @@ type Prompt struct {
 	Code         string    `pg:"code,use_zero"`
 	Security     string    `pg:"security,use_zero"`
 	Tests        string    `pg:"tests,use_zero"`
+	Operability  string    `pg:"operability,use_zero"`
 	CreatedAt    time.Time `pg:"createdAt,use_zero"`
 	StatusID     int       `pg:"statusId,use_zero"`
 }

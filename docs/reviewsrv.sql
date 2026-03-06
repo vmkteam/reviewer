@@ -13,6 +13,7 @@ CREATE TABLE "prompts" (
 	"code" text NOT NULL,
 	"security" text NOT NULL,
 	"tests" text NOT NULL,
+	"operability" text NOT NULL,
 	"createdAt" timestamp with time zone NOT NULL DEFAULT now(),
 	"statusId" int4 NOT NULL,
 	PRIMARY KEY("promptId")

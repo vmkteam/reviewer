@@ -15,6 +15,7 @@ const (
 	ReviewTypeCode         = "code"
 	ReviewTypeSecurity     = "security"
 	ReviewTypeTests        = "tests"
+	ReviewTypeOperability  = "operability"
 
 	SeverityCritical = "critical"
 	SeverityHigh     = "high"
@@ -23,7 +24,7 @@ const (
 )
 
 var (
-	ReviewTypes            = []string{ReviewTypeArchitecture, ReviewTypeCode, ReviewTypeSecurity, ReviewTypeTests}
+	ReviewTypes            = []string{ReviewTypeArchitecture, ReviewTypeCode, ReviewTypeSecurity, ReviewTypeTests, ReviewTypeOperability}
 	Severities             = []string{SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow}
 	ErrInvalidReviewType   = errors.New("invalid review type")
 	ErrDuplicateReviewType = errors.New("duplicate review type")

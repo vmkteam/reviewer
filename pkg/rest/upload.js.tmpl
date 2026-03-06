@@ -5,7 +5,7 @@ const BASE_URL = process.env.REVIEWSRV_URL || "{{.BaseURL}}";
 const PROJECT_KEY = process.env.PROJECT_KEY;
 const DIR = process.env.REVIEW_DIR || ".";
 
-const TYPES = { R1: "architecture", R2: "code", R3: "security", R4: "tests" };
+const TYPES = { R1: "architecture", R2: "code", R3: "security", R4: "tests", R5: "operability" };
 
 async function upload(url, body, contentType = "application/octet-stream") {
   const res = await fetch(url, { method: "POST", body, headers: { "Content-Type": contentType } });

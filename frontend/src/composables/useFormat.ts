@@ -10,11 +10,14 @@ const dateTimeOpts: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 }
 
+export const reviewTypes = ['architecture', 'code', 'security', 'tests', 'operability'] as const
+
 const reviewTypeLabels: Record<string, string> = {
   architecture: 'A',
   code: 'C',
   security: 'S',
   tests: 'T',
+  operability: 'O',
 }
 
 const reviewTypeFullNames: Record<string, string> = {
@@ -22,6 +25,7 @@ const reviewTypeFullNames: Record<string, string> = {
   code: 'Code',
   security: 'Security',
   tests: 'Tests',
+  operability: 'Operability',
 }
 
 const severityOrder: Record<string, number> = {

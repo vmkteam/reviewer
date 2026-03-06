@@ -175,10 +175,7 @@
               </PSelect>
               <PSelect v-model="issueFilters.reviewType">
                 <option value="">All review types</option>
-                <option value="architecture">Architecture</option>
-                <option value="code">Code</option>
-                <option value="security">Security</option>
-                <option value="tests">Tests</option>
+                <option v-for="rt in reviewTypes" :key="rt" :value="rt">{{ reviewTypeFullName(rt) }}</option>
               </PSelect>
               <span v-if="issueCount !== null" class="ml-auto text-xs text-fg-subtle">
                 {{ issueCount }} issue{{ issueCount !== 1 ? 's' : '' }}
@@ -242,7 +239,7 @@ import ExternalLink from '../components/ExternalLink.vue'
 import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
 import ReviewsTable from '../components/ReviewsTable.vue'
-import { useFormat } from '../composables/useFormat'
+import { useFormat, reviewTypes } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 import { linkifyTaskIds } from '../composables/useTaskLink'
 
@@ -272,7 +269,7 @@ const issueFilters = reactive<{ severity: string; issueType: string; reviewType:
 
 // Tabs
 const selectedTab = ref(0)
-const typeOrder = ['architecture', 'code', 'security', 'tests']
+const typeOrder = reviewTypes
 const targetIssueId = ref<number | null>(null)
 const copiedIssueId = ref<number | null>(null)
 

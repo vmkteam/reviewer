@@ -179,7 +179,7 @@ func newReview(in *reviewer.Review) *Review {
 	return r
 }
 
-// ReviewFile — таб Architecture/Code/Security/Tests.
+// ReviewFile — таб Architecture/Code/Security/Tests/Operability.
 type ReviewFile struct {
 	ID           int        `json:"reviewFileId"`
 	ReviewType   string     `json:"reviewType"`
