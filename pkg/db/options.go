@@ -17,11 +17,17 @@ const (
 	StatusEnabled  = 1
 	StatusDisabled = 2
 	StatusDeleted  = 3
+
+	// issue resolution statuses
+	StatusValid         = 4
+	StatusFalsePositive = 5
+	StatusIgnored       = 6
 )
 
 var (
 	StatusFilter        = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusDisabled}, SearchType: SearchTypeArray}
 	StatusEnabledFilter = Filter{Field: "statusId", Value: []int{StatusEnabled}, SearchType: SearchTypeArray}
+	IssueStatusFilter   = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusValid, StatusFalsePositive, StatusIgnored}, SearchType: SearchTypeArray}
 )
 
 type SortDirection string

@@ -152,8 +152,9 @@ body {
 
 /* Issue badges in markdown headings */
 .issue-badge { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; vertical-align: middle; font-size: 0.7rem; }
-.issue-badge-fp { padding: 1px 6px; border-radius: 9999px; background: rgba(239,68,68,0.1); color: #dc2626; border: 1px solid rgba(239,68,68,0.3); font-weight: 600; }
-.issue-badge-valid { padding: 1px 6px; border-radius: 9999px; background: rgba(16,185,129,0.1); color: #059669; border: 1px solid rgba(16,185,129,0.3); font-weight: 600; }
+.issue-badge-fp { padding: 2px 8px; border-radius: 6px; background: rgba(239,68,68,0.1); color: #dc2626; border: 1px solid rgba(239,68,68,0.3); font-weight: 600; }
+.issue-badge-valid { padding: 2px 8px; border-radius: 6px; background: rgba(16,185,129,0.1); color: #059669; border: 1px solid rgba(16,185,129,0.3); font-weight: 600; }
+.issue-badge-ignored { padding: 2px 8px; border-radius: 6px; background: rgba(245,158,11,0.1); color: #d97706; border: 1px solid rgba(245,158,11,0.3); font-weight: 600; }
 .issue-badge-goto { color: var(--color-accent); cursor: pointer; text-decoration: none; }
 .issue-badge-goto:hover { text-decoration: underline; }
 .issue-comment-block {
@@ -168,6 +169,7 @@ body {
 }
 .dark .issue-badge-fp { background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.4); }
 .dark .issue-badge-valid { background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.4); }
+.dark .issue-badge-ignored { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.4); }
 
 /* Badge / pill base */
 .badge {

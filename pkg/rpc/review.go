@@ -236,19 +236,19 @@ func (s ReviewService) CountIssuesByProject(ctx context.Context, projectId int, 
 	return count, nil
 }
 
-// Feedback updates false positive flag for an issue.
+// Feedback updates resolution status for an issue.
 //
 //zenrpc:issueId Issue ID
-//zenrpc:isFalsePositive False positive flag (true = false positive, false = confirmed, null = unprocessed)
+//zenrpc:statusId Resolution (1 = unprocessed, 4 = valid, 5 = false positive, 6 = ignored)
 //zenrpc:return bool
 //zenrpc:404 Not Found
 //zenrpc:500 Internal Error
-func (s ReviewService) Feedback(ctx context.Context, issueId int, isFalsePositive *bool) (bool, error) {
+func (s ReviewService) Feedback(ctx context.Context, issueId int, statusId int) (bool, error) {
 	if err := s.checkIssue(ctx, issueId); err != nil {
 		return false, err
 	}
 
-	ok, err := s.rm.SetFeedback(ctx, issueId, isFalsePositive)
+	ok, err := s.rm.SetFeedback(ctx, issueId, statusId)
 	if err != nil {
 		return false, newInternalError(err)
 	}

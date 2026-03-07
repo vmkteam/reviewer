@@ -10,11 +10,12 @@ import type Token from 'markdown-it/lib/token.mjs'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import { buildTaskURL, getTaskPattern } from '../composables/useTaskLink'
+import { StatusValid, StatusFalsePositive, StatusIgnored } from '../constants/status'
 
 export interface IssueBadgeInfo {
   issueId: number
   localId: string
-  isFalsePositive?: boolean | null
+  statusId: number
   comment?: string
 }
 
@@ -129,10 +130,12 @@ md.core.ruler.push('task_link', (state: StateCore) => {
 
 function buildBadgeHtml(issue: IssueBadgeInfo): string {
   let html = ' <span class="issue-badge">'
-  if (issue.isFalsePositive === true) {
+  if (issue.statusId === StatusFalsePositive) {
     html += '<span class="issue-badge-fp" title="False Positive">FP</span>'
-  } else if (issue.isFalsePositive === false) {
+  } else if (issue.statusId === StatusValid) {
     html += '<span class="issue-badge-valid" title="Confirmed">\u2713</span>'
+  } else if (issue.statusId === StatusIgnored) {
+    html += '<span class="issue-badge-ignored" title="Ignored">\u2205</span>'
   }
   html += `<a class="issue-badge-goto" data-issue-id="${issue.issueId}" title="Go to issue">\u2192\u00A0Issues</a>`
   html += '</span>'

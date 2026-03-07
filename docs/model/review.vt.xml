@@ -15,7 +15,7 @@
                 <Attribute Name="File" AttrName="File" SearchName="FileILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
                 <Attribute Name="Lines" AttrName="Lines" SearchName="LinesILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
                 <Attribute Name="Comment" AttrName="Comment" SearchName="CommentILike" Summary="true" Search="true" Max="255" Min="0" Required="false" Validate=""></Attribute>
-                <Attribute Name="IsFalsePositive" AttrName="IsFalsePositive" SearchName="IsFalsePositive" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusIDs" SearchName="StatusIDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="ProcessedAt" AttrName="ProcessedAt" SearchName="ProcessedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="UserID" AttrName="UserID" SearchName="UserID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
@@ -35,7 +35,7 @@
                 <Attribute Name="File" VTAttrName="File" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="Lines" VTAttrName="Lines" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="Comment" VTAttrName="Comment" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
-                <Attribute Name="IsFalsePositive" VTAttrName="IsFalsePositive" List="true" Form="HTML_CHECKBOX" Search="HTML_CHECKBOX"></Attribute>
+                <Attribute Name="StatusIDs" VTAttrName="StatusIDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
                 <Attribute Name="ProcessedAt" VTAttrName="ProcessedAt" List="false" Form="HTML_DATETIME" Search="HTML_DATETIME"></Attribute>
                 <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
                 <Attribute Name="UserID" VTAttrName="UserID" List="false" FKOpts="login" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>

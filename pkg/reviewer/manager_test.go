@@ -279,8 +279,15 @@ func TestDBReviewManager_ProjectsStats(t *testing.T) {
 	assert.NotEmpty(t, ps.TrafficLight)
 }
 
+func ensureIssueStatuses(t *testing.T, dbc db.DB) {
+	t.Helper()
+	_, err := dbc.ExecContext(t.Context(), `INSERT INTO "statuses" ("statusId", "title", "alias") VALUES (4, 'Valid', 'valid'), (5, 'FalsePositive', 'falsePositive'), (6, 'Ignored', 'ignored') ON CONFLICT DO NOTHING`)
+	require.NoError(t, err)
+}
+
 func TestDBReviewManager_SetFeedback(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
+	ensureIssueStatuses(t, dbc)
 	pr, prCl := createTestProject(t, dbc)
 	t.Cleanup(prCl)
 
@@ -289,40 +296,47 @@ func TestDBReviewManager_SetFeedback(t *testing.T) {
 
 	issueID := rv.ReviewFiles[0].Issues[0].ID
 
-	t.Run("set true", func(t *testing.T) {
-		isFP := true
-		ok, err := rm.SetFeedback(t.Context(), issueID, &isFP)
+	t.Run("set false positive", func(t *testing.T) {
+		ok, err := rm.SetFeedback(t.Context(), issueID, db.StatusFalsePositive)
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		iss, err := rm.IssueByID(t.Context(), issueID)
 		require.NoError(t, err)
-		require.NotNil(t, iss.IsFalsePositive)
-		assert.True(t, *iss.IsFalsePositive)
+		assert.Equal(t, db.StatusFalsePositive, iss.StatusID)
 		assert.NotNil(t, iss.ProcessedAt)
 	})
 
-	t.Run("set false", func(t *testing.T) {
-		isFP := false
-		ok, err := rm.SetFeedback(t.Context(), issueID, &isFP)
+	t.Run("set valid", func(t *testing.T) {
+		ok, err := rm.SetFeedback(t.Context(), issueID, db.StatusValid)
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		iss, err := rm.IssueByID(t.Context(), issueID)
 		require.NoError(t, err)
-		require.NotNil(t, iss.IsFalsePositive)
-		assert.False(t, *iss.IsFalsePositive)
+		assert.Equal(t, db.StatusValid, iss.StatusID)
 		assert.NotNil(t, iss.ProcessedAt)
 	})
 
-	t.Run("reset to nil", func(t *testing.T) {
-		ok, err := rm.SetFeedback(t.Context(), issueID, nil)
+	t.Run("set ignored", func(t *testing.T) {
+		ok, err := rm.SetFeedback(t.Context(), issueID, db.StatusIgnored)
 		require.NoError(t, err)
 		assert.True(t, ok)
 
 		iss, err := rm.IssueByID(t.Context(), issueID)
 		require.NoError(t, err)
-		assert.Nil(t, iss.IsFalsePositive)
+		assert.Equal(t, db.StatusIgnored, iss.StatusID)
+		assert.NotNil(t, iss.ProcessedAt)
+	})
+
+	t.Run("reset to unprocessed", func(t *testing.T) {
+		ok, err := rm.SetFeedback(t.Context(), issueID, db.StatusEnabled)
+		require.NoError(t, err)
+		assert.True(t, ok)
+
+		iss, err := rm.IssueByID(t.Context(), issueID)
+		require.NoError(t, err)
+		assert.Equal(t, db.StatusEnabled, iss.StatusID)
 		assert.Nil(t, iss.ProcessedAt)
 	})
 }

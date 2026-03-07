@@ -127,6 +127,7 @@ import InfoBadge from '../components/InfoBadge.vue'
 import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
 import IssuesTable from '../components/IssuesTable.vue'
+import { StatusFalsePositive, StatusIgnored } from '../constants/status'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 
 const { setProject: setProjectCrumb } = useBreadcrumbs()
@@ -164,7 +165,7 @@ const risksLoaded = ref(false)
 const expandedIssueId = ref<number | null>(null)
 const copiedIssueId = ref<number | null>(null)
 
-const risksFilters = { isFalsePositive: true }
+const risksFilters = { statusIds: [StatusFalsePositive, StatusIgnored] }
 
 function copyIssueLink(issueId: number) {
   const issue = risks.value.find(i => i.issueId === issueId)
@@ -279,10 +280,10 @@ async function loadMoreRisks() {
   }
 }
 
-async function setRiskFeedback(issue: Issue, value: boolean | null) {
+async function setRiskFeedback(issue: Issue, statusId: number) {
   try {
-    await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
-    if (value !== true) {
+    await api.review.feedback({ issueId: issue.issueId, statusId })
+    if (statusId !== StatusFalsePositive) {
       // Issue is no longer a false positive — remove from list
       risks.value = risks.value.filter(i => i.issueId !== issue.issueId)
       if (risksCount.value !== null) risksCount.value--

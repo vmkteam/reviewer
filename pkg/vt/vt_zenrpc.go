@@ -346,6 +346,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -551,6 +555,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -751,6 +759,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
+										Name: "operability",
+										Type: smd.String,
+									},
+									{
 										Name:     "status",
 										Optional: true,
 										Ref:      "#/definitions/Status",
@@ -941,6 +953,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "tests",
+									Type: smd.String,
+								},
+								{
+									Name: "operability",
 									Type: smd.String,
 								},
 								{
@@ -1143,6 +1159,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
+										Name: "operability",
+										Type: smd.String,
+									},
+									{
 										Name:     "status",
 										Optional: true,
 										Ref:      "#/definitions/Status",
@@ -1260,17 +1280,30 @@ func (ProjectService) SMD() smd.ServiceInfo {
 				},
 			},
 			"GitlabCI": {
-				Description: `GitlabCI returns a generated GitLab CI YAML fragment.`,
-				Parameters: []smd.JSONSchema{
-					{
-						Name:        "targetBranch",
-						Description: `string`,
-						Type:        smd.String,
-					},
-				},
+				Description: `GitlabCI returns CI configuration files for GitLab CI integration.`,
+				Parameters:  []smd.JSONSchema{},
 				Returns: smd.JSONSchema{
-					Description: `string`,
-					Type:        smd.String,
+					Description: `[]CIFile`,
+					Type:        smd.Array,
+					TypeName:    "[]CIFile",
+					Items: map[string]string{
+						"$ref": "#/definitions/CIFile",
+					},
+					Definitions: map[string]smd.Definition{
+						"CIFile": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "name",
+									Type: smd.String,
+								},
+								{
+									Name: "content",
+									Type: smd.String,
+								},
+							},
+						},
+					},
 				},
 				Errors: map[int]string{
 					500: "Internal Error",
@@ -1383,6 +1416,10 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "tests",
+										Type: smd.String,
+									},
+									{
+										Name: "operability",
 										Type: smd.String,
 									},
 									{
@@ -1647,23 +1684,7 @@ func (s ProjectService) Invoke(ctx context.Context, method string, params json.R
 		resp.Set(s.Delete(ctx, args.Id))
 
 	case RPC.ProjectService.GitlabCI:
-		var args = struct {
-			TargetBranch string `json:"targetBranch"`
-		}{}
-
-		if zenrpc.IsArray(params) {
-			if params, err = zenrpc.ConvertToObject([]string{"targetBranch"}, params); err != nil {
-				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
-			}
-		}
-
-		if len(params) > 0 {
-			if err := json.Unmarshal(params, &args); err != nil {
-				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
-			}
-		}
-
-		resp.Set(s.GitlabCI(ctx, args.TargetBranch))
+		resp.Set(s.GitlabCI(ctx))
 
 	case RPC.ProjectService.Validate:
 		var args = struct {
@@ -1740,6 +1761,11 @@ func (PromptService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:     "operability",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
 								Name:     "statusId",
 								Optional: true,
 								Type:     smd.Integer,
@@ -1804,6 +1830,11 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "tests",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "operability",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -1891,6 +1922,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name: "operability",
+									Type: smd.String,
+								},
+								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -1962,6 +1997,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "tests",
+							Type: smd.String,
+						},
+						{
+							Name: "operability",
 							Type: smd.String,
 						},
 						{
@@ -2038,6 +2077,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
+								Name: "operability",
+								Type: smd.String,
+							},
+							{
 								Name: "statusId",
 								Type: smd.Integer,
 							},
@@ -2101,6 +2144,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "tests",
+							Type: smd.String,
+						},
+						{
+							Name: "operability",
 							Type: smd.String,
 						},
 						{
@@ -2173,6 +2220,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "tests",
+								Type: smd.String,
+							},
+							{
+								Name: "operability",
 								Type: smd.String,
 							},
 							{
@@ -2272,6 +2323,10 @@ func (PromptService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "tests",
+								Type: smd.String,
+							},
+							{
+								Name: "operability",
 								Type: smd.String,
 							},
 							{

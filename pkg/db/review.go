@@ -20,7 +20,7 @@ func NewReviewRepo(db orm.DB) ReviewRepo {
 	return ReviewRepo{
 		db: db,
 		filters: map[string][]Filter{
-			Tables.Issue.Name:      {StatusFilter},
+			Tables.Issue.Name:      {IssueStatusFilter},
 			Tables.ReviewFile.Name: {StatusFilter},
 			Tables.Review.Name:     {StatusFilter},
 		},

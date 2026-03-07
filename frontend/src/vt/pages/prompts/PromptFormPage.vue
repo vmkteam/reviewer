@@ -18,24 +18,28 @@
         <VInput v-model="entity.title" type="text" />
       </FormField>
 
-      <FormField label="Common" :error="fieldError('common')">
+      <FormField label="Common" :error="fieldError('common')" :fillable="canFill('common')" @fill="fillField('common')">
         <VTextarea v-model="entity.common" :rows="4" />
       </FormField>
 
-      <FormField label="Architecture" :error="fieldError('architecture')">
+      <FormField label="Architecture" :error="fieldError('architecture')" :fillable="canFill('architecture')" @fill="fillField('architecture')">
         <VTextarea v-model="entity.architecture" :rows="4" />
       </FormField>
 
-      <FormField label="Code" :error="fieldError('code')">
+      <FormField label="Code" :error="fieldError('code')" :fillable="canFill('code')" @fill="fillField('code')">
         <VTextarea v-model="entity.code" :rows="4" />
       </FormField>
 
-      <FormField label="Security" :error="fieldError('security')">
+      <FormField label="Security" :error="fieldError('security')" :fillable="canFill('security')" @fill="fillField('security')">
         <VTextarea v-model="entity.security" :rows="4" />
       </FormField>
 
-      <FormField label="Tests" :error="fieldError('tests')">
+      <FormField label="Tests" :error="fieldError('tests')" :fillable="canFill('tests')" @fill="fillField('tests')">
         <VTextarea v-model="entity.tests" :rows="4" />
+      </FormField>
+
+      <FormField label="Operability" :error="fieldError('operability')" :fillable="canFill('operability')" @fill="fillField('operability')">
+        <VTextarea v-model="entity.operability" :rows="4" />
       </FormField>
 
       <FormField label="Status" :error="fieldError('statusId')">
@@ -76,7 +80,7 @@ const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Prompt>(vtApi.prompt, 'prompt', () => ({
-  id: 0, title: '', common: '', architecture: '', code: '', security: '', tests: '', statusId: 1,
+  id: 0, title: '', common: '', architecture: '', code: '', security: '', tests: '', operability: '', statusId: 1,
 }))
 
 onMounted(() => {
@@ -92,24 +96,51 @@ async function handleDelete() {
   if (props.id && await remove(parseInt(props.id))) router.push('/prompts')
 }
 
-const languagePresets: Record<string, { title: string; code: string; architecture: string; security: string; tests: string }> = {
-  'Go': { title: 'Go Review', code: 'Rob Pike', architecture: 'Dave Cheney', security: 'Filippo Valsorda', tests: 'Mitchell Hashimoto' },
-  'Swift / iOS': { title: 'Swift Review', code: 'Chris Lattner', architecture: 'Krzysztof Zabłocki', security: 'Philippe De Ryck', tests: 'John Sundell' },
-  'Kotlin / Android': { title: 'Kotlin Review', code: 'Roman Elizarov', architecture: 'Yigit Boyar', security: 'Maddie Stone', tests: 'Jake Wharton' },
-  'Vue + Nuxt': { title: 'Vue Review', code: 'Evan You', architecture: 'Daniel Roe', security: 'Liran Tal', tests: 'Jessica Sachs' },
-  'Python': { title: 'Python Review', code: 'Raymond Hettinger', architecture: 'Sebastián Ramírez', security: 'Anthony Shaw', tests: 'Brian Okken' },
+const languagePresets: Record<string, { title: string; code: string; architecture: string; security: string; tests: string; operability: string }> = {
+  'Go': { title: 'Go Review', code: 'Rob Pike', architecture: 'Dave Cheney', security: 'Filippo Valsorda', tests: 'Mitchell Hashimoto', operability: 'Peter Bourgon. Проведи ревью операционной готовности этого MR: логирование, метрики, трейсинг, алерты, feature flags, graceful degradation, миграции БД, план отката.' },
+  'Swift / iOS': { title: 'Swift Review', code: 'Chris Lattner', architecture: 'Krzysztof Zabłocki', security: 'Philippe De Ryck', tests: 'John Sundell', operability: 'Felix Krause. Проведи ревью операционной готовности этого MR: crash reporting, аналитика, feature flags, релизные пайплайны, graceful degradation, план отката.' },
+  'Kotlin / Android': { title: 'Kotlin Review', code: 'Roman Elizarov', architecture: 'Yigit Boyar', security: 'Maddie Stone', tests: 'Jake Wharton', operability: 'Chet Haase. Проведи ревью операционной готовности этого MR: crash reporting, ANR, профилирование, логирование, feature flags, graceful degradation, план отката.' },
+  'Vue + Nuxt': { title: 'Vue Review', code: 'Evan You', architecture: 'Daniel Roe', security: 'Liran Tal', tests: 'Jessica Sachs', operability: 'Sébastien Chopin. Проведи ревью операционной готовности этого MR: error boundaries, SSR fallback, edge rendering, performance monitoring, feature flags, graceful degradation.' },
+  'Python': { title: 'Python Review', code: 'Raymond Hettinger', architecture: 'Sebastián Ramírez', security: 'Anthony Shaw', tests: 'Brian Okken', operability: 'Hynek Schlawack. Проведи ревью операционной готовности этого MR: structured logging, метрики, трейсинг, алерты, feature flags, graceful degradation, миграции БД, план отката.' },
+}
+
+type FillableField = 'common' | 'architecture' | 'code' | 'security' | 'tests' | 'operability'
+
+function buildFillValues(p: typeof languagePresets[string]): Record<FillableField, string> {
+  return {
+    common: 'Дополнительно проверь текст задачи на предмет фикса.\nЕсли были исправлены ошибки, предположи, что к ним привело и где еще могут быть потенциальные ошибки.',
+    architecture: `${p.architecture}. Есть ли ошибки в бизнес логике?`,
+    code: `${p.code}. Обязательно расскажи, что можно улучшить и упросить в данном коде.`,
+    security: `${p.security}. Проведи ревью безопасности этого MR.`,
+    tests: `${p.tests}. Проведи ревью тестов этого MR. Если тестов нет — укажи, какие нужно добавить и почему.`,
+    operability: p.operability,
+  }
 }
 
 function fillExample(lang: string) {
   const preset = languagePresets[lang]
   if (!preset) return
-
   entity.title = preset.title
-  entity.common = 'Дополнительно проверь текст задачи на предмет фикса.\nЕсли были исправлены ошибки, предположи, что к ним привело и где еще могут быть потенциальные ошибки.'
-  entity.architecture = `${preset.architecture}. Есть ли ошибки в бизнес логике?`
-  entity.code = `${preset.code}. Обязательно расскажи, что можно улучшить и упросить в данном коде.`
-  entity.security = `${preset.security}. Проведи ревью безопасности этого MR.`
-  entity.tests = `${preset.tests}. Проведи ревью тестов этого MR. Если тестов нет — укажи, какие нужно добавить и почему.`
+  Object.assign(entity, buildFillValues(preset))
   entity.statusId = 1
+}
+
+const detectedPreset = computed(() => {
+  const title = entity.title?.toLowerCase() || ''
+  for (const [, preset] of Object.entries(languagePresets)) {
+    if (title.includes(preset.title.toLowerCase())) return preset
+  }
+  return null
+})
+
+const fillValues = computed(() => detectedPreset.value ? buildFillValues(detectedPreset.value) : null)
+
+function canFill(field: FillableField): boolean {
+  return !entity[field] && !!fillValues.value?.[field]
+}
+
+function fillField(field: FillableField) {
+  const val = fillValues.value?.[field]
+  if (val) entity[field] = val
 }
 </script>

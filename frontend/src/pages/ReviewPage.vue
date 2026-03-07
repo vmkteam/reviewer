@@ -175,10 +175,7 @@
               </PSelect>
               <PSelect v-model="issueFilters.reviewType">
                 <option value="">All review types</option>
-                <option value="architecture">Architecture</option>
-                <option value="code">Code</option>
-                <option value="security">Security</option>
-                <option value="tests">Tests</option>
+                <option v-for="rt in reviewTypes" :key="rt" :value="rt">{{ reviewTypeFullName(rt) }}</option>
               </PSelect>
               <span v-if="issueCount !== null" class="ml-auto text-xs text-fg-subtle">
                 {{ issueCount }} issue{{ issueCount !== 1 ? 's' : '' }}
@@ -242,7 +239,7 @@ import ExternalLink from '../components/ExternalLink.vue'
 import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
 import ReviewsTable from '../components/ReviewsTable.vue'
-import { useFormat } from '../composables/useFormat'
+import { useFormat, reviewTypes } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 import { linkifyTaskIds } from '../composables/useTaskLink'
 
@@ -272,7 +269,7 @@ const issueFilters = reactive<{ severity: string; issueType: string; reviewType:
 
 // Tabs
 const selectedTab = ref(0)
-const typeOrder = ['architecture', 'code', 'security', 'tests']
+const typeOrder = reviewTypes
 const targetIssueId = ref<number | null>(null)
 const copiedIssueId = ref<number | null>(null)
 
@@ -298,6 +295,8 @@ function applyHash() {
     selectedTab.value = idx
     if (tabKey === 'issues') {
       targetIssueId.value = issueId
+    } else if (tabKey === 'previous') {
+      loadPreviousReviews()
     }
   }
 }
@@ -421,10 +420,10 @@ function goToPreviousReview(reviewId: number) {
   router.push({ name: 'review', params: { id: reviewId } })
 }
 
-async function setFeedback(issue: Issue, value: boolean | null) {
+async function setFeedback(issue: Issue, statusId: number) {
   try {
-    await api.review.feedback({ issueId: issue.issueId, isFalsePositive: value ?? undefined })
-    issue.isFalsePositive = value ?? undefined
+    await api.review.feedback({ issueId: issue.issueId, statusId })
+    issue.statusId = statusId
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to update feedback'
   }
@@ -436,7 +435,7 @@ function issuesForReviewFile(reviewType: string): IssueBadgeInfo[] {
     .map(i => ({
       issueId: i.issueId,
       localId: i.localId!,
-      isFalsePositive: i.isFalsePositive ?? null,
+      statusId: i.statusId,
       comment: i.comment,
     }))
 }
@@ -489,14 +488,14 @@ onMounted(async () => {
     setReviewCrumb(review.value.reviewId, review.value.title)
     loadProjectCrumb(review.value.projectId, review.value)
     // Load previous reviews count in parallel with issues
-    if (review.value.externalId && review.value.externalId !== '0') {
-      api.review.count({
-        projectId: review.value.projectId,
-        filters: { externalId: review.value.externalId },
-      }).then(c => { previousCount.value = c }).catch(() => {})
-    }
-    await loadIssues()
-    // Apply hash after data is loaded — sets selectedTab and targetIssueId
+    const prevCountPromise = (review.value.externalId && review.value.externalId !== '0')
+      ? api.review.count({
+          projectId: review.value.projectId,
+          filters: { externalId: review.value.externalId },
+        }).then(c => { previousCount.value = c }).catch(() => {})
+      : Promise.resolve()
+    await Promise.all([loadIssues(), prevCountPromise])
+    // Apply hash after all data is loaded — sets selectedTab and targetIssueId
     applyHash()
     // Wait for tab panel switch to render
     await nextTick()

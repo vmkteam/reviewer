@@ -146,7 +146,6 @@ type IssueSearch struct {
 	File                 *string
 	Lines                *string
 	Comment              *string
-	IsFalsePositive      *bool
 	ProcessedAt          *time.Time
 	CreatedAt            *time.Time
 	UserID               *int
@@ -161,6 +160,7 @@ type IssueSearch struct {
 	FileILike            *string
 	LinesILike           *string
 	CommentILike         *string
+	StatusIDs            []int
 	ReviewFileReviewType *string
 	ReviewProjectID      *int
 }
@@ -201,9 +201,6 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if is.Comment != nil {
 		is.where(query, Tables.Issue.Alias, Columns.Issue.Comment, is.Comment)
-	}
-	if is.IsFalsePositive != nil {
-		is.where(query, Tables.Issue.Alias, Columns.Issue.IsFalsePositive, is.IsFalsePositive)
 	}
 	if is.ProcessedAt != nil {
 		is.where(query, Tables.Issue.Alias, Columns.Issue.ProcessedAt, is.ProcessedAt)
@@ -246,6 +243,9 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if is.CommentILike != nil {
 		Filter{Columns.Issue.Comment, *is.CommentILike, SearchTypeILike, false}.Apply(query)
+	}
+	if len(is.StatusIDs) > 0 {
+		Filter{Columns.Issue.StatusID, is.StatusIDs, SearchTypeArray, false}.Apply(query)
 	}
 	if is.ReviewFileReviewType != nil {
 		Filter{"review_file.reviewType", *is.ReviewFileReviewType, SearchTypeEquals, false}.Apply(query)
@@ -546,6 +546,7 @@ type PromptSearch struct {
 	Code              *string
 	Security          *string
 	Tests             *string
+	Operability       *string
 	CreatedAt         *time.Time
 	StatusID          *int
 	IDs               []int
@@ -555,6 +556,7 @@ type PromptSearch struct {
 	CodeILike         *string
 	SecurityILike     *string
 	TestsILike        *string
+	OperabilityILike  *string
 }
 
 func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
@@ -582,6 +584,9 @@ func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
 	if ps.Tests != nil {
 		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.Tests, ps.Tests)
 	}
+	if ps.Operability != nil {
+		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.Operability, ps.Operability)
+	}
 	if ps.CreatedAt != nil {
 		ps.where(query, Tables.Prompt.Alias, Columns.Prompt.CreatedAt, ps.CreatedAt)
 	}
@@ -608,6 +613,9 @@ func (ps *PromptSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.TestsILike != nil {
 		Filter{Columns.Prompt.Tests, *ps.TestsILike, SearchTypeILike, false}.Apply(query)
+	}
+	if ps.OperabilityILike != nil {
+		Filter{Columns.Prompt.Operability, *ps.OperabilityILike, SearchTypeILike, false}.Apply(query)
 	}
 
 	ps.apply(query)

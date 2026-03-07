@@ -179,7 +179,7 @@ func newReview(in *reviewer.Review) *Review {
 	return r
 }
 
-// ReviewFile — таб Architecture/Code/Security/Tests.
+// ReviewFile — таб Architecture/Code/Security/Tests/Operability.
 type ReviewFile struct {
 	ID           int        `json:"reviewFileId"`
 	ReviewType   string     `json:"reviewType"`
@@ -204,20 +204,20 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 
 // Issue — строка таблицы issues в табе Issues.
 type Issue struct {
-	ID              int     `json:"issueId"`
-	ReviewID        int     `json:"reviewId"`
-	LocalID         *string `json:"localId"`
-	Title           string  `json:"title"`
-	Severity        string  `json:"severity"`
-	Description     string  `json:"description"`
-	Content         string  `json:"content"`
-	File            string  `json:"file"`
-	Lines           string  `json:"lines"`
-	IssueType       string  `json:"issueType"`
-	ReviewType      string  `json:"reviewType"`
-	CommitHash      string  `json:"commitHash"`
-	IsFalsePositive *bool   `json:"isFalsePositive"`
-	Comment         *string `json:"comment"`
+	ID          int     `json:"issueId"`
+	ReviewID    int     `json:"reviewId"`
+	LocalID     *string `json:"localId"`
+	Title       string  `json:"title"`
+	Severity    string  `json:"severity"`
+	Description string  `json:"description"`
+	Content     string  `json:"content"`
+	File        string  `json:"file"`
+	Lines       string  `json:"lines"`
+	IssueType   string  `json:"issueType"`
+	ReviewType  string  `json:"reviewType"`
+	CommitHash  string  `json:"commitHash"`
+	StatusID    int     `json:"statusId"`
+	Comment     *string `json:"comment"`
 }
 
 func newIssue(in *reviewer.Issue) *Issue {
@@ -226,19 +226,19 @@ func newIssue(in *reviewer.Issue) *Issue {
 	}
 
 	issue := &Issue{
-		ID:              in.ID,
-		ReviewID:        in.ReviewID,
-		LocalID:         in.LocalID,
-		Title:           in.Title,
-		Severity:        in.Severity,
-		Description:     in.Description,
-		Content:         in.Content,
-		File:            in.File,
-		Lines:           in.Lines,
-		IssueType:       in.IssueType,
-		ReviewType:      in.ReviewFile.ReviewType,
-		IsFalsePositive: in.IsFalsePositive,
-		Comment:         in.Comment,
+		ID:          in.ID,
+		ReviewID:    in.ReviewID,
+		LocalID:     in.LocalID,
+		Title:       in.Title,
+		Severity:    in.Severity,
+		Description: in.Description,
+		Content:     in.Content,
+		File:        in.File,
+		Lines:       in.Lines,
+		IssueType:   in.IssueType,
+		ReviewType:  in.ReviewFile.ReviewType,
+		StatusID:    in.StatusID,
+		Comment:     in.Comment,
 	}
 
 	if in.Review != nil {
@@ -273,10 +273,10 @@ func (f *ReviewFilters) ToDomain(projectID int, fromReviewID *int) *reviewer.Rev
 
 // IssueFilters — фильтры для списка issues.
 type IssueFilters struct {
-	Severity        *string `json:"severity"`
-	IssueType       *string `json:"issueType"`
-	ReviewType      *string `json:"reviewType"`
-	IsFalsePositive *bool   `json:"isFalsePositive"`
+	Severity   *string `json:"severity"`
+	IssueType  *string `json:"issueType"`
+	ReviewType *string `json:"reviewType"`
+	StatusIDs  []int   `json:"statusIds"`
 }
 
 // ToDomain converts RPC filters to a domain IssueSearch scoped to a review.
@@ -288,7 +288,7 @@ func (f *IssueFilters) ToDomain(reviewID int) *reviewer.IssueSearch {
 		s.Severity = f.Severity
 		s.IssueType = f.IssueType
 		s.ReviewType = f.ReviewType
-		s.IsFalsePositive = f.IsFalsePositive
+		s.StatusIDs = f.StatusIDs
 	}
 	return s
 }
@@ -302,7 +302,7 @@ func (f *IssueFilters) ToDomainByProject(projectID int) *reviewer.IssueSearch {
 		s.Severity = f.Severity
 		s.IssueType = f.IssueType
 		s.ReviewType = f.ReviewType
-		s.IsFalsePositive = f.IsFalsePositive
+		s.StatusIDs = f.StatusIDs
 	}
 	return s
 }

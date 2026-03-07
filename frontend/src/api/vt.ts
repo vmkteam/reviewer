@@ -4,7 +4,7 @@ import { getAuthKey, setAuthKey } from './auth'
 
 // Re-export types from generated file
 export type { IFieldError as FieldError, IViewOps as ViewOps, IStatus as Status } from './vt.generated'
-export type { IProject as Project, IProjectSummary as ProjectSummary, IProjectSearch as ProjectSearch } from './vt.generated'
+export type { IProject as Project, IProjectSummary as ProjectSummary, IProjectSearch as ProjectSearch, ICIFile } from './vt.generated'
 export type { IPrompt as Prompt, IPromptSummary as PromptSummary, IPromptSearch as PromptSearch } from './vt.generated'
 export type { ISlackChannel as SlackChannel, ISlackChannelSummary as SlackChannelSummary, ISlackChannelSearch as SlackChannelSearch } from './vt.generated'
 export type { ITaskTracker as TaskTracker, ITaskTrackerSummary as TaskTrackerSummary, ITaskTrackerSearch as TaskTrackerSearch } from './vt.generated'

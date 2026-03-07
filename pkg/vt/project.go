@@ -1,10 +1,8 @@
 package vt
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
-	"text/template"
 
 	"reviewsrv/pkg/db"
 
@@ -14,6 +12,14 @@ import (
 
 //go:embed gitlab-ci.yml.tmpl
 var gitlabCITmpl string
+
+//go:embed gitlab-review.yml.tmpl
+var gitlabReviewTmpl string
+
+type CIFile struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
 
 type ProjectService struct {
 	zenrpc.Service
@@ -162,30 +168,15 @@ func (s ProjectService) Delete(ctx context.Context, id int) (bool, error) {
 	return ok, err
 }
 
-// GitlabCI returns a generated GitLab CI YAML fragment.
+// GitlabCI returns CI configuration files for GitLab CI integration.
 //
-//zenrpc:targetBranch string
-//zenrpc:return string
+//zenrpc:return []CIFile
 //zenrpc:500 Internal Error
-func (s ProjectService) GitlabCI(_ context.Context, targetBranch string) (string, error) {
-	if targetBranch == "" {
-		targetBranch = "devel"
-	}
-
-	tmpl, err := template.New("gitlab-ci").Parse(gitlabCITmpl)
-	if err != nil {
-		return "", InternalError(err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, map[string]string{
-		"BaseURL":      s.baseURL,
-		"TargetBranch": targetBranch,
-	}); err != nil {
-		return "", InternalError(err)
-	}
-
-	return buf.String(), nil
+func (s ProjectService) GitlabCI(_ context.Context) ([]CIFile, error) {
+	return []CIFile{
+		{Name: "templates/review.yml", Content: gitlabReviewTmpl},
+		{Name: ".gitlab-ci.yml", Content: gitlabCITmpl},
+	}, nil
 }
 
 // Validate verifies that Project data is valid.

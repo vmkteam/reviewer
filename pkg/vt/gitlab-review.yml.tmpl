@@ -1,0 +1,118 @@
+spec:
+  inputs:
+    stage:
+      type: string
+      default: check
+
+    job_name:
+      type: string
+      default: claude-code-review
+
+    dockerimage:
+      type: string
+      default: vmkteam/claude-ci:latest
+
+    stub_rules:
+      type: array
+      default:
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        - when: never
+
+    rules:
+      type: array
+      default:
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+          when: manual
+          allow_failure: true
+        - when: never
+
+    tags:
+      type: array
+      default: []
+
+---
+
+pipeline-ok:
+  stage: check
+  tags: $[[ inputs.tags ]]
+  script:
+    - echo "pipeline ok"
+  rules: $[[ inputs.stub_rules ]]
+
+# Required CI/CD variables: PROJECT_KEY, ANTHROPIC_API_KEY, REVIEWSRV_URL
+$[[ inputs.job_name ]]:
+  image: $[[ inputs.dockerimage ]]
+  stage: $[[ inputs.stage ]]
+  tags: $[[ inputs.tags ]]
+  variables:
+    GIT_DEPTH: 100
+  cache:
+    key: "claude-review-${CI_MERGE_REQUEST_IID}"
+    paths:
+      - .claude-cache/
+  script:
+    - |
+      missing=0
+
+      for var in PROJECT_KEY ANTHROPIC_API_KEY REVIEWSRV_URL; do
+        if [ -z "${!var}" ]; then
+          echo "ERROR: required env var '$var' is not set" >&2
+          missing=1
+        fi
+      done
+
+      if [ "$missing" -ne 0 ]; then
+        exit 1
+      fi
+    - git fetch --depth=20 --force origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - |
+      PROMPT=$(curl -sf "${REVIEWSRV_URL}/v1/prompt/${PROJECT_KEY}/")
+      if [ -z "$PROMPT" ]; then echo "Failed to fetch prompt"; exit 1; fi
+      ESCAPED_MR_TITLE=${CI_MERGE_REQUEST_TITLE//&/\\&}
+      PROMPT=$(echo "$PROMPT" | sed \
+        -e "s|%SOURCE_BRANCH%|${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}|g" \
+        -e "s|%TARGET_BRANCH%|${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}|g" \
+        -e "s|%EXTERNAL_ID%|${CI_MERGE_REQUEST_IID}|g" \
+        -e "s|%TITLE%|${ESCAPED_MR_TITLE}|g")
+      echo -e $PROMPT > p.md
+    - |
+      # Restore cached session into current project hash directory
+      CACHED_SESSION=$(find .claude-cache/projects -name '*.jsonl' -print -quit 2>/dev/null)
+      if [ -n "$CACHED_SESSION" ]; then
+        CACHED_PROJECT_DIR=$(dirname "$CACHED_SESSION")
+        CURRENT_HASH=$(echo "$PWD" | sed 's|/|-|g; s|^-||')
+        TARGET_DIR="/root/.claude/projects/$CURRENT_HASH"
+        mkdir -p "$TARGET_DIR"
+        cp -r "$CACHED_PROJECT_DIR"/* "$TARGET_DIR/"
+        echo "Restored cached Claude session into $TARGET_DIR"
+      fi
+    - |
+      CLAUDE_RESUME=""
+      if find /root/.claude/projects -name '*.jsonl' -print -quit 2>/dev/null | grep -q .; then
+        CLAUDE_RESUME="--continue"
+        echo "Resuming previous session"
+      fi
+    - |
+      claude $CLAUDE_RESUME \
+      --model opus \
+      --permission-mode acceptEdits \
+      --allowedTools "Bash(*) Read(*) Edit(*) Write(*) WebFetch(*)" \
+      -p "$PROMPT"
+    - curl -sf "$REVIEWSRV_URL/v1/upload/upload.js" -o upload.cjs
+    - REVIEW_DIR=. node upload.cjs
+    - for f in R*.ru.md; do [ -f "$f" ] || continue; o="${f%.md}.html"; { sed '/{{BODY}}/,$d' /app/review-template.html; npx marked -i "$f"; sed '1,/{{BODY}}/d' /app/review-template.html; } > "$o"; done
+    - |
+      # Save current session for next run
+      CURRENT_HASH=$(echo "$PWD" | sed 's|/|-|g; s|^-||')
+      SOURCE_DIR="/root/.claude/projects/$CURRENT_HASH"
+      if [ -d "$SOURCE_DIR" ]; then
+        mkdir -p ".claude-cache/projects/$CURRENT_HASH"
+        cp -r "$SOURCE_DIR"/* ".claude-cache/projects/$CURRENT_HASH/"
+        echo "Saved Claude session from $SOURCE_DIR"
+      fi
+    - rm -f p.md upload.cjs
+  artifacts:
+    paths:
+      - "R*.ru.html"
+    when: always
+  rules: $[[ inputs.rules ]]

@@ -11,6 +11,11 @@ export interface IAuthLoginParams {
   remember: boolean
 }
 
+export interface ICIFile {
+  name: string,
+  content: string
+}
+
 export interface IFieldError {
   field: string,
   error: string,
@@ -60,10 +65,6 @@ export interface IProjectGetParams {
   viewOps?: IViewOps
 }
 
-export interface IProjectGitlabCIParams {
-  targetBranch: string
-}
-
 export interface IProjectSearch {
   id?: number,
   title?: string,
@@ -108,6 +109,7 @@ export interface IPrompt {
   code: string,
   security: string,
   tests: string,
+  operability: string,
   statusId: number,
   status?: IStatus
 }
@@ -141,6 +143,7 @@ export interface IPromptSearch {
   code?: string,
   security?: string,
   tests?: string,
+  operability?: string,
   statusId?: number,
   ids: Array<number>
 }
@@ -153,6 +156,7 @@ export interface IPromptSummary {
   code: string,
   security: string,
   tests: string,
+  operability: string,
   status?: IStatus
 }
 
@@ -369,6 +373,13 @@ export class AuthLoginParams implements IAuthLoginParams {
   remember: boolean = false;
 }
 
+export class CIFile implements ICIFile {
+  static entityName = "cifile";
+
+  name: string = null;
+  content: string = null;
+}
+
 export class FieldError implements IFieldError {
   static entityName = "fielderror";
 
@@ -434,12 +445,6 @@ export class ProjectGetParams implements IProjectGetParams {
   viewOps?: IViewOps = null;
 }
 
-export class ProjectGitlabCIParams implements IProjectGitlabCIParams {
-  static entityName = "projectgitlabciparams";
-
-  targetBranch: string = null;
-}
-
 export class ProjectSearch implements IProjectSearch {
   static entityName = "projectsearch";
 
@@ -494,6 +499,7 @@ export class Prompt implements IPrompt {
   code: string = null;
   security: string = null;
   tests: string = null;
+  operability: string = null;
   statusId: number = 0;
   status?: IStatus = null;
 }
@@ -539,6 +545,7 @@ export class PromptSearch implements IPromptSearch {
   code?: string = "";
   security?: string = "";
   tests?: string = "";
+  operability?: string = "";
   statusId?: number = 0;
   ids: Array<number> = [0];
 }
@@ -553,6 +560,7 @@ export class PromptSummary implements IPromptSummary {
   code: string = null;
   security: string = null;
   tests: string = null;
+  operability: string = null;
   status?: IStatus = null;
 }
 
@@ -890,10 +898,10 @@ export const factory = (send: any) => ({
       return send('project.GetByID', params)
     },
     /**
-     * GitlabCI returns a generated GitLab CI YAML fragment.
+     * GitlabCI returns CI configuration files for GitLab CI integration.
      */
-    gitlabCI(params: IProjectGitlabCIParams): Promise<string> {
-      return send('project.GitlabCI', params)
+    gitlabCI(): Promise<Array<ICIFile>> {
+      return send('project.GitlabCI')
     },
     /**
      * Update updates the Project data identified by id from the query.

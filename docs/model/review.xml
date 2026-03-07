@@ -14,7 +14,7 @@
                 <Attribute Name="File" DBName="file" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
                 <Attribute Name="Lines" DBName="lines" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
                 <Attribute Name="Comment" DBName="comment" DBType="varchar" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
-                <Attribute Name="IsFalsePositive" DBName="isFalsePositive" DBType="bool" GoType="*bool" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+
                 <Attribute Name="ProcessedAt" DBName="processedAt" DBType="timestamptz" GoType="*time.Time" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="UserID" DBName="userId" DBType="int4" GoType="*int" PK="false" FK="User" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
@@ -31,6 +31,7 @@
                 <Search Name="FileILike" AttrName="File" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="LinesILike" AttrName="Lines" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="CommentILike" AttrName="Comment" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="StatusIDs" AttrName="StatusID" SearchType="SEARCHTYPE_ARRAY"></Search>
                 <Search Name="ReviewFileReviewType" AttrName="ReviewFile.ReviewType" SearchType="SEARCHTYPE_EQUALS"></Search>
                 <Search Name="ReviewProjectID" AttrName="Review.ProjectID" SearchType="SEARCHTYPE_EQUALS"></Search>
             </Searches>

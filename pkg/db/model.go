@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID string
 	}
 	Issue struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
 
 		ReviewFile, Review, User string
 	}
@@ -33,7 +33,7 @@ var Columns = struct {
 		Prompt, TaskTracker, SlackChannel string
 	}
 	Prompt struct {
-		ID, Title, Common, Architecture, Code, Security, Tests, CreatedAt, StatusID string
+		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
 	}
 	SlackChannel struct {
 		ID, Title, Channel, WebhookURL, StatusID string
@@ -54,27 +54,26 @@ var Columns = struct {
 		StatusID:       "statusId",
 	},
 	Issue: struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, IsFalsePositive, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
 
 		ReviewFile, Review, User string
 	}{
-		ID:              "issueId",
-		ReviewFileID:    "reviewFileId",
-		IssueType:       "issueType",
-		ReviewID:        "reviewId",
-		Title:           "title",
-		Severity:        "severity",
-		Description:     "description",
-		Content:         "content",
-		File:            "file",
-		Lines:           "lines",
-		Comment:         "comment",
-		IsFalsePositive: "isFalsePositive",
-		ProcessedAt:     "processedAt",
-		CreatedAt:       "createdAt",
-		UserID:          "userId",
-		StatusID:        "statusId",
-		LocalID:         "localId",
+		ID:           "issueId",
+		ReviewFileID: "reviewFileId",
+		IssueType:    "issueType",
+		ReviewID:     "reviewId",
+		Title:        "title",
+		Severity:     "severity",
+		Description:  "description",
+		Content:      "content",
+		File:         "file",
+		Lines:        "lines",
+		Comment:      "comment",
+		ProcessedAt:  "processedAt",
+		CreatedAt:    "createdAt",
+		UserID:       "userId",
+		StatusID:     "statusId",
+		LocalID:      "localId",
 
 		ReviewFile: "ReviewFile",
 		Review:     "Review",
@@ -144,7 +143,7 @@ var Columns = struct {
 		SlackChannel: "SlackChannel",
 	},
 	Prompt: struct {
-		ID, Title, Common, Architecture, Code, Security, Tests, CreatedAt, StatusID string
+		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
 	}{
 		ID:           "promptId",
 		Title:        "title",
@@ -153,6 +152,7 @@ var Columns = struct {
 		Code:         "code",
 		Security:     "security",
 		Tests:        "tests",
+		Operability:  "operability",
 		CreatedAt:    "createdAt",
 		StatusID:     "statusId",
 	},
@@ -269,23 +269,22 @@ type User struct {
 type Issue struct {
 	tableName struct{} `pg:"issues,alias:t,discard_unknown_columns"`
 
-	ID              int        `pg:"issueId,pk"`
-	ReviewFileID    int        `pg:"reviewFileId,use_zero"`
-	IssueType       string     `pg:"issueType,use_zero"`
-	ReviewID        int        `pg:"reviewId,use_zero"`
-	Title           string     `pg:"title,use_zero"`
-	Severity        string     `pg:"severity,use_zero"`
-	Description     string     `pg:"description,use_zero"`
-	Content         string     `pg:"content,use_zero"`
-	File            string     `pg:"file,use_zero"`
-	Lines           string     `pg:"lines,use_zero"`
-	Comment         *string    `pg:"comment"`
-	IsFalsePositive *bool      `pg:"isFalsePositive"`
-	ProcessedAt     *time.Time `pg:"processedAt"`
-	CreatedAt       time.Time  `pg:"createdAt,use_zero"`
-	UserID          *int       `pg:"userId"`
-	StatusID        int        `pg:"statusId,use_zero"`
-	LocalID         *string    `pg:"localId"`
+	ID           int        `pg:"issueId,pk"`
+	ReviewFileID int        `pg:"reviewFileId,use_zero"`
+	IssueType    string     `pg:"issueType,use_zero"`
+	ReviewID     int        `pg:"reviewId,use_zero"`
+	Title        string     `pg:"title,use_zero"`
+	Severity     string     `pg:"severity,use_zero"`
+	Description  string     `pg:"description,use_zero"`
+	Content      string     `pg:"content,use_zero"`
+	File         string     `pg:"file,use_zero"`
+	Lines        string     `pg:"lines,use_zero"`
+	Comment      *string    `pg:"comment"`
+	ProcessedAt  *time.Time `pg:"processedAt"`
+	CreatedAt    time.Time  `pg:"createdAt,use_zero"`
+	UserID       *int       `pg:"userId"`
+	StatusID     int        `pg:"statusId,use_zero"`
+	LocalID      *string    `pg:"localId"`
 
 	ReviewFile *ReviewFile `pg:"fk:reviewFileId,rel:has-one"`
 	Review     *Review     `pg:"fk:reviewId,rel:has-one"`
@@ -362,6 +361,7 @@ type Prompt struct {
 	Code         string    `pg:"code,use_zero"`
 	Security     string    `pg:"security,use_zero"`
 	Tests        string    `pg:"tests,use_zero"`
+	Operability  string    `pg:"operability,use_zero"`
 	CreatedAt    time.Time `pg:"createdAt,use_zero"`
 	StatusID     int       `pg:"statusId,use_zero"`
 }

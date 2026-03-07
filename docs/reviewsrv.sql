@@ -1,6 +1,6 @@
 ﻿-- =============================================================================
 -- Diagram Name: reviewsrv
--- Created on: 2/19/2026 12:58:43 PM
+-- Created on: 3/6/2026 9:53:56 PM
 -- Diagram Version: 
 -- =============================================================================
 
@@ -13,6 +13,7 @@ CREATE TABLE "prompts" (
 	"code" text NOT NULL,
 	"security" text NOT NULL,
 	"tests" text NOT NULL,
+	"operability" text NOT NULL,
 	"createdAt" timestamp with time zone NOT NULL DEFAULT now(),
 	"statusId" int4 NOT NULL,
 	PRIMARY KEY("promptId")
@@ -122,7 +123,6 @@ CREATE TABLE "issues" (
 	"lines" varchar(255) NOT NULL,
 	"comment" varchar(255),
 	"localId" varchar(16),
-	"isFalsePositive" bool,
 	"processedAt" timestamp with time zone,
 	"createdAt" timestamp with time zone NOT NULL DEFAULT now(),
 	"userId" int4,
@@ -130,8 +130,8 @@ CREATE TABLE "issues" (
 	PRIMARY KEY("issueId")
 );
 
-CREATE INDEX "IX_issues_isFalsePositive" ON "issues" (
-	"isFalsePositive"
+CREATE INDEX "IX_issues_statusId" ON "issues" (
+	"statusId"
 );
 
 

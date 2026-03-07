@@ -313,17 +313,16 @@ func TestIssueSearch_ToDB(t *testing.T) {
 		severity := "high"
 		issueType := "error-handling"
 		reviewType := "code"
-		isFP := true
 		projectID := 5
 		fromID := 100
 		s := &IssueSearch{
-			ReviewID:        10,
-			ProjectID:       &projectID,
-			IsFalsePositive: &isFP,
-			FromIssueID:     &fromID,
-			Severity:        &severity,
-			IssueType:       &issueType,
-			ReviewType:      &reviewType,
+			ReviewID:    10,
+			ProjectID:   &projectID,
+			StatusIDs:   []int{db.StatusFalsePositive},
+			FromIssueID: &fromID,
+			Severity:    &severity,
+			IssueType:   &issueType,
+			ReviewType:  &reviewType,
 		}
 
 		got := s.ToDB()
@@ -332,7 +331,7 @@ func TestIssueSearch_ToDB(t *testing.T) {
 		assert.Equal(t, "high", *got.Severity)
 		assert.Equal(t, "error-handling", *got.IssueType)
 		assert.Equal(t, "code", *got.ReviewFileReviewType)
-		assert.True(t, *got.IsFalsePositive)
+		assert.Equal(t, []int{db.StatusFalsePositive}, got.StatusIDs)
 		assert.Equal(t, 5, *got.ReviewProjectID)
 	})
 
