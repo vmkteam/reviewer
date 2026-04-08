@@ -7,3 +7,4 @@ Makefile.mk
 P.md
 node_modules
 tsconfig.tsbuildinfo
+.DS_Store
