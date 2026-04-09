@@ -71,6 +71,8 @@ CREATE TABLE "reviews" (
 	"modelInfo" jsonb NOT NULL DEFAULT '{}',
 	"statusId" integer NOT NULL,
 	"promptId" integer NOT NULL,
+	"effortMinutes" integer,
+	"aiSlopScore" real,
 	CONSTRAINT "reviews_pkey" PRIMARY KEY("reviewId")
 );
 
@@ -104,6 +106,7 @@ CREATE TABLE "issues" (
 	"processedAt" timestamptz,
 	"createdAt" timestamptz NOT NULL DEFAULT now(),
 	"userId" integer,
+	"suggestedFix" text,
 	"statusId" integer NOT NULL,
 	CONSTRAINT "issues_pkey" PRIMARY KEY("issueId")
 );

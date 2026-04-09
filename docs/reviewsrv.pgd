@@ -122,6 +122,8 @@
       <column name="modelInfo" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <column name="promptId" type="integer" nullable="false"></column>
+      <column name="effortMinutes" type="integer"></column>
+      <column name="aiSlopScore" type="real"></column>
       <pk name="reviews_pkey">
         <column name="reviewId"></column>
       </pk>
@@ -176,6 +178,7 @@
       <column name="processedAt" type="timestamptz"></column>
       <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
       <column name="userId" type="integer"></column>
+      <column name="suggestedFix" type="text"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <pk name="issues_pkey">
         <column name="issueId"></column>

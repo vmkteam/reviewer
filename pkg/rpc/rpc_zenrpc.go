@@ -308,6 +308,16 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									},
 								},
 								{
+									Name:     "effortMinutes",
+									Optional: true,
+									Type:     smd.Integer,
+								},
+								{
+									Name:     "aiSlopScore",
+									Optional: true,
+									Type:     smd.Float,
+								},
+								{
 									Name:     "lastVersionReviewId",
 									Optional: true,
 									Type:     smd.Integer,
@@ -485,6 +495,16 @@ func (ReviewService) SMD() smd.ServiceInfo {
 							Items: map[string]string{
 								"$ref": "#/definitions/ReviewFile",
 							},
+						},
+						{
+							Name:     "effortMinutes",
+							Optional: true,
+							Type:     smd.Integer,
+						},
+						{
+							Name:     "aiSlopScore",
+							Optional: true,
+							Type:     smd.Float,
 						},
 						{
 							Name:     "lastVersionReviewId",
@@ -681,6 +701,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
+									Name:     "suggestedFix",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
 									Name: "statusId",
 									Type: smd.Integer,
 								},
@@ -850,6 +875,11 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								{
 									Name: "commitHash",
 									Type: smd.String,
+								},
+								{
+									Name:     "suggestedFix",
+									Optional: true,
+									Type:     smd.String,
 								},
 								{
 									Name: "statusId",

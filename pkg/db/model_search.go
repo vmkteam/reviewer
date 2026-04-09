@@ -151,6 +151,7 @@ type IssueSearch struct {
 	UserID               *int
 	StatusID             *int
 	LocalID              *string
+	SuggestedFix         *string
 	IDs                  []int
 	IssueTypeILike       *string
 	TitleILike           *string
@@ -216,6 +217,9 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if is.LocalID != nil {
 		is.where(query, Tables.Issue.Alias, Columns.Issue.LocalID, is.LocalID)
+	}
+	if is.SuggestedFix != nil {
+		is.where(query, Tables.Issue.Alias, Columns.Issue.SuggestedFix, is.SuggestedFix)
 	}
 	if len(is.IDs) > 0 {
 		Filter{Columns.Issue.ID, is.IDs, SearchTypeArray, false}.Apply(query)
@@ -355,24 +359,26 @@ func (rfs *ReviewFileSearch) Q() applier {
 type ReviewSearch struct {
 	search
 
-	ID           *int
-	ProjectID    *int
-	Title        *string
-	Description  *string
-	ExternalID   *string
-	TrafficLight *string
-	CommitHash   *string
-	SourceBranch *string
-	TargetBranch *string
-	Author       *string
-	CreatedAt    *time.Time
-	DurationMS   *int
-	StatusID     *int
-	PromptID     *int
-	IDs          []int
-	IDLt         *int
-	TitleILike   *string
-	AuthorILike  *string
+	ID            *int
+	ProjectID     *int
+	Title         *string
+	Description   *string
+	ExternalID    *string
+	TrafficLight  *string
+	CommitHash    *string
+	SourceBranch  *string
+	TargetBranch  *string
+	Author        *string
+	CreatedAt     *time.Time
+	DurationMS    *int
+	StatusID      *int
+	PromptID      *int
+	EffortMinutes *int
+	AiSlopScore   *float32
+	IDs           []int
+	IDLt          *int
+	TitleILike    *string
+	AuthorILike   *string
 }
 
 func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
@@ -420,6 +426,12 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if rs.PromptID != nil {
 		rs.where(query, Tables.Review.Alias, Columns.Review.PromptID, rs.PromptID)
+	}
+	if rs.EffortMinutes != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.EffortMinutes, rs.EffortMinutes)
+	}
+	if rs.AiSlopScore != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.AiSlopScore, rs.AiSlopScore)
 	}
 	if len(rs.IDs) > 0 {
 		Filter{Columns.Review.ID, rs.IDs, SearchTypeArray, false}.Apply(query)

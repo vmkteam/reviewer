@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID string
 	}
 	Issue struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix string
 
 		ReviewFile, Review, User string
 	}
@@ -23,7 +23,7 @@ var Columns = struct {
 		Review string
 	}
 	Review struct {
-		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, StatusID, PromptID string
+		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, StatusID, PromptID, EffortMinutes, AiSlopScore string
 
 		Project, Prompt string
 	}
@@ -54,7 +54,7 @@ var Columns = struct {
 		StatusID:       "statusId",
 	},
 	Issue: struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix string
 
 		ReviewFile, Review, User string
 	}{
@@ -74,6 +74,7 @@ var Columns = struct {
 		UserID:       "userId",
 		StatusID:     "statusId",
 		LocalID:      "localId",
+		SuggestedFix: "suggestedFix",
 
 		ReviewFile: "ReviewFile",
 		Review:     "Review",
@@ -98,25 +99,27 @@ var Columns = struct {
 		Review: "Review",
 	},
 	Review: struct {
-		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, StatusID, PromptID string
+		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, StatusID, PromptID, EffortMinutes, AiSlopScore string
 
 		Project, Prompt string
 	}{
-		ID:           "reviewId",
-		ProjectID:    "projectId",
-		Title:        "title",
-		Description:  "description",
-		ExternalID:   "externalId",
-		TrafficLight: "trafficLight",
-		CommitHash:   "commitHash",
-		SourceBranch: "sourceBranch",
-		TargetBranch: "targetBranch",
-		Author:       "author",
-		CreatedAt:    "createdAt",
-		DurationMS:   "durationMS",
-		ModelInfo:    "modelInfo",
-		StatusID:     "statusId",
-		PromptID:     "promptId",
+		ID:            "reviewId",
+		ProjectID:     "projectId",
+		Title:         "title",
+		Description:   "description",
+		ExternalID:    "externalId",
+		TrafficLight:  "trafficLight",
+		CommitHash:    "commitHash",
+		SourceBranch:  "sourceBranch",
+		TargetBranch:  "targetBranch",
+		Author:        "author",
+		CreatedAt:     "createdAt",
+		DurationMS:    "durationMS",
+		ModelInfo:     "modelInfo",
+		StatusID:      "statusId",
+		PromptID:      "promptId",
+		EffortMinutes: "effortMinutes",
+		AiSlopScore:   "aiSlopScore",
 
 		Project: "Project",
 		Prompt:  "Prompt",
@@ -285,6 +288,7 @@ type Issue struct {
 	UserID       *int       `pg:"userId"`
 	StatusID     int        `pg:"statusId,use_zero"`
 	LocalID      *string    `pg:"localId"`
+	SuggestedFix *string    `pg:"suggestedFix"`
 
 	ReviewFile *ReviewFile `pg:"fk:reviewFileId,rel:has-one"`
 	Review     *Review     `pg:"fk:reviewId,rel:has-one"`
@@ -311,21 +315,23 @@ type ReviewFile struct {
 type Review struct {
 	tableName struct{} `pg:"reviews,alias:t,discard_unknown_columns"`
 
-	ID           int             `pg:"reviewId,pk"`
-	ProjectID    int             `pg:"projectId,use_zero"`
-	Title        string          `pg:"title,use_zero"`
-	Description  string          `pg:"description,use_zero"`
-	ExternalID   string          `pg:"externalId,use_zero"`
-	TrafficLight string          `pg:"trafficLight,use_zero"`
-	CommitHash   string          `pg:"commitHash,use_zero"`
-	SourceBranch string          `pg:"sourceBranch,use_zero"`
-	TargetBranch string          `pg:"targetBranch,use_zero"`
-	Author       string          `pg:"author,use_zero"`
-	CreatedAt    time.Time       `pg:"createdAt,use_zero"`
-	DurationMS   int             `pg:"durationMS,use_zero"`
-	ModelInfo    ReviewModelInfo `pg:"modelInfo,use_zero"`
-	StatusID     int             `pg:"statusId,use_zero"`
-	PromptID     int             `pg:"promptId,use_zero"`
+	ID            int             `pg:"reviewId,pk"`
+	ProjectID     int             `pg:"projectId,use_zero"`
+	Title         string          `pg:"title,use_zero"`
+	Description   string          `pg:"description,use_zero"`
+	ExternalID    string          `pg:"externalId,use_zero"`
+	TrafficLight  string          `pg:"trafficLight,use_zero"`
+	CommitHash    string          `pg:"commitHash,use_zero"`
+	SourceBranch  string          `pg:"sourceBranch,use_zero"`
+	TargetBranch  string          `pg:"targetBranch,use_zero"`
+	Author        string          `pg:"author,use_zero"`
+	CreatedAt     time.Time       `pg:"createdAt,use_zero"`
+	DurationMS    int             `pg:"durationMS,use_zero"`
+	ModelInfo     ReviewModelInfo `pg:"modelInfo,use_zero"`
+	StatusID      int             `pg:"statusId,use_zero"`
+	PromptID      int             `pg:"promptId,use_zero"`
+	EffortMinutes *int            `pg:"effortMinutes"`
+	AiSlopScore   *float32        `pg:"aiSlopScore"`
 
 	Project *Project `pg:"fk:projectId,rel:has-one"`
 	Prompt  *Prompt  `pg:"fk:promptId,rel:has-one"`

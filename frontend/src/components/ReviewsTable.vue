@@ -9,6 +9,7 @@
           <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider hidden lg:table-cell">Branch</th>
           <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Reviews</th>
           <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider">Issues</th>
+          <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider whitespace-nowrap">Effort</th>
           <th class="px-4 py-3 text-left text-[11px] font-semibold text-fg-subtle uppercase tracking-wider whitespace-nowrap">Date</th>
         </tr>
       </thead>
@@ -56,12 +57,15 @@
               {{ totalIssues(r) || '\u2014' }}
             </span>
           </td>
+          <td class="px-4 py-3.5 text-xs text-fg-subtle whitespace-nowrap tabular-nums">
+            {{ r.effortMinutes ? '~' + r.effortMinutes + 'm' : '\u2014' }}
+          </td>
           <td class="px-4 py-3.5 text-xs text-fg-subtle whitespace-nowrap">
             <TimeAgo :date="r.createdAt" />
           </td>
         </tr>
         <tr v-if="reviews.length === 0">
-          <td colspan="7" class="px-4 py-12 text-center text-sm text-fg-subtle">No reviews found.</td>
+          <td colspan="8" class="px-4 py-12 text-center text-sm text-fg-subtle">No reviews found.</td>
         </tr>
       </tbody>
     </table>
