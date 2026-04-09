@@ -1,6 +1,6 @@
 # reviewctl
 
-Go CLI orchestrator for AI code review. Replaces bash + Node.js (`upload.cjs`) pipeline with a single binary.
+Go CLI orchestrator for AI code review. Single binary for the full review cycle: prompt → Claude → upload → MR comments → HTML.
 
 ## Subcommands
 
@@ -90,6 +90,30 @@ When `$REVIEWER_GITLAB_TOKEN` is set, reviewctl posts:
 
 1. **Summary comment** — traffic light, cost, duration, per-type stats, link to full review
 2. **Inline comments** — critical issues as discussions on specific lines with suggested fixes (falls back to plain notes if line is outside diff)
+
+### Token Setup
+
+#### Phase 1: Read-only review (current)
+
+Create a **Project Access Token** (recommended) or Group Access Token:
+
+- **Role:** Developer (minimum for MR comments)
+- **Scope:** `api`
+- **Path:** Settings → Access Tokens in the GitLab project
+
+Add as CI/CD variable:
+
+- **Key:** `REVIEWER_GITLAB_TOKEN`
+- **Flags:** Protected, Masked
+
+#### Phase 2: Interactive auto-fix (future)
+
+When reviewctl gains the ability to commit suggested fixes:
+
+1. Create a dedicated GitLab user (e.g. `reviewer-bot`)
+2. **Personal Access Token** of this bot user with scopes: `api`, `write_repository`
+3. **Role:** Developer on the project (pushes to MR source branch, never to protected branches)
+4. Commits appear as `reviewer-bot` in git blame — clearly distinguishable from human commits
 
 ## Build
 

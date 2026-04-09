@@ -107,7 +107,6 @@ Environment = ""
 | GET | `/v1/prompt/:projectKey/` | Get review prompt for a project |
 | POST | `/v1/upload/:projectKey/` | Create a new review |
 | POST | `/v1/upload/:projectKey/:reviewId/:reviewType/` | Upload a review file |
-| GET | `/v1/upload/upload.js` | Get the upload script for CI |
 
 ### JSON-RPC
 

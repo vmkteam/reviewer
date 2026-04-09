@@ -38,6 +38,7 @@ func main() {
 	pf.StringVar(&cfg.ExternalID, "external-id", os.Getenv("CI_MERGE_REQUEST_IID"), "external ID")
 	pf.StringVar(&cfg.DiffBaseSHA, "diff-base-sha", os.Getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA"), "diff base SHA")
 	pf.StringVar(&cfg.SessionID, "session", "", "Claude session ID for --resume (reuses prompt cache)")
+	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -47,7 +48,7 @@ func main() {
 				return err
 			}
 			log := slog.Default()
-			runner := &ctl.ExecClaudeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, Log: log}
+			runner := &ctl.ExecClaudeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}
 			c := ctl.NewController(cfg, runner, log)
 			return c.Review(cmd.Context())
 		},

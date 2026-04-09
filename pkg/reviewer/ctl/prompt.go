@@ -59,6 +59,7 @@ func SubstituteVariables(prompt string, cfg *Config) string {
 		"%SOURCE_BRANCH%", cfg.SourceBranch,
 		"%TARGET_BRANCH%", cfg.TargetBranch,
 		"%MR_TITLE%", cfg.MRTitle,
+		"%TITLE%", cfg.MRTitle,
 		"%EXTERNAL_ID%", cfg.ExternalID,
 	)
 	return r.Replace(prompt)

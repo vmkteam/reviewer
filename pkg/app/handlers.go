@@ -68,7 +68,6 @@ func (a *App) registerHandlers() {
 	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL)
 
 	a.echo.GET("/v1/prompt/:projectKey/", h.GetPrompt, lg)
-	a.echo.GET("/v1/upload/upload.js", h.GetUploadScript, lg)
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 }

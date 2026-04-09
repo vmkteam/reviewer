@@ -26,7 +26,8 @@ type Config struct {
 	ExternalID   string
 
 	// Claude session for --resume (reuses prompt cache).
-	SessionID string
+	SessionID       string
+	ContinueSession bool // use --continue instead of --resume
 
 	// For comment subcommand.
 	ReviewID int
