@@ -97,7 +97,7 @@ func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey str
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("upload file %s: HTTP %d: %s", reviewType, resp.StatusCode, string(respBody))
 	}
 

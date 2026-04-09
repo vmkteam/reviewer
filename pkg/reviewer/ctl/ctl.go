@@ -168,6 +168,6 @@ func (c *Controller) reviewURL(reviewID int) string {
 
 func (c *Controller) generateHTML(draft *rest.ReviewDraft, mdFiles map[string]string) {
 	if err := GenerateHTML(c.cfg.Dir, draft.Review.Title, mdFiles); err != nil {
-		c.log.Warn("failed to generate HTML", "err", err)
+		c.log.WarnContext(context.Background(), "failed to generate HTML", "err", err)
 	}
 }

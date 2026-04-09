@@ -63,7 +63,7 @@ func (g *GitLabClient) PostAllComments(ctx context.Context, draft *rest.ReviewDr
 
 	var inlineCount int
 	for _, iss := range draft.Issues {
-		if iss.Severity != reviewer.SeverityCritical && iss.Severity != reviewer.SeverityHigh {
+		if !isInlineSeverity(iss.Severity) {
 			continue
 		}
 		if err := g.PostInlineCommentWithFallback(ctx, iss); err != nil {
@@ -105,63 +105,43 @@ func (g *GitLabClient) PostInlineCommentWithFallback(ctx context.Context, issue 
 
 func (g *GitLabClient) createNote(ctx context.Context, body string) error {
 	url := fmt.Sprintf("%s/projects/%s/merge_requests/%s/notes", g.apiURL, g.projectID, g.mrIID)
-
 	payload, _ := json.Marshal(map[string]string{"body": body})
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("create note request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+g.token)
-
-	resp, err := g.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("post note: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("post note: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
+	return g.doJSONRequest(ctx, http.MethodPost, url, payload)
 }
 
 func (g *GitLabClient) createDiscussion(ctx context.Context, issue rest.ReviewDraftIssue, line int) error {
 	url := fmt.Sprintf("%s/projects/%s/merge_requests/%s/discussions", g.apiURL, g.projectID, g.mrIID)
-
-	position := map[string]any{
-		"base_sha":      g.baseSHA,
-		"head_sha":      g.headSHA,
-		"start_sha":     g.baseSHA,
-		"position_type": "text",
-		"new_path":      issue.File,
-		"new_line":      line,
-	}
-
 	payload, _ := json.Marshal(map[string]any{
-		"body":     formatIssueNote(issue),
-		"position": position,
+		"body": formatIssueNote(issue),
+		"position": map[string]any{
+			"base_sha":      g.baseSHA,
+			"head_sha":      g.headSHA,
+			"start_sha":     g.baseSHA,
+			"position_type": "text",
+			"new_path":      issue.File,
+			"new_line":      line,
+		},
 	})
+	return g.doJSONRequest(ctx, http.MethodPost, url, payload)
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+func (g *GitLabClient) doJSONRequest(ctx context.Context, method, url string, payload []byte) error {
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create discussion request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+g.token)
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("post discussion: %w", err)
+		return fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("post discussion: HTTP %d: %s", resp.StatusCode, string(respBody))
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
@@ -242,6 +222,10 @@ func (g *GitLabClient) cleanupInlineDiscussions(ctx context.Context) {
 	if deleted > 0 || skipped > 0 {
 		g.log.InfoContext(ctx, "cleaned up inline discussions", "deleted", deleted, "skippedWithReplies", skipped)
 	}
+}
+
+func isInlineSeverity(severity string) bool {
+	return severity == reviewer.SeverityCritical || severity == reviewer.SeverityHigh
 }
 
 // parseLinePosition extracts the first line number from "42-45" or "42".
@@ -340,7 +324,7 @@ func renderSummaryComment(draft *rest.ReviewDraft, reviewURL string) (string, er
 	}
 
 	for _, iss := range draft.Issues {
-		if iss.Severity != reviewer.SeverityCritical && iss.Severity != reviewer.SeverityHigh {
+		if !isInlineSeverity(iss.Severity) {
 			continue
 		}
 		data.CriticalIssues = append(data.CriticalIssues, summaryIssue{

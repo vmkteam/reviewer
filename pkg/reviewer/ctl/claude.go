@@ -169,10 +169,10 @@ func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResul
 
 	if r.Log.Enabled(ctx, slog.LevelDebug) {
 		if stderr.Len() > 0 {
-			r.Log.DebugContext(ctx, "claude stderr", "stderr", stderr.String())
+			r.Log.DebugContext(ctx, "claude stderr", "stderr", truncate(stderr.String(), 2000))
 		}
-		if stdout.Len() > 0 && stdout.Len() < 1000 {
-			r.Log.DebugContext(ctx, "claude stdout", "stdout", stdout.String())
+		if stdout.Len() > 0 {
+			r.Log.DebugContext(ctx, "claude stdout", "stdout", truncate(stdout.String(), 2000))
 		}
 	}
 
