@@ -23,6 +23,12 @@ type ModelInfo struct {
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUsd      float64 `json:"costUsd"`
+
+	CacheCreationInputTokens int    `json:"cacheCreationInputTokens,omitempty"`
+	CacheReadInputTokens     int    `json:"cacheReadInputTokens,omitempty"`
+	NumTurns                 int    `json:"numTurns,omitempty"`
+	SessionID                string `json:"sessionId,omitempty"`
+	DurationAPIMs            int    `json:"durationApiMs,omitempty"`
 }
 
 func newIssueStats(in db.ReviewFileIssueStats) IssueStats {
@@ -41,6 +47,12 @@ func newModelInfo(in db.ReviewModelInfo) ModelInfo {
 		InputTokens:  in.InputTokens,
 		OutputTokens: in.OutputTokens,
 		CostUsd:      in.CostUsd,
+
+		CacheCreationInputTokens: in.CacheCreationInputTokens,
+		CacheReadInputTokens:     in.CacheReadInputTokens,
+		NumTurns:                 in.NumTurns,
+		SessionID:                in.SessionID,
+		DurationAPIMs:            in.DurationAPIMs,
 	}
 }
 

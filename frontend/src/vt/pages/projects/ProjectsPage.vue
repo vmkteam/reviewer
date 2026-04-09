@@ -183,24 +183,18 @@ const localRunVisible = ref(false)
 const localRunProject = ref<ProjectSummary | null>(null)
 const localRunCopied = ref(false)
 
-const dockerfileContent = `FROM node:20-alpine
-RUN apk add git bash curl
-WORKDIR /app
+const dockerfileContent = `FROM vmkteam/reviewer:latest AS source
+
+FROM node:20-alpine
+RUN apk add --no-cache git bash curl
 RUN npm install -g @anthropic-ai/claude-code
-RUN npm install -g marked
+
+# Copy reviewctl from reviewer image
+COPY --from=source /reviewctl /usr/local/bin/reviewctl
 
 # Claude Code default settings
 RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json <<'EOF'
 {
-  "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
-  },
-  "attribution": {
-    "commit": "",
-    "pr": ""
-  },
-  "includeCoAuthoredBy": false,
   "permissions": {
     "deny": [
       "Read(**/.env)",
@@ -220,7 +214,7 @@ RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json <<'EOF'
 }
 EOF
 
-CMD ["claude-code"]`
+WORKDIR /workspace`
 
 const localRunScript = computed(() => {
   const baseURL = window.location.origin
@@ -228,22 +222,12 @@ const localRunScript = computed(() => {
   return `export PROJECT_KEY="${key}"
 export REVIEWSRV_URL="${baseURL}"
 
-# Download prompt
-curl -sf "$REVIEWSRV_URL/v1/prompt/$PROJECT_KEY/" -o p.md
+# Full review: prompt → Claude → upload → HTML
+reviewctl review
 
-# Run claude-code review
-claude \\
-  --model opus \\
-  --permission-mode acceptEdits \\
-  --allowedTools "Bash(*) Read(*) Edit(*) Write(*) WebFetch(*)" \\
-  -p "$(cat p.md)"
-
-# Upload results
-curl -sf "$REVIEWSRV_URL/v1/upload/upload.js" -o upload.cjs
-REVIEW_DIR=. node upload.cjs
-
-# Cleanup
-rm -f p.md upload.cjs`
+# Or step-by-step:
+# reviewctl upload    # upload local review.json + R*.md
+# reviewctl comment   # post MR comments only`
 })
 
 async function openCI() {

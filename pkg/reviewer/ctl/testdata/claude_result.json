@@ -1,0 +1,27 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "result": "Review completed.",
+  "stop_reason": "end_turn",
+  "duration_ms": 145780,
+  "duration_api_ms": 142410,
+  "num_turns": 15,
+  "session_id": "34ee826b-a176-42dc-abd0-2a4ea59f47be",
+  "total_cost_usd": 2.0875265,
+  "usage": {
+    "input_tokens": 2680,
+    "cache_creation_input_tokens": 154964,
+    "cache_read_input_tokens": 1879403,
+    "output_tokens": 6636
+  },
+  "modelUsage": {
+    "claude-opus-4-6": {
+      "inputTokens": 2680,
+      "outputTokens": 6636,
+      "cacheReadInputTokens": 1879403,
+      "cacheCreationInputTokens": 154964,
+      "costUSD": 2.0875265
+    }
+  }
+}

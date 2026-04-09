@@ -60,6 +60,11 @@ frontend-build:
 build:
 	@CGO_ENABLED=0 go build $(GOFLAGS) -o ${NAME} $(MAIN)
 
+build-reviewctl:
+	@CGO_ENABLED=0 go build $(GOFLAGS) \
+		-ldflags "-s -w -X main.version=$(VERSION)" \
+		-o bin/reviewctl ./cmd/reviewctl
+
 run:
 	@echo "Compiling"
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -dev

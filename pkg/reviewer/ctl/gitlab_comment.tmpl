@@ -1,0 +1,19 @@
+## {{ .TrafficLightEmoji }} Code Review — {{ .TrafficLightText }}
+
+**Model:** {{ .Model }} | **Cost:** ${{ printf "%.2f" .CostUsd }} | **Duration:** {{ .Duration }}{{ if .EffortMinutes }} | **Effort:** ~{{ .EffortMinutes }} min{{ end }}
+
+| Type | Issues | Traffic Light |
+|------|--------|--------------|
+{{ range .Files -}}
+| {{ .ReviewType }} | {{ .IssuesSummary }} | {{ .TrafficLightEmoji }} |
+{{ end }}
+{{ if .CriticalIssues -}}
+### Critical Issues
+{{ range .CriticalIssues }}
+**{{ .LocalID }}.** {{ .Title }} in `{{ .File }}{{ if .Lines }}:{{ .Lines }}{{ end }}` ({{ .IssueType }})
+> {{ .Description }}
+{{ end }}
+{{ end -}}
+
+---
+*[Full review →]({{ .ReviewURL }})*

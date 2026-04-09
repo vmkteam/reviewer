@@ -10,41 +10,39 @@ import (
 
 type ReviewDraft struct {
 	Review struct {
-		ExternalID    string    `json:"externalId"`
-		Title         string    `json:"title"`
-		Description   string    `json:"description"`
-		CommitHash    string    `json:"commitHash"`
-		SourceBranch  string    `json:"sourceBranch"`
-		TargetBranch  string    `json:"targetBranch"`
-		Author        string    `json:"author"`
-		CreatedAt     time.Time `json:"createdAt"`
-		DurationMs    int       `json:"durationMs"`
-		EffortMinutes int       `json:"effortMinutes"`
-		AiSlopScore   float32   `json:"aiSlopScore"`
-		ModelInfo     struct {
-			Model        string  `json:"model"`
-			InputTokens  int     `json:"inputTokens"`
-			OutputTokens int     `json:"outputTokens"`
-			CostUsd      float64 `json:"costUsd"`
-		} `json:"modelInfo"`
+		ExternalID    string             `json:"externalId"`
+		Title         string             `json:"title"`
+		Description   string             `json:"description"`
+		CommitHash    string             `json:"commitHash"`
+		SourceBranch  string             `json:"sourceBranch"`
+		TargetBranch  string             `json:"targetBranch"`
+		Author        string             `json:"author"`
+		CreatedAt     time.Time          `json:"createdAt"`
+		DurationMs    int                `json:"durationMs"`
+		EffortMinutes int                `json:"effortMinutes"`
+		AiSlopScore   float32            `json:"aiSlopScore"`
+		ModelInfo     db.ReviewModelInfo `json:"modelInfo"`
 	} `json:"review"`
 	Files []struct {
 		ReviewType string `json:"reviewType"`
 		Summary    string `json:"summary"`
 		IsAccepted bool   `json:"isAccepted"`
 	} `json:"files"`
-	Issues []struct {
-		LocalID      string `json:"localId"`
-		Severity     string `json:"severity"`
-		Title        string `json:"title"`
-		Description  string `json:"description"`
-		Content      string `json:"content"`
-		File         string `json:"file"`
-		Lines        string `json:"lines"`
-		IssueType    string `json:"issueType"`
-		FileType     string `json:"fileType"`
-		SuggestedFix string `json:"suggestedFix"`
-	} `json:"issues"`
+	Issues []ReviewDraftIssue `json:"issues"`
+}
+
+// ReviewDraftIssue represents a single issue in the review draft.
+type ReviewDraftIssue struct {
+	LocalID      string `json:"localId"`
+	Severity     string `json:"severity"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Content      string `json:"content"`
+	File         string `json:"file"`
+	Lines        string `json:"lines"`
+	IssueType    string `json:"issueType"`
+	FileType     string `json:"fileType"`
+	SuggestedFix string `json:"suggestedFix"`
 }
 
 // Validate checks that all reviewType and fileType values are valid.
@@ -80,12 +78,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 			DurationMS:    rd.Review.DurationMs,
 			EffortMinutes: ptrInt(rd.Review.EffortMinutes),
 			AiSlopScore:   ptrFloat32(rd.Review.AiSlopScore),
-			ModelInfo: db.ReviewModelInfo{
-				Model:        rd.Review.ModelInfo.Model,
-				InputTokens:  rd.Review.ModelInfo.InputTokens,
-				OutputTokens: rd.Review.ModelInfo.OutputTokens,
-				CostUsd:      rd.Review.ModelInfo.CostUsd,
-			},
+			ModelInfo:     rd.Review.ModelInfo,
 		},
 	}
 
