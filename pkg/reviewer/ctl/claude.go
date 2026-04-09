@@ -36,7 +36,8 @@ type ClaudeResult struct {
 }
 
 // ParseClaudeResult parses the JSON output from Claude CLI.
-// Supports both single JSON object and NDJSON array (stream-json from --resume).
+// Supports both single JSON object and JSON array (from --resume or --verbose).
+// Tolerates truncated JSON arrays by using streaming decoder.
 func ParseClaudeResult(data []byte) (*ClaudeResult, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty claude output")
@@ -44,21 +45,34 @@ func ParseClaudeResult(data []byte) (*ClaudeResult, error) {
 
 	data = bytes.TrimSpace(data)
 
-	// NDJSON array: [{...}, {...}, ...] — find the last "result" entry.
+	// JSON array: [{...}, {...}, ...] — stream-decode to find the last "result" entry.
+	// Uses json.Decoder to tolerate truncated arrays where the closing ] is missing.
 	if data[0] == '[' {
-		var messages []json.RawMessage
-		if err := json.Unmarshal(data, &messages); err != nil {
-			return nil, fmt.Errorf("parse claude NDJSON array: %w", err)
+		dec := json.NewDecoder(bytes.NewReader(data))
+
+		// Read opening '['.
+		if _, err := dec.Token(); err != nil {
+			return nil, fmt.Errorf("parse claude JSON array: %w", err)
 		}
-		for i := len(messages) - 1; i >= 0; i-- {
+
+		var lastResult json.RawMessage
+		for dec.More() {
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				break // truncated array — use what we have
+			}
 			var peek struct {
 				Type string `json:"type"`
 			}
-			if json.Unmarshal(messages[i], &peek) == nil && peek.Type == claudeResultType {
-				return parseResultObject(messages[i])
+			if json.Unmarshal(raw, &peek) == nil && peek.Type == claudeResultType {
+				lastResult = raw
 			}
 		}
-		return nil, errors.New("no result message found in claude output")
+
+		if lastResult == nil {
+			return nil, errors.New("no result message found in claude output")
+		}
+		return parseResultObject(lastResult)
 	}
 
 	// Single JSON object.
@@ -105,10 +119,11 @@ type ClaudeRunner interface {
 
 // ExecClaudeRunner runs the real claude CLI subprocess.
 type ExecClaudeRunner struct {
-	Model     string
-	Dir       string
-	SessionID string // if set, uses --resume to reuse prompt cache
-	Log       *slog.Logger
+	Model           string
+	Dir             string
+	SessionID       string // if set, uses --resume to reuse prompt cache
+	ContinueSession bool   // if true, uses --continue to resume last session
+	Log             *slog.Logger
 }
 
 // Run executes claude --print --output-format json and parses the result.
@@ -118,10 +133,11 @@ func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResul
 		"--output-format", "json",
 		"--model", r.Model,
 		"--permission-mode", "bypassPermissions",
-		"--verbose",
 	}
 
-	if r.SessionID != "" {
+	if r.ContinueSession {
+		args = append(args, "--continue")
+	} else if r.SessionID != "" {
 		args = append(args, "--resume", r.SessionID)
 	}
 

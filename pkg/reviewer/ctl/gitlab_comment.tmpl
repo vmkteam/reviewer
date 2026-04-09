@@ -1,14 +1,16 @@
-## {{ .TrafficLightEmoji }} Code Review — {{ .TrafficLightText }}
+## {{ .TrafficLightEmoji }} Reviewer
 
 **Model:** {{ .Model }} | **Cost:** ${{ printf "%.2f" .CostUsd }} | **Duration:** {{ .Duration }}{{ if .EffortMinutes }} | **Effort:** ~{{ .EffortMinutes }} min{{ end }}
-
-| Type | Issues | Traffic Light |
-|------|--------|--------------|
+{{ if .Description }}
+{{ .Description }}
+{{ end }}
+| Type | Summary | Issues | Traffic Light |
+|------|---------|--------|--------------|
 {{ range .Files -}}
-| {{ .ReviewType }} | {{ .IssuesSummary }} | {{ .TrafficLightEmoji }} |
+| {{ .ReviewType }} | {{ .Summary }} | {{ .IssuesSummary }} | {{ .TrafficLightEmoji }} |
 {{ end }}
 {{ if .CriticalIssues -}}
-### Critical Issues
+### Critical & High Issues
 {{ range .CriticalIssues }}
 **{{ .LocalID }}.** {{ .Title }} in `{{ .File }}{{ if .Lines }}:{{ .Lines }}{{ end }}` ({{ .IssueType }})
 > {{ .Description }}
@@ -17,3 +19,4 @@
 
 ---
 *[Full review →]({{ .ReviewURL }})*
+<!-- reviewer -->

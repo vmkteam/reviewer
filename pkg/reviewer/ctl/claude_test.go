@@ -75,6 +75,27 @@ func TestParseClaudeResult_NDJSONNoResult(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseClaudeResult_TruncatedArray(t *testing.T) {
+	// Array with result followed by truncated entry (simulates 448KB cutoff).
+	data := []byte(`[
+		{"type":"system","subtype":"init"},
+		{"type":"result","subtype":"success","result":"Done.","total_cost_usd":1.5,"num_turns":5,"usage":{"input_tokens":100,"output_tokens":200}},
+		{"type":"assistant","message":"trunc`)
+
+	cr, err := ParseClaudeResult(data)
+	require.NoError(t, err)
+	assert.Equal(t, "result", cr.Type)
+	assert.InDelta(t, 1.5, cr.TotalCostUSD, 0.0001)
+}
+
+func TestParseClaudeResult_TruncatedArrayNoResult(t *testing.T) {
+	// Truncated array without result entry.
+	data := []byte(`[{"type":"system","subtype":"init"},{"type":"assistant","mess`)
+	_, err := ParseClaudeResult(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no result message")
+}
+
 func TestParseClaudeResult_NDJSON_File(t *testing.T) {
 	data, err := os.ReadFile("testdata/claude_result_ndjson.json")
 	require.NoError(t, err)

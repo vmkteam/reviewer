@@ -49,20 +49,32 @@ func NewGitLabClient(cfg *Config, log *slog.Logger) *GitLabClient {
 	}
 }
 
-// PostAllComments posts summary comment and inline critical issues to the MR.
+const reviewerMarker = "<!-- reviewer -->"
+
+// PostAllComments cleans up previous inline discussions (without replies), then posts summary and new inline issues.
 func (g *GitLabClient) PostAllComments(ctx context.Context, draft *rest.ReviewDraft, reviewURL string) {
+	g.cleanupInlineDiscussions(ctx)
+
 	if err := g.PostSummaryComment(ctx, draft, reviewURL); err != nil {
 		g.log.WarnContext(ctx, "failed to post summary comment", "err", err)
+	} else {
+		g.log.InfoContext(ctx, "posted summary comment")
 	}
 
+	var inlineCount int
 	for _, iss := range draft.Issues {
-		if iss.Severity != reviewer.SeverityCritical {
+		if iss.Severity != reviewer.SeverityCritical && iss.Severity != reviewer.SeverityHigh {
 			continue
 		}
 		if err := g.PostInlineCommentWithFallback(ctx, iss); err != nil {
 			g.log.WarnContext(ctx, "failed to post inline comment", "localId", iss.LocalID, "err", err)
+		} else {
+			inlineCount++
+			g.log.InfoContext(ctx, "posted inline comment", "localId", iss.LocalID, "severity", iss.Severity, "file", iss.File)
 		}
 	}
+
+	g.log.InfoContext(ctx, "gitlab comments completed", "inlinePosted", inlineCount, "totalIssues", len(draft.Issues))
 }
 
 // PostSummaryComment posts the review summary as an MR note.
@@ -155,6 +167,83 @@ func (g *GitLabClient) createDiscussion(ctx context.Context, issue rest.ReviewDr
 	return nil
 }
 
+// cleanupInlineDiscussions deletes previous reviewer inline discussions that have no replies.
+// Discussions with replies (notes_count > 1) are preserved to keep conversation context.
+// Summary notes are never deleted — they show review progress history.
+func (g *GitLabClient) cleanupInlineDiscussions(ctx context.Context) {
+	url := fmt.Sprintf("%s/projects/%s/merge_requests/%s/discussions?per_page=100", g.apiURL, g.projectID, g.mrIID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		g.log.WarnContext(ctx, "cleanup: failed to create request", "err", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+g.token)
+
+	resp, err := g.httpClient.Do(req)
+	if err != nil {
+		g.log.WarnContext(ctx, "cleanup: failed to fetch discussions", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	var discussions []struct {
+		ID    string `json:"id"`
+		Notes []struct {
+			ID     int    `json:"id"`
+			Type   string `json:"type"`
+			Body   string `json:"body"`
+			System bool   `json:"system"`
+		} `json:"notes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&discussions); err != nil {
+		g.log.WarnContext(ctx, "cleanup: failed to decode discussions", "err", err)
+		return
+	}
+
+	var deleted, skipped int
+	for _, d := range discussions {
+		if len(d.Notes) == 0 || d.Notes[0].System {
+			continue
+		}
+		// Only clean up inline diff discussions, not summary notes.
+		if d.Notes[0].Type != "DiffNote" {
+			continue
+		}
+		if !strings.Contains(d.Notes[0].Body, reviewerMarker) {
+			continue
+		}
+		// Skip discussions where someone replied.
+		if len(d.Notes) > 1 {
+			skipped++
+			continue
+		}
+		// Delete our single-note discussion.
+		noteID := d.Notes[0].ID
+		delURL := fmt.Sprintf("%s/projects/%s/merge_requests/%s/discussions/%s/notes/%d", g.apiURL, g.projectID, g.mrIID, d.ID, noteID)
+		delReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, delURL, nil)
+		if err != nil {
+			continue
+		}
+		delReq.Header.Set("Authorization", "Bearer "+g.token)
+		delResp, err := g.httpClient.Do(delReq)
+		if err != nil {
+			g.log.WarnContext(ctx, "cleanup: failed to delete discussion", "discussionId", d.ID, "err", err)
+			continue
+		}
+		delResp.Body.Close()
+		deleted++
+	}
+
+	if deleted > 0 || skipped > 0 {
+		g.log.InfoContext(ctx, "cleaned up inline discussions", "deleted", deleted, "skippedWithReplies", skipped)
+	}
+}
+
 // parseLinePosition extracts the first line number from "42-45" or "42".
 func parseLinePosition(lines string) (int, bool) {
 	if lines == "" {
@@ -174,6 +263,7 @@ func formatIssueNote(issue rest.ReviewDraftIssue) string {
 		fmt.Fprintf(&b, "\n**Suggested fix:**\n%s\n", issue.SuggestedFix)
 	}
 
+	fmt.Fprintf(&b, "\n%s\n", reviewerMarker)
 	return b.String()
 }
 
@@ -185,6 +275,7 @@ type summaryData struct {
 	CostUsd           float64
 	Duration          string
 	EffortMinutes     int
+	Description       string
 	Files             []summaryFile
 	CriticalIssues    []summaryIssue
 	ReviewURL         string
@@ -192,6 +283,7 @@ type summaryData struct {
 
 type summaryFile struct {
 	ReviewType        string
+	Summary           string
 	IssuesSummary     string
 	TrafficLightEmoji string
 }
@@ -215,10 +307,11 @@ func renderSummaryComment(draft *rest.ReviewDraft, reviewURL string) (string, er
 	}
 
 	data := summaryData{
-		Model:     draft.Review.ModelInfo.Model,
-		CostUsd:   draft.Review.ModelInfo.CostUsd,
-		Duration:  formatDuration(draft.Review.DurationMs),
-		ReviewURL: reviewURL,
+		Model:       draft.Review.ModelInfo.Model,
+		CostUsd:     draft.Review.ModelInfo.CostUsd,
+		Duration:    formatDuration(draft.Review.DurationMs),
+		Description: draft.Review.Description,
+		ReviewURL:   reviewURL,
 	}
 
 	if draft.Review.EffortMinutes > 0 {
@@ -238,6 +331,7 @@ func renderSummaryComment(draft *rest.ReviewDraft, reviewURL string) (string, er
 		counts := issuesByType[f.ReviewType]
 		sf := summaryFile{
 			ReviewType:    capitalizeFirst(f.ReviewType),
+			Summary:       f.Summary,
 			IssuesSummary: formatIssueCounts(counts),
 		}
 		fc, fh, fm := counts[reviewer.SeverityCritical], counts[reviewer.SeverityHigh], counts[reviewer.SeverityMedium]
@@ -246,7 +340,7 @@ func renderSummaryComment(draft *rest.ReviewDraft, reviewURL string) (string, er
 	}
 
 	for _, iss := range draft.Issues {
-		if iss.Severity != reviewer.SeverityCritical {
+		if iss.Severity != reviewer.SeverityCritical && iss.Severity != reviewer.SeverityHigh {
 			continue
 		}
 		data.CriticalIssues = append(data.CriticalIssues, summaryIssue{

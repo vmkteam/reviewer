@@ -48,7 +48,7 @@ func TestPostSummaryComment(t *testing.T) {
 	err := g.PostSummaryComment(context.Background(), draft, "https://reviewer.example.com/reviews/1/")
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer test-token", gotAuth)
-	assert.Contains(t, gotBody, "Code Review")
+	assert.Contains(t, gotBody, "Reviewer")
 	assert.Contains(t, gotBody, "Full review")
 }
 
@@ -182,19 +182,19 @@ func TestRenderSummaryComment(t *testing.T) {
 			issues: []rest.ReviewDraftIssue{
 				{Severity: "critical", LocalID: "C1", Title: "Bug", File: "main.go", Lines: "1", IssueType: "error-handling", FileType: "code"},
 			},
-			contains: []string{"🔴", "Red Light", "C1"},
+			contains: []string{"🔴", "Reviewer", "C1"},
 		},
 		{
 			name: "yellow light",
 			issues: []rest.ReviewDraftIssue{
 				{Severity: "high", LocalID: "H1", Title: "Issue", FileType: "code", IssueType: "naming"},
 			},
-			contains: []string{"🟡", "Yellow Light"},
+			contains: []string{"🟡", "Reviewer"},
 		},
 		{
 			name:     "green light",
 			issues:   nil,
-			contains: []string{"🟢", "Green Light"},
+			contains: []string{"🟢", "Reviewer"},
 		},
 	}
 
@@ -242,4 +242,73 @@ func TestParseLinePosition(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestCleanupInlineDiscussions(t *testing.T) {
+	var deletedPaths []string
+
+	// Mock discussions API response.
+	discussions := []map[string]any{
+		{
+			// Summary note — type=null, should NOT be deleted.
+			"id": "disc-summary",
+			"notes": []map[string]any{
+				{"id": 50, "type": nil, "body": "## 🔴 Reviewer\n\n" + reviewerMarker + "\n", "system": false},
+			},
+		},
+		{
+			// Inline DiffNote, no replies — should be deleted.
+			"id": "disc-1",
+			"notes": []map[string]any{
+				{"id": 100, "type": "DiffNote", "body": "🔴 **C1. Bug** (code)\n\ndesc\n\n" + reviewerMarker + "\n", "system": false},
+			},
+		},
+		{
+			// Inline DiffNote with reply — should be skipped.
+			"id": "disc-2",
+			"notes": []map[string]any{
+				{"id": 200, "type": "DiffNote", "body": "🔴 **C2. Issue** (code)\n\ndesc\n\n" + reviewerMarker + "\n", "system": false},
+				{"id": 201, "type": "DiffNote", "body": "will fix", "system": false},
+			},
+		},
+		{
+			// Unrelated comment — should be skipped.
+			"id": "disc-3",
+			"notes": []map[string]any{
+				{"id": 300, "type": "DiffNote", "body": "unrelated comment", "system": false},
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/discussions") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(discussions)
+			return
+		}
+		if r.Method == http.MethodDelete {
+			deletedPaths = append(deletedPaths, r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := &Config{
+		GitLabToken: "test-token",
+		GitLabURL:   srv.URL,
+		ProjectID:   "12",
+		MRIID:       "563",
+	}
+
+	g := NewGitLabClient(cfg, slog.Default())
+	g.cleanupInlineDiscussions(context.Background())
+
+	// disc-summary: summary note (type=null) → not touched
+	// disc-1: DiffNote, our marker, 1 note → deleted
+	// disc-2: DiffNote, our marker, 2 notes (has reply) → skipped
+	// disc-3: DiffNote, no marker → skipped
+	require.Len(t, deletedPaths, 1)
+	assert.Contains(t, deletedPaths[0], "disc-1/notes/100")
 }

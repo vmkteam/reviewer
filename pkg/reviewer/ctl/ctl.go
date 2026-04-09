@@ -155,8 +155,10 @@ func (c *Controller) fillMetadata(draft *rest.ReviewDraft) {
 
 func (c *Controller) postComments(ctx context.Context, draft *rest.ReviewDraft, reviewID int) {
 	if c.gitlab == nil {
+		c.log.InfoContext(ctx, "gitlab not configured, skipping comments")
 		return
 	}
+	c.log.InfoContext(ctx, "posting gitlab comments", "reviewId", reviewID)
 	c.gitlab.PostAllComments(ctx, draft, c.reviewURL(reviewID))
 }
 
