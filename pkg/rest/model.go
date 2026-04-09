@@ -10,16 +10,18 @@ import (
 
 type ReviewDraft struct {
 	Review struct {
-		ExternalID   string    `json:"externalId"`
-		Title        string    `json:"title"`
-		Description  string    `json:"description"`
-		CommitHash   string    `json:"commitHash"`
-		SourceBranch string    `json:"sourceBranch"`
-		TargetBranch string    `json:"targetBranch"`
-		Author       string    `json:"author"`
-		CreatedAt    time.Time `json:"createdAt"`
-		DurationMs   int       `json:"durationMs"`
-		ModelInfo    struct {
+		ExternalID    string    `json:"externalId"`
+		Title         string    `json:"title"`
+		Description   string    `json:"description"`
+		CommitHash    string    `json:"commitHash"`
+		SourceBranch  string    `json:"sourceBranch"`
+		TargetBranch  string    `json:"targetBranch"`
+		Author        string    `json:"author"`
+		CreatedAt     time.Time `json:"createdAt"`
+		DurationMs    int       `json:"durationMs"`
+		EffortMinutes int       `json:"effortMinutes"`
+		AiSlopScore   float32   `json:"aiSlopScore"`
+		ModelInfo     struct {
 			Model        string  `json:"model"`
 			InputTokens  int     `json:"inputTokens"`
 			OutputTokens int     `json:"outputTokens"`
@@ -32,15 +34,16 @@ type ReviewDraft struct {
 		IsAccepted bool   `json:"isAccepted"`
 	} `json:"files"`
 	Issues []struct {
-		LocalID     string `json:"localId"`
-		Severity    string `json:"severity"`
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Content     string `json:"content"`
-		File        string `json:"file"`
-		Lines       string `json:"lines"`
-		IssueType   string `json:"issueType"`
-		FileType    string `json:"fileType"`
+		LocalID      string `json:"localId"`
+		Severity     string `json:"severity"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		Content      string `json:"content"`
+		File         string `json:"file"`
+		Lines        string `json:"lines"`
+		IssueType    string `json:"issueType"`
+		FileType     string `json:"fileType"`
+		SuggestedFix string `json:"suggestedFix"`
 	} `json:"issues"`
 }
 
@@ -66,15 +69,17 @@ func (rd ReviewDraft) Validate() error {
 func (rd ReviewDraft) ToModel() reviewer.Review {
 	rv := reviewer.Review{
 		Review: db.Review{
-			Title:        rd.Review.Title,
-			Description:  rd.Review.Description,
-			ExternalID:   rd.Review.ExternalID,
-			CommitHash:   rd.Review.CommitHash,
-			SourceBranch: rd.Review.SourceBranch,
-			TargetBranch: rd.Review.TargetBranch,
-			Author:       rd.Review.Author,
-			CreatedAt:    rd.Review.CreatedAt,
-			DurationMS:   rd.Review.DurationMs,
+			Title:         rd.Review.Title,
+			Description:   rd.Review.Description,
+			ExternalID:    rd.Review.ExternalID,
+			CommitHash:    rd.Review.CommitHash,
+			SourceBranch:  rd.Review.SourceBranch,
+			TargetBranch:  rd.Review.TargetBranch,
+			Author:        rd.Review.Author,
+			CreatedAt:     rd.Review.CreatedAt,
+			DurationMS:    rd.Review.DurationMs,
+			EffortMinutes: ptrInt(rd.Review.EffortMinutes),
+			AiSlopScore:   ptrFloat32(rd.Review.AiSlopScore),
 			ModelInfo: db.ReviewModelInfo{
 				Model:        rd.Review.ModelInfo.Model,
 				InputTokens:  rd.Review.ModelInfo.InputTokens,
@@ -88,14 +93,15 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 	for _, iss := range rd.Issues {
 		issuesByType[iss.FileType] = append(issuesByType[iss.FileType], reviewer.Issue{
 			Issue: db.Issue{
-				LocalID:     ptrString(iss.LocalID),
-				IssueType:   iss.IssueType,
-				Title:       iss.Title,
-				Severity:    iss.Severity,
-				Description: iss.Description,
-				Content:     iss.Content,
-				File:        iss.File,
-				Lines:       iss.Lines,
+				LocalID:      ptrString(iss.LocalID),
+				IssueType:    iss.IssueType,
+				Title:        iss.Title,
+				Severity:     iss.Severity,
+				Description:  iss.Description,
+				Content:      iss.Content,
+				File:         iss.File,
+				Lines:        iss.Lines,
+				SuggestedFix: ptrString(iss.SuggestedFix),
 			},
 		})
 	}
@@ -120,4 +126,18 @@ func ptrString(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func ptrInt(v int) *int {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
+func ptrFloat32(v float32) *float32 {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }

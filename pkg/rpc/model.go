@@ -94,6 +94,8 @@ type ReviewSummary struct {
 	TargetBranch        string              `json:"targetBranch"`
 	CreatedAt           time.Time           `json:"createdAt"`
 	ReviewFiles         []ReviewFileSummary `json:"reviewFiles"`
+	EffortMinutes       *int                `json:"effortMinutes,omitempty"`
+	AiSlopScore         *float32            `json:"aiSlopScore,omitempty"`
 	LastVersionReviewID *int                `json:"lastVersionReviewId,omitempty"`
 }
 
@@ -129,6 +131,8 @@ func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 		}
 	}
 
+	rs.EffortMinutes = in.EffortMinutes
+	rs.AiSlopScore = in.AiSlopScore
 	rs.LastVersionReviewID = in.LastVersionReviewID
 
 	return rs
@@ -150,6 +154,8 @@ type Review struct {
 	DurationMS          int          `json:"durationMs"`
 	ModelInfo           ModelInfo    `json:"modelInfo"`
 	ReviewFiles         []ReviewFile `json:"reviewFiles"`
+	EffortMinutes       *int         `json:"effortMinutes,omitempty"`
+	AiSlopScore         *float32     `json:"aiSlopScore,omitempty"`
 	LastVersionReviewID *int         `json:"lastVersionReviewId,omitempty"`
 }
 
@@ -173,6 +179,8 @@ func newReview(in *reviewer.Review) *Review {
 		DurationMS:          in.DurationMS,
 		ModelInfo:           newModelInfo(in.ModelInfo),
 		ReviewFiles:         newReviewFiles(in.ReviewFiles),
+		EffortMinutes:       in.EffortMinutes,
+		AiSlopScore:         in.AiSlopScore,
 		LastVersionReviewID: in.LastVersionReviewID,
 	}
 
@@ -204,20 +212,21 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 
 // Issue — строка таблицы issues в табе Issues.
 type Issue struct {
-	ID          int     `json:"issueId"`
-	ReviewID    int     `json:"reviewId"`
-	LocalID     *string `json:"localId"`
-	Title       string  `json:"title"`
-	Severity    string  `json:"severity"`
-	Description string  `json:"description"`
-	Content     string  `json:"content"`
-	File        string  `json:"file"`
-	Lines       string  `json:"lines"`
-	IssueType   string  `json:"issueType"`
-	ReviewType  string  `json:"reviewType"`
-	CommitHash  string  `json:"commitHash"`
-	StatusID    int     `json:"statusId"`
-	Comment     *string `json:"comment"`
+	ID           int     `json:"issueId"`
+	ReviewID     int     `json:"reviewId"`
+	LocalID      *string `json:"localId"`
+	Title        string  `json:"title"`
+	Severity     string  `json:"severity"`
+	Description  string  `json:"description"`
+	Content      string  `json:"content"`
+	File         string  `json:"file"`
+	Lines        string  `json:"lines"`
+	IssueType    string  `json:"issueType"`
+	ReviewType   string  `json:"reviewType"`
+	CommitHash   string  `json:"commitHash"`
+	SuggestedFix *string `json:"suggestedFix,omitempty"`
+	StatusID     int     `json:"statusId"`
+	Comment      *string `json:"comment"`
 }
 
 func newIssue(in *reviewer.Issue) *Issue {
@@ -226,19 +235,20 @@ func newIssue(in *reviewer.Issue) *Issue {
 	}
 
 	issue := &Issue{
-		ID:          in.ID,
-		ReviewID:    in.ReviewID,
-		LocalID:     in.LocalID,
-		Title:       in.Title,
-		Severity:    in.Severity,
-		Description: in.Description,
-		Content:     in.Content,
-		File:        in.File,
-		Lines:       in.Lines,
-		IssueType:   in.IssueType,
-		ReviewType:  in.ReviewFile.ReviewType,
-		StatusID:    in.StatusID,
-		Comment:     in.Comment,
+		ID:           in.ID,
+		ReviewID:     in.ReviewID,
+		LocalID:      in.LocalID,
+		Title:        in.Title,
+		Severity:     in.Severity,
+		Description:  in.Description,
+		Content:      in.Content,
+		File:         in.File,
+		Lines:        in.Lines,
+		IssueType:    in.IssueType,
+		ReviewType:   in.ReviewFile.ReviewType,
+		SuggestedFix: in.SuggestedFix,
+		StatusID:     in.StatusID,
+		Comment:      in.Comment,
 	}
 
 	if in.Review != nil {

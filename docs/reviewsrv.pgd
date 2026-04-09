@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pgd version="1" pg-version="17" default-schema="public">
+  <project name="reviewsrv">
+    <settings>
+      <naming convention="camelCase" tables="plural"></naming>
+      <defaults nullable="true" on-delete="restrict" on-update="restrict"></defaults>
+    </settings>
+  </project>
+  <roles></roles>
+  <tablespaces></tablespaces>
+  <extensions></extensions>
+  <sequences></sequences>
+  <schema name="public">
+    <table name="prompts">
+      <column name="promptId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="common" type="text" nullable="false"></column>
+      <column name="architecture" type="text" nullable="false"></column>
+      <column name="code" type="text" nullable="false"></column>
+      <column name="security" type="text" nullable="false"></column>
+      <column name="tests" type="text" nullable="false"></column>
+      <column name="operability" type="text" nullable="false"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="prompts_pkey">
+        <column name="promptId"></column>
+      </pk>
+      <fk name="Ref_prompts_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
+    <table name="statuses">
+      <column name="statusId" type="integer" nullable="false"></column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="alias" type="varchar" length="64"></column>
+      <pk name="statuses_pkey">
+        <column name="statusId"></column>
+      </pk>
+    </table>
+    <table name="taskTrackers">
+      <column name="taskTrackerId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="url" type="varchar" length="255" nullable="false"></column>
+      <column name="authToken" type="varchar" length="255"></column>
+      <column name="fetchPrompt" type="text" nullable="false"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="taskTrackers_pkey">
+        <column name="taskTrackerId"></column>
+      </pk>
+      <fk name="Ref_taskTrackers_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
+    <table name="slackChannels">
+      <column name="slackChannelId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="channel" type="varchar" length="255" nullable="false"></column>
+      <column name="webhookURL" type="varchar" length="1024" nullable="false"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="slackChannels_pkey">
+        <column name="slackChannelId"></column>
+      </pk>
+      <fk name="Ref_slackChannels_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
+    <table name="projects">
+      <column name="projectId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="vcsURL" type="varchar" length="255" nullable="false"></column>
+      <column name="language" type="varchar" length="32" nullable="false"></column>
+      <column name="projectKey" type="uuid" nullable="false"></column>
+      <column name="instructions" type="text"></column>
+      <column name="promptId" type="integer" nullable="false"></column>
+      <column name="taskTrackerId" type="integer"></column>
+      <column name="slackChannelId" type="integer"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="projects_pkey">
+        <column name="projectId"></column>
+      </pk>
+      <fk name="Ref_projects_to_prompts" to-table="prompts" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="promptId" references="promptId"></column>
+      </fk>
+      <fk name="Ref_projects_to_taskTrackers" to-table="taskTrackers" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="taskTrackerId" references="taskTrackerId"></column>
+      </fk>
+      <fk name="Ref_projects_to_slackChannels" to-table="slackChannels" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="slackChannelId" references="slackChannelId"></column>
+      </fk>
+      <fk name="Ref_projects_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+      <unique name="UNQ_projects_projectKey">
+        <column name="projectKey"></column>
+      </unique>
+    </table>
+    <table name="reviews">
+      <column name="reviewId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="projectId" type="integer" nullable="false"></column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="description" type="varchar" length="2048" nullable="false"></column>
+      <column name="externalId" type="varchar" length="32" nullable="false"></column>
+      <column name="trafficLight" type="varchar" length="32" nullable="false" default="&#39;none&#39;"></column>
+      <column name="commitHash" type="varchar" length="40" nullable="false"></column>
+      <column name="sourceBranch" type="varchar" length="255" nullable="false"></column>
+      <column name="targetBranch" type="varchar" length="255" nullable="false"></column>
+      <column name="author" type="varchar" length="255" nullable="false"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="durationMS" type="integer" nullable="false" default="0"></column>
+      <column name="modelInfo" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <column name="promptId" type="integer" nullable="false"></column>
+      <column name="effortMinutes" type="integer"></column>
+      <column name="aiSlopScore" type="real"></column>
+      <pk name="reviews_pkey">
+        <column name="reviewId"></column>
+      </pk>
+      <fk name="Ref_reviews_to_projects" to-table="projects" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="projectId" references="projectId"></column>
+      </fk>
+      <fk name="Ref_reviews_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+      <fk name="Ref_reviews_to_prompts" to-table="prompts" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="promptId" references="promptId"></column>
+      </fk>
+    </table>
+    <table name="reviewFiles">
+      <column name="reviewFileId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="reviewId" type="integer" nullable="false"></column>
+      <column name="reviewType" type="varchar" length="64" nullable="false"></column>
+      <column name="content" type="text" nullable="false"></column>
+      <column name="issueStats" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
+      <column name="trafficLight" type="varchar" length="32" nullable="false"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="summary" type="varchar" length="2048" nullable="false"></column>
+      <column name="isAccepted" type="boolean" nullable="false" default="false"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="reviewFiles_pkey">
+        <column name="reviewFileId"></column>
+      </pk>
+      <fk name="Ref_reviewFiles_to_reviews" to-table="reviews" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="reviewId" references="reviewId"></column>
+      </fk>
+      <fk name="Ref_reviewFiles_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
+    <table name="issues">
+      <column name="issueId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="reviewFileId" type="integer" nullable="false"></column>
+      <column name="issueType" type="varchar" length="32" nullable="false"></column>
+      <column name="reviewId" type="integer" nullable="false"></column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="severity" type="varchar" length="16" nullable="false"></column>
+      <column name="description" type="text" nullable="false"></column>
+      <column name="content" type="text" nullable="false"></column>
+      <column name="file" type="varchar" length="255" nullable="false"></column>
+      <column name="lines" type="varchar" length="255" nullable="false"></column>
+      <column name="comment" type="varchar" length="255"></column>
+      <column name="localId" type="varchar" length="16"></column>
+      <column name="processedAt" type="timestamptz"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="userId" type="integer"></column>
+      <column name="suggestedFix" type="text"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="issues_pkey">
+        <column name="issueId"></column>
+      </pk>
+      <fk name="Ref_issues_to_reviewFiles" to-table="reviewFiles" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="reviewFileId" references="reviewFileId"></column>
+      </fk>
+      <fk name="Ref_issues_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+      <fk name="Ref_issues_to_users" to-table="users" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="userId" references="userId"></column>
+      </fk>
+      <fk name="Ref_issues_to_reviews" to-table="reviews" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="reviewId" references="reviewId"></column>
+      </fk>
+    </table>
+    <table name="users">
+      <column name="userId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="login" type="varchar" length="64" nullable="false"></column>
+      <column name="password" type="varchar" length="64" nullable="false"></column>
+      <column name="authKey" type="varchar" length="32"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="lastActivityAt" type="timestamptz"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="users_pkey">
+        <column name="userId"></column>
+      </pk>
+      <fk name="Ref_users_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
+    <index name="IX_reviews_projectId" table="reviews">
+      <column name="projectId"></column>
+    </index>
+    <index name="IX_reviews_externalId" table="reviews">
+      <column name="externalId"></column>
+    </index>
+    <index name="IX_reviews_reviewId" table="reviewFiles">
+      <column name="reviewId"></column>
+    </index>
+    <index name="IX_issues_statusId" table="issues">
+      <column name="statusId"></column>
+    </index>
+    <index name="IX_issues_reviewId" table="issues">
+      <column name="reviewId"></column>
+    </index>
+    <index name="IX_issues_reviewFileId" table="issues">
+      <column name="reviewFileId"></column>
+    </index>
+    <index name="ix_issues_userId" table="issues" using="btree">
+      <column name="userId"></column>
+    </index>
+    <index name="ix_projects_statusId" table="projects" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_prompts_statusId" table="prompts" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_reviewFiles_statusId" table="reviewFiles" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_reviews_promptId" table="reviews" using="btree">
+      <column name="promptId"></column>
+    </index>
+    <index name="ix_slackChannels_statusId" table="slackChannels" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_taskTrackers_statusId" table="taskTrackers" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_users_statusId" table="users" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_projects_slackChannelId" table="projects" using="btree">
+      <column name="slackChannelId"></column>
+    </index>
+    <index name="ix_reviews_statusId" table="reviews" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_projects_taskTrackerId" table="projects" using="btree">
+      <column name="taskTrackerId"></column>
+    </index>
+    <index name="ix_projects_promptId" table="projects" using="btree">
+      <column name="promptId"></column>
+    </index>
+  </schema>
+  <functions></functions>
+  <triggers></triggers>
+  <rules></rules>
+  <policies></policies>
+  <comments></comments>
+  <layouts>
+    <layout name="Default Diagram" default="true">
+      <entity schema="public" table="prompts" x="60" y="440"></entity>
+      <entity schema="public" table="statuses" x="520" y="560"></entity>
+      <entity schema="public" table="taskTrackers" x="840" y="40"></entity>
+      <entity schema="public" table="slackChannels" x="480" y="-160"></entity>
+      <entity schema="public" table="projects" x="60" y="-20"></entity>
+      <entity schema="public" table="reviews" x="840" y="260"></entity>
+      <entity schema="public" table="reviewFiles" x="860" y="680"></entity>
+      <entity schema="public" table="issues" x="440" y="740"></entity>
+      <entity schema="public" table="users" x="60" y="720"></entity>
+    </layout>
+  </layouts>
+</pgd>

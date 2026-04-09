@@ -132,6 +132,15 @@
                 </div>
                 <p v-if="issue.description" class="text-sm text-fg-secondary leading-relaxed" v-html="linkifyTaskIds(issue.description, taskTrackerURL)" />
                 <MarkdownContent v-if="issue.content" :content="issue.content" :task-tracker-url="taskTrackerURL" />
+                <!-- Suggested Fix -->
+                <details v-if="issue.suggestedFix" class="mt-3 border border-edge rounded-lg overflow-hidden">
+                  <summary class="px-3 py-2 text-xs font-medium text-fg-subtle bg-surface-alt cursor-pointer hover:text-fg-secondary transition-colors select-none">
+                    Suggested Fix
+                  </summary>
+                  <div class="px-3 py-2">
+                    <MarkdownContent :content="issue.suggestedFix" />
+                  </div>
+                </details>
                 <!-- Feedback (mobile) -->
                 <div class="sm:hidden flex items-center gap-2 pt-2 border-t border-edge-light" @click.stop>
                   <span class="text-xs text-fg-subtle">Feedback</span>

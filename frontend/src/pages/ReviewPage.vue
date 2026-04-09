@@ -26,7 +26,17 @@
             <TrafficLight :color="review.trafficLight" size="lg" />
           </div>
           <div class="flex-1 min-w-0">
-            <h1 class="text-xl font-bold text-fg leading-snug" v-html="linkifyTaskIds(review.title, taskTrackerURL)" />
+            <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="text-xl font-bold text-fg leading-snug" v-html="linkifyTaskIds(review.title, taskTrackerURL)" />
+              <span
+                v-if="review.aiSlopScore && review.aiSlopScore >= 0.5"
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300"
+                :title="'AI-generated confidence: ' + Math.round(review.aiSlopScore * 100) + '%'"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                AI {{ Math.round(review.aiSlopScore * 100) }}%
+              </span>
+            </div>
             <p v-if="review.description" class="text-sm text-fg-muted mt-1 line-clamp-2" v-html="linkifyTaskIds(review.description, taskTrackerURL)" />
           </div>
           <ExternalLink
@@ -80,6 +90,10 @@
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Duration</div>
             <div class="text-sm text-fg-secondary">{{ formatDuration(review.durationMs) }}</div>
+          </div>
+          <div v-if="review.effortMinutes">
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Effort</div>
+            <div class="text-sm text-fg-secondary">~{{ review.effortMinutes }} min</div>
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Model</div>

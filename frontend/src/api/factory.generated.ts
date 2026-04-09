@@ -14,6 +14,7 @@ export interface IIssue {
   issueType: string,
   reviewType: string,
   commitHash: string,
+  suggestedFix?: string,
   statusId: number,
   comment?: string
 }
@@ -72,6 +73,8 @@ export interface IReview {
   durationMs: number,
   modelInfo: IModelInfo,
   reviewFiles: Array<IReviewFile>,
+  effortMinutes?: number,
+  aiSlopScore?: number,
   lastVersionReviewId?: number
 }
 
@@ -158,6 +161,8 @@ export interface IReviewSummary {
   targetBranch: string,
   createdAt: string,
   reviewFiles: Array<IReviewFileSummary>,
+  effortMinutes?: number,
+  aiSlopScore?: number,
   lastVersionReviewId?: number
 }
 
@@ -176,6 +181,7 @@ export class Issue implements IIssue {
   issueType: string = null;
   reviewType: string = null;
   commitHash: string = null;
+  suggestedFix?: string = null;
   statusId: number = 0;
   comment?: string = null;
 }
@@ -246,6 +252,8 @@ export class Review implements IReview {
   durationMs: number = 0;
   modelInfo: IModelInfo = null;
   reviewFiles: Array<IReviewFile> = null;
+  effortMinutes?: number = 0;
+  aiSlopScore?: number = 0;
   lastVersionReviewId?: number = 0;
 }
 
@@ -360,6 +368,8 @@ export class ReviewSummary implements IReviewSummary {
   targetBranch: string = null;
   createdAt: string = null;
   reviewFiles: Array<IReviewFileSummary> = null;
+  effortMinutes?: number = 0;
+  aiSlopScore?: number = 0;
   lastVersionReviewId?: number = 0;
 }
 

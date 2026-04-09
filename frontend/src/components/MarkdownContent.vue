@@ -1,9 +1,9 @@
 <template>
-  <div class="prose prose-sm max-w-none markdown-body" v-html="rendered" @click="onClick" />
+  <div ref="containerRef" class="prose prose-sm max-w-none markdown-body" v-html="rendered" @click="onClick" />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type StateCore from 'markdown-it/lib/rules_core/state_core.mjs'
 import type Token from 'markdown-it/lib/token.mjs'
@@ -51,10 +51,28 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+const containerRef = ref<HTMLElement | null>(null)
+
+function getMermaidTheme(): 'dark' | 'neutral' {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'neutral'
+}
+
+async function renderMermaid() {
+  if (!containerRef.value) return
+  const nodes = containerRef.value.querySelectorAll('pre.mermaid:not([data-processed])')
+  if (nodes.length === 0) return
+  const { default: mermaid } = await import('mermaid')
+  mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme() })
+  await mermaid.run({ nodes: Array.from(nodes) as HTMLElement[] })
+}
+
 const md: MarkdownIt = new MarkdownIt({
   html: false,
   linkify: true,
   highlight(str: string, lang: string): string {
+    if (lang === 'mermaid') {
+      return `<pre class="mermaid">${escapeHtml(str)}</pre>`
+    }
     if (lang && hljs.getLanguage(lang)) {
       try {
         return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`
@@ -186,6 +204,9 @@ const rendered = computed(() => md.render(props.content || '', {
   taskTrackerURL: props.taskTrackerUrl,
   issueMap: issueMap.value,
 }))
+
+watch(rendered, () => nextTick(renderMermaid))
+onMounted(() => nextTick(renderMermaid))
 </script>
 
 <style>
@@ -220,5 +241,11 @@ const rendered = computed(() => md.render(props.content || '', {
 .markdown-body th {
   background: var(--color-surface-alt);
   font-weight: 600;
+}
+.markdown-body pre.mermaid {
+  background: transparent;
+  border: none;
+  padding: 16px 0;
+  text-align: center;
 }
 </style>
