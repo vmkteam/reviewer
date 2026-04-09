@@ -11,14 +11,15 @@ import (
 	"testing"
 
 	"reviewsrv/pkg/rest"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testDraft(t *testing.T) *rest.ReviewDraft {
 	t.Helper()
 	draft, err := ReadReviewJSON("testdata")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return draft
 }
 
@@ -26,9 +27,7 @@ func TestPostSummaryComment(t *testing.T) {
 	var gotAuth, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		if !strings.HasSuffix(r.URL.Path, "/notes") {
-			t.Errorf("path = %q, want suffix /notes", r.URL.Path)
-		}
+		assert.True(t, strings.HasSuffix(r.URL.Path, "/notes"), "path = %q, want suffix /notes", r.URL.Path)
 		body, _ := io.ReadAll(r.Body)
 		var payload map[string]string
 		json.Unmarshal(body, &payload)
@@ -47,18 +46,10 @@ func TestPostSummaryComment(t *testing.T) {
 	g := NewGitLabClient(cfg, slog.Default())
 	draft := testDraft(t)
 	err := g.PostSummaryComment(context.Background(), draft, "https://reviewer.example.com/reviews/1/")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gotAuth != "Bearer test-token" {
-		t.Errorf("Authorization = %q, want %q", gotAuth, "Bearer test-token")
-	}
-	if !strings.Contains(gotBody, "Code Review") {
-		t.Errorf("body should contain 'Code Review', got: %s", gotBody[:200])
-	}
-	if !strings.Contains(gotBody, "Full review") {
-		t.Error("body should contain review URL link")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer test-token", gotAuth)
+	assert.Contains(t, gotBody, "Code Review")
+	assert.Contains(t, gotBody, "Full review")
 }
 
 func TestPostInlineComment(t *testing.T) {
@@ -93,29 +84,15 @@ func TestPostInlineComment(t *testing.T) {
 	}
 
 	err := g.PostInlineCommentWithFallback(context.Background(), issue)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.HasSuffix(gotPath, "/discussions") {
-		t.Errorf("path = %q, want suffix /discussions", gotPath)
-	}
+	require.NoError(t, err)
+	assert.True(t, strings.HasSuffix(gotPath, "/discussions"), "path = %q, want suffix /discussions", gotPath)
 
 	pos, ok := gotPayload["position"].(map[string]any)
-	if !ok {
-		t.Fatal("position not found in payload")
-	}
-	if pos["new_path"] != "pkg/api/handler.go" {
-		t.Errorf("new_path = %v, want pkg/api/handler.go", pos["new_path"])
-	}
-	if pos["new_line"] != float64(42) {
-		t.Errorf("new_line = %v, want 42", pos["new_line"])
-	}
-	if pos["base_sha"] != "base-sha-123" {
-		t.Errorf("base_sha = %v, want base-sha-123", pos["base_sha"])
-	}
-	if pos["head_sha"] != "head-sha-456" {
-		t.Errorf("head_sha = %v, want head-sha-456", pos["head_sha"])
-	}
+	require.True(t, ok, "position not found in payload")
+	assert.Equal(t, "pkg/api/handler.go", pos["new_path"])
+	assert.EqualValues(t, 42, pos["new_line"])
+	assert.Equal(t, "base-sha-123", pos["base_sha"])
+	assert.Equal(t, "head-sha-456", pos["head_sha"])
 }
 
 func TestPostInlineComment_Fallback(t *testing.T) {
@@ -151,19 +128,11 @@ func TestPostInlineComment_Fallback(t *testing.T) {
 	}
 
 	err := g.PostInlineCommentWithFallback(context.Background(), issue)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if len(paths) != 2 {
-		t.Fatalf("expected 2 requests (discussion + fallback note), got %d", len(paths))
-	}
-	if !strings.HasSuffix(paths[0], "/discussions") {
-		t.Errorf("first request path = %q, want /discussions", paths[0])
-	}
-	if !strings.HasSuffix(paths[1], "/notes") {
-		t.Errorf("second request path = %q, want /notes", paths[1])
-	}
+	require.Len(t, paths, 2, "expected 2 requests (discussion + fallback note)")
+	assert.True(t, strings.HasSuffix(paths[0], "/discussions"), "first request path = %q, want /discussions", paths[0])
+	assert.True(t, strings.HasSuffix(paths[1], "/notes"), "second request path = %q, want /notes", paths[1])
 }
 
 func TestPostInlineComment_NoFileOrLines(t *testing.T) {
@@ -192,20 +161,14 @@ func TestPostInlineComment_NoFileOrLines(t *testing.T) {
 	}
 
 	err := g.PostInlineCommentWithFallback(context.Background(), issue)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 	// Should fall back to note, not discussion.
-	if !strings.HasSuffix(gotPath, "/notes") {
-		t.Errorf("path = %q, want suffix /notes (fallback)", gotPath)
-	}
+	assert.True(t, strings.HasSuffix(gotPath, "/notes"), "path = %q, want suffix /notes (fallback)", gotPath)
 }
 
 func TestPostMRComment_NoToken(t *testing.T) {
 	cfg := &Config{} // no token
-	if cfg.HasGitLab() {
-		t.Error("HasGitLab() should return false without token")
-	}
+	assert.False(t, cfg.HasGitLab())
 }
 
 func TestRenderSummaryComment(t *testing.T) {
@@ -250,14 +213,10 @@ func TestRenderSummaryComment(t *testing.T) {
 			draft.Issues = tt.issues
 
 			body, err := renderSummaryComment(draft, "https://example.com/reviews/1/")
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 
 			for _, s := range tt.contains {
-				if !strings.Contains(body, s) {
-					t.Errorf("body should contain %q, got:\n%s", s, body)
-				}
+				assert.Contains(t, body, s)
 			}
 		})
 	}
@@ -279,12 +238,8 @@ func TestParseLinePosition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			got, ok := parseLinePosition(tt.input)
-			if ok != tt.ok {
-				t.Errorf("ok = %v, want %v", ok, tt.ok)
-			}
-			if got != tt.want {
-				t.Errorf("line = %d, want %d", got, tt.want)
-			}
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

@@ -3,95 +3,56 @@ package ctl
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseClaudeResult(t *testing.T) {
 	data, err := os.ReadFile("testdata/claude_result.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	cr, err := ParseClaudeResult(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if cr.Type != "result" {
-		t.Errorf("type = %q, want %q", cr.Type, "result")
-	}
-	if cr.Subtype != "success" {
-		t.Errorf("subtype = %q, want %q", cr.Subtype, "success")
-	}
-	if cr.TotalCostUSD != 2.0875265 {
-		t.Errorf("totalCostUSD = %f, want %f", cr.TotalCostUSD, 2.0875265)
-	}
-	if cr.DurationMs != 145780 {
-		t.Errorf("durationMs = %d, want %d", cr.DurationMs, 145780)
-	}
-	if cr.DurationAPIMs != 142410 {
-		t.Errorf("durationApiMs = %d, want %d", cr.DurationAPIMs, 142410)
-	}
-	if cr.NumTurns != 15 {
-		t.Errorf("numTurns = %d, want %d", cr.NumTurns, 15)
-	}
-	if cr.SessionID != "34ee826b-a176-42dc-abd0-2a4ea59f47be" {
-		t.Errorf("sessionID = %q, want %q", cr.SessionID, "34ee826b-a176-42dc-abd0-2a4ea59f47be")
-	}
-	if cr.Usage.InputTokens != 2680 {
-		t.Errorf("inputTokens = %d, want %d", cr.Usage.InputTokens, 2680)
-	}
-	if cr.Usage.CacheCreationInputTokens != 154964 {
-		t.Errorf("cacheCreationInputTokens = %d, want %d", cr.Usage.CacheCreationInputTokens, 154964)
-	}
-	if cr.Usage.CacheReadInputTokens != 1879403 {
-		t.Errorf("cacheReadInputTokens = %d, want %d", cr.Usage.CacheReadInputTokens, 1879403)
-	}
-	if cr.Usage.OutputTokens != 6636 {
-		t.Errorf("outputTokens = %d, want %d", cr.Usage.OutputTokens, 6636)
-	}
+	assert.Equal(t, "result", cr.Type)
+	assert.Equal(t, "success", cr.Subtype)
+	assert.InDelta(t, 2.0875265, cr.TotalCostUSD, 0.0001)
+	assert.Equal(t, 145780, cr.DurationMs)
+	assert.Equal(t, 142410, cr.DurationAPIMs)
+	assert.Equal(t, 15, cr.NumTurns)
+	assert.Equal(t, "34ee826b-a176-42dc-abd0-2a4ea59f47be", cr.SessionID)
+	assert.Equal(t, 2680, cr.Usage.InputTokens)
+	assert.Equal(t, 154964, cr.Usage.CacheCreationInputTokens)
+	assert.Equal(t, 1879403, cr.Usage.CacheReadInputTokens)
+	assert.Equal(t, 6636, cr.Usage.OutputTokens)
 }
 
 func TestParseClaudeResult_Error(t *testing.T) {
 	data, err := os.ReadFile("testdata/claude_result_error.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	cr, err := ParseClaudeResult(data)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if cr == nil {
-		t.Fatal("expected ClaudeResult even on error")
-	}
-	if cr.Subtype != "error_max_turns" {
-		t.Errorf("subtype = %q, want %q", cr.Subtype, "error_max_turns")
-	}
+	require.Error(t, err)
+	require.NotNil(t, cr, "expected ClaudeResult even on error")
+	assert.Equal(t, "error_max_turns", cr.Subtype)
 }
 
 func TestParseClaudeResult_InvalidJSON(t *testing.T) {
 	_, err := ParseClaudeResult([]byte("not json"))
-	if err == nil {
-		t.Fatal("expected error for invalid JSON")
-	}
+	require.Error(t, err)
 }
 
 func TestParseClaudeResult_WrongType(t *testing.T) {
 	_, err := ParseClaudeResult([]byte(`{"type": "assistant", "subtype": "success"}`))
-	if err == nil {
-		t.Fatal("expected error for wrong type")
-	}
+	require.Error(t, err)
 }
 
 func TestParseClaudeResult_EmptyUsage(t *testing.T) {
 	data := []byte(`{"type": "result", "subtype": "success", "result": "", "usage": {}}`)
 	cr, err := ParseClaudeResult(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cr.Usage.InputTokens != 0 {
-		t.Errorf("inputTokens = %d, want 0", cr.Usage.InputTokens)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 0, cr.Usage.InputTokens)
 }
 
 func TestParseClaudeResult_NDJSONArray(t *testing.T) {
@@ -102,84 +63,44 @@ func TestParseClaudeResult_NDJSONArray(t *testing.T) {
 	]`)
 
 	cr, err := ParseClaudeResult(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cr.Type != "result" {
-		t.Errorf("type = %q, want %q", cr.Type, "result")
-	}
-	if cr.TotalCostUSD != 0.50 {
-		t.Errorf("cost = %f, want 0.50", cr.TotalCostUSD)
-	}
-	if cr.NumTurns != 3 {
-		t.Errorf("numTurns = %d, want 3", cr.NumTurns)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "result", cr.Type)
+	assert.InDelta(t, 0.50, cr.TotalCostUSD, 0.0001)
+	assert.Equal(t, 3, cr.NumTurns)
 }
 
 func TestParseClaudeResult_NDJSONNoResult(t *testing.T) {
 	data := []byte(`[{"type":"system","subtype":"init"},{"type":"assistant","message":"hi"}]`)
 	_, err := ParseClaudeResult(data)
-	if err == nil {
-		t.Fatal("expected error for NDJSON without result")
-	}
+	require.Error(t, err)
 }
 
 func TestParseClaudeResult_NDJSON_File(t *testing.T) {
 	data, err := os.ReadFile("testdata/claude_result_ndjson.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	cr, err := ParseClaudeResult(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cr.TotalCostUSD != 2.0875265 {
-		t.Errorf("cost = %f, want 2.0875265", cr.TotalCostUSD)
-	}
-	if cr.Usage.CacheReadInputTokens != 1879403 {
-		t.Errorf("cacheRead = %d, want 1879403", cr.Usage.CacheReadInputTokens)
-	}
+	require.NoError(t, err)
+	assert.InDelta(t, 2.0875265, cr.TotalCostUSD, 0.0001)
+	assert.Equal(t, 1879403, cr.Usage.CacheReadInputTokens)
 }
 
 func TestClaudeResultToModelInfo(t *testing.T) {
 	data, err := os.ReadFile("testdata/claude_result.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	cr, err := ParseClaudeResult(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	mi := cr.ToModelInfo("opus")
 
-	if mi.Model != "opus" {
-		t.Errorf("model = %q, want %q", mi.Model, "opus")
-	}
-	if mi.InputTokens != 2680 {
-		t.Errorf("inputTokens = %d, want %d", mi.InputTokens, 2680)
-	}
-	if mi.OutputTokens != 6636 {
-		t.Errorf("outputTokens = %d, want %d", mi.OutputTokens, 6636)
-	}
-	if mi.CostUsd != 2.0875265 {
-		t.Errorf("costUsd = %f, want %f", mi.CostUsd, 2.0875265)
-	}
-	if mi.CacheCreationInputTokens != 154964 {
-		t.Errorf("cacheCreationInputTokens = %d, want %d", mi.CacheCreationInputTokens, 154964)
-	}
-	if mi.CacheReadInputTokens != 1879403 {
-		t.Errorf("cacheReadInputTokens = %d, want %d", mi.CacheReadInputTokens, 1879403)
-	}
-	if mi.NumTurns != 15 {
-		t.Errorf("numTurns = %d, want %d", mi.NumTurns, 15)
-	}
-	if mi.SessionID != "34ee826b-a176-42dc-abd0-2a4ea59f47be" {
-		t.Errorf("sessionID = %q, want %q", mi.SessionID, "34ee826b-a176-42dc-abd0-2a4ea59f47be")
-	}
-	if mi.DurationAPIMs != 142410 {
-		t.Errorf("durationApiMs = %d, want %d", mi.DurationAPIMs, 142410)
-	}
+	assert.Equal(t, "opus", mi.Model)
+	assert.Equal(t, 2680, mi.InputTokens)
+	assert.Equal(t, 6636, mi.OutputTokens)
+	assert.InDelta(t, 2.0875265, mi.CostUsd, 0.0001)
+	assert.Equal(t, 154964, mi.CacheCreationInputTokens)
+	assert.Equal(t, 1879403, mi.CacheReadInputTokens)
+	assert.Equal(t, 15, mi.NumTurns)
+	assert.Equal(t, "34ee826b-a176-42dc-abd0-2a4ea59f47be", mi.SessionID)
+	assert.Equal(t, 142410, mi.DurationAPIMs)
 }

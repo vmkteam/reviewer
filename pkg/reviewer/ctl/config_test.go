@@ -1,6 +1,10 @@
 package ctl
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
@@ -19,8 +23,10 @@ func TestConfigValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.cfg.Validate(tt.cmd)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -41,9 +47,7 @@ func TestConfigHasGitLab(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.cfg.HasGitLab(); got != tt.want {
-				t.Errorf("HasGitLab() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.cfg.HasGitLab())
 		})
 	}
 }

@@ -82,9 +82,6 @@ github.com/go-playground/validator/v10
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/gopherjs/gopherjs v1.17.2
-## explicit; go 1.17
-github.com/gopherjs/gopherjs/js
 # github.com/gorilla/websocket v1.5.3
 ## explicit; go 1.12
 github.com/gorilla/websocket
@@ -103,9 +100,6 @@ github.com/inconshreveable/mousetrap
 # github.com/jinzhu/inflection v1.0.0
 ## explicit
 github.com/jinzhu/inflection
-# github.com/jtolds/gls v4.20.0+incompatible
-## explicit
-github.com/jtolds/gls
 # github.com/labstack/echo/v4 v4.15.0
 ## explicit; go 1.24.0
 github.com/labstack/echo/v4
@@ -157,17 +151,6 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/smarty/assertions v1.16.0
-## explicit; go 1.21
-github.com/smarty/assertions
-github.com/smarty/assertions/internal/go-diff/diffmatchpatch
-github.com/smarty/assertions/internal/go-render/render
-github.com/smarty/assertions/internal/oglematchers
-# github.com/smartystreets/goconvey v1.8.1
-## explicit; go 1.18
-github.com/smartystreets/goconvey/convey
-github.com/smartystreets/goconvey/convey/gotest
-github.com/smartystreets/goconvey/convey/reporting
 # github.com/spf13/cobra v1.2.1
 ## explicit; go 1.14
 github.com/spf13/cobra

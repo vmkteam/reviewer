@@ -7,18 +7,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFetchPrompt(t *testing.T) {
 	const wantPrompt = "Review this code for %SOURCE_BRANCH% targeting %TARGET_BRANCH%"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method = %q, want GET", r.Method)
-		}
-		if !strings.HasPrefix(r.URL.Path, "/v1/prompt/") {
-			t.Errorf("path = %q, want prefix /v1/prompt/", r.URL.Path)
-		}
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.True(t, strings.HasPrefix(r.URL.Path, "/v1/prompt/"), "path = %q, want prefix /v1/prompt/", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(wantPrompt))
 	}))
@@ -26,12 +25,8 @@ func TestFetchPrompt(t *testing.T) {
 
 	c := NewPromptClient(slog.Default())
 	got, err := c.FetchPrompt(context.Background(), srv.URL, "test-key")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != wantPrompt {
-		t.Errorf("prompt = %q, want %q", got, wantPrompt)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, wantPrompt, got)
 }
 
 func TestFetchPrompt_ServerError(t *testing.T) {
@@ -53,9 +48,7 @@ func TestFetchPrompt_ServerError(t *testing.T) {
 
 			c := NewPromptClient(slog.Default())
 			_, err := c.FetchPrompt(context.Background(), srv.URL, "test-key")
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
+			require.Error(t, err)
 		})
 	}
 }
@@ -72,24 +65,18 @@ func TestSubstituteVariables(t *testing.T) {
 		input := "Review %SOURCE_BRANCH% → %TARGET_BRANCH%, MR: %MR_TITLE%, ID: %EXTERNAL_ID%"
 		want := "Review feature/foo → master, MR: Add new feature, ID: 123"
 		got := SubstituteVariables(input, cfg)
-		if got != want {
-			t.Errorf("got %q, want %q", got, want)
-		}
+		assert.Equal(t, want, got)
 	})
 
 	t.Run("no placeholders", func(t *testing.T) {
 		input := "Plain text without placeholders"
 		got := SubstituteVariables(input, cfg)
-		if got != input {
-			t.Errorf("got %q, want %q", got, input)
-		}
+		assert.Equal(t, input, got)
 	})
 
 	t.Run("unknown placeholders unchanged", func(t *testing.T) {
 		input := "%UNKNOWN% stays as is"
 		got := SubstituteVariables(input, cfg)
-		if got != input {
-			t.Errorf("got %q, want %q", got, input)
-		}
+		assert.Equal(t, input, got)
 	})
 }

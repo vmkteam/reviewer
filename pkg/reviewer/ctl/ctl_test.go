@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // testClaudeRunner returns a fixed ClaudeResult from testdata.
@@ -34,12 +37,9 @@ func setupTestDir(t *testing.T) string {
 	files := []string{"review.json", "R1.architecture.md", "R2.code.md", "R3.security.md", "R4.tests.md"}
 	for _, f := range files {
 		data, err := os.ReadFile(filepath.Join("testdata", f))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(tmpDir, f), data, 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(tmpDir, f), data, 0o644)
+		require.NoError(t, err)
 	}
 
 	return tmpDir
@@ -81,22 +81,15 @@ func TestController_Upload(t *testing.T) {
 
 	c := NewController(cfg, nil, slog.Default())
 	err := c.Upload(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !uploadedReview {
-		t.Error("review.json was not uploaded")
-	}
-	if len(uploadedFiles) != 4 {
-		t.Errorf("uploaded %d files, want 4", len(uploadedFiles))
-	}
+	assert.True(t, uploadedReview, "review.json was not uploaded")
+	assert.Len(t, uploadedFiles, 4)
 
 	// Verify HTML was generated.
 	htmlPath := filepath.Join(tmpDir, "review.html")
-	if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
-		t.Error("review.html was not generated")
-	}
+	_, err = os.Stat(htmlPath)
+	assert.False(t, os.IsNotExist(err), "review.html was not generated")
 }
 
 func TestController_Review(t *testing.T) {
@@ -143,16 +136,10 @@ func TestController_Review(t *testing.T) {
 	c := NewController(cfg, runner, slog.Default())
 
 	err := c.Review(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !promptCalled {
-		t.Error("prompt was not fetched")
-	}
-	if !uploadedReview {
-		t.Error("review was not uploaded")
-	}
+	assert.True(t, promptCalled, "prompt was not fetched")
+	assert.True(t, uploadedReview, "review was not uploaded")
 }
 
 func TestController_Comment(t *testing.T) {
@@ -189,11 +176,7 @@ func TestController_Comment(t *testing.T) {
 
 	c := NewController(cfg, nil, slog.Default())
 	err := c.Comment(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !commentPosted {
-		t.Error("MR comment was not posted")
-	}
+	assert.True(t, commentPosted, "MR comment was not posted")
 }

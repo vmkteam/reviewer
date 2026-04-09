@@ -3,7 +3,7 @@ package vt
 import (
 	"testing"
 
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -37,142 +37,163 @@ type Tail struct {
 }
 
 func TestValidator_CheckBasic(t *testing.T) {
-	Convey("Test Validator", t, func() {
-		var (
-			v Validator
+	var (
+		tailOne   = Tail{Color: colorBrown, Length: 31}
+		tailTwo   = Tail{Color: colorGray, Length: 35}
+		tailThree = Tail{Color: colorBrown, Length: 28}
+		tailBad   = Tail{}
 
-			tailOne   = Tail{Color: colorBrown, Length: 31}
-			tailTwo   = Tail{Color: colorGray, Length: 35}
-			tailThree = Tail{Color: colorBrown, Length: 28}
-			tailBad   = Tail{}
+		animalOne   = Animal{Name: animalNameOne, Weight: 5, Tail: &tailOne}
+		animalTwo   = Animal{Name: animalNameTwo, Weight: 4, Tail: &tailTwo}
+		animalThree = Animal{Name: animalNameThree, Weight: 6, Tail: &tailThree}
+		animalDummy = Animal{Name: animalNameDummy, Weight: 6}
+		animalBad   = Animal{Name: animalNameBad, Weight: 500, Tail: &tailBad}
+	)
 
-			animalOne   = Animal{Name: animalNameOne, Weight: 5, Tail: &tailOne}
-			animalTwo   = Animal{Name: animalNameTwo, Weight: 4, Tail: &tailTwo}
-			animalThree = Animal{Name: animalNameThree, Weight: 6, Tail: &tailThree}
-			animalDummy = Animal{Name: animalNameDummy, Weight: 6}
-			animalBad   = Animal{Name: animalNameBad, Weight: 500, Tail: &tailBad}
+	t.Run("Positive case", func(t *testing.T) {
+		var v Validator
+		ctx := t.Context()
 
-			ctx = t.Context()
-		)
+		v.CheckBasic(ctx, &Circus{
+			Name:    circusNameGood,
+			Animals: []Animal{animalOne, animalTwo, animalThree, animalDummy},
+		})
+		assert.False(t, v.HasErrors())
+		assert.Empty(t, v.Fields())
+	})
 
-		Convey("Positive case", func() {
+	t.Run("Negative cases", func(t *testing.T) {
+		t.Run("full", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
 			v.CheckBasic(ctx, &Circus{
-				Name:    circusNameGood,
-				Animals: []Animal{animalOne, animalTwo, animalThree, animalDummy},
+				Name:    circusNameBad,
+				Animals: []Animal{animalBad},
 			})
-			So(v.HasErrors(), ShouldBeFalse)
-			So(v.Fields(), ShouldHaveLength, 0)
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 5)
+
+			assert.Contains(t, v.Fields(), FieldError{Field: "name", Error: "max", Constraint: &FieldErrorConstraint{Max: 16}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
 		})
 
-		Convey("Negative cases", func() {
-			Convey("full", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameBad,
-					Animals: []Animal{animalBad},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 5)
+		t.Run("good circus name", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "name", Error: "max", Constraint: &FieldErrorConstraint{Max: 16}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{animalBad},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 4)
 
-			Convey("good circus name", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{animalBad},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 4)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
+		})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
+		t.Run("good circus name, [animalBad, animalOne]", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{animalBad, animalOne},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 4)
 
-			Convey("good circus name, [animalBad, animalOne]", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{animalBad, animalOne},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 4)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
+		})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].optionalTail.length", Error: "required"})
+		t.Run("good circus name, [animalOne, animalBad]", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{animalOne, animalBad},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 4)
 
-			Convey("good circus name, [animalOne, animalBad]", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{animalOne, animalBad},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 4)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
+		})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
+		t.Run("good circus name, [animalOne, animalBad, animalDummy]", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{animalOne, animalBad, animalDummy},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 4)
 
-			Convey("good circus name, [animalOne, animalBad, animalDummy]", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{animalOne, animalBad, animalDummy},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 4)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
+		})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
+		t.Run("good circus name, [animalOne, animalBad, animalTwo, animalBad]", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{animalOne, animalBad, animalTwo, animalBad},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 8)
 
-			Convey("good circus name, [animalOne, animalBad, animalTwo, animalBad]", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{animalOne, animalBad, animalTwo, animalBad},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 8)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[1].optionalTail.length", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[3].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[3].weight", Error: "lt"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[3].optionalTail.color", Error: "required"})
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[3].optionalTail.length", Error: "required"})
+		})
 
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[3].name", Error: "max", Constraint: &FieldErrorConstraint{Max: 12}})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[3].weight", Error: "lt"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[3].optionalTail.color", Error: "required"})
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[3].optionalTail.length", Error: "required"})
+		t.Run("good circus name, no animals", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
+
+			v.CheckBasic(ctx, &Circus{
+				Name: circusNameGood,
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 1)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals", Error: "required"})
+		})
 
-			Convey("good circus name, no animals", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name: circusNameGood,
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 1)
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals", Error: "required"})
-			})
+		t.Run("good circus name, one overweighted animal", func(t *testing.T) {
+			var v Validator
+			ctx := t.Context()
 
-			Convey("good circus name, one overweighted animal", func() {
-				v.CheckBasic(ctx, &Circus{
-					Name:    circusNameGood,
-					Animals: []Animal{{Name: animalNameOne, Weight: 200}},
-				})
-				So(v.HasErrors(), ShouldBeTrue)
-				So(v.Fields(), ShouldHaveLength, 1)
-				So(v.Fields(), ShouldContain, FieldError{Field: "animals[0].weight", Error: "lt"})
+			v.CheckBasic(ctx, &Circus{
+				Name:    circusNameGood,
+				Animals: []Animal{{Name: animalNameOne, Weight: 200}},
 			})
+			assert.True(t, v.HasErrors())
+			assert.Len(t, v.Fields(), 1)
+			assert.Contains(t, v.Fields(), FieldError{Field: "animals[0].weight", Error: "lt"})
 		})
 	})
 }
