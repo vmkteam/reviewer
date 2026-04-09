@@ -5,8 +5,12 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 ## Features
 
 - **Multi-project support** with configurable prompts per project
-- **4 review types**: architecture, code, security, tests
+- **5 review types**: architecture, code, security, tests, operability
 - **Severity levels**: critical, high, medium, low with traffic light system (red/yellow/green)
+- **reviewctl CLI** — single binary for the full review cycle: prompt fetch, Claude Code, upload, GitLab MR comments, HTML report
+- **GitLab MR inline comments** — critical and high issues posted directly in the diff with cleanup on re-runs
+- **Session caching** — `--session`/`--continue` flags to reuse Claude prompt cache (~90% token savings)
+- **Auto-migrations** — pgmigrator integrated as Go library, runs SQL patches on server startup
 - **GitLab CI integration** via generated CI component and Docker image
 - **Slack notifications** for completed reviews
 - **VT admin panel** for managing projects, prompts, users, and Slack channels
@@ -16,9 +20,13 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 
 ```
 GitLab CI (merge request)
-  -> fetch prompt from reviewer (/v1/prompt/$PROJECT_KEY/)
-  -> claude-code runs review with the prompt
-  -> results uploaded to reviewer (/v1/upload/$PROJECT_KEY/)
+  -> reviewctl review
+       -> fetch prompt from reviewer (/v1/prompt/$PROJECT_KEY/)
+       -> claude --print --output-format json -p "$PROMPT"
+       -> parse review.json + R*.md files
+       -> upload to reviewer (/v1/upload/$PROJECT_KEY/)
+       -> post GitLab MR comments (summary + inline issues)
+       -> generate HTML report
   -> reviewer server stores results in PostgreSQL
   -> frontend displays reviews / Slack notification sent
 ```
@@ -107,7 +115,6 @@ Environment = ""
 | GET | `/v1/prompt/:projectKey/` | Get review prompt for a project |
 | POST | `/v1/upload/:projectKey/` | Create a new review |
 | POST | `/v1/upload/:projectKey/:reviewId/:reviewType/` | Upload a review file |
-| GET | `/v1/upload/upload.js` | Get the upload script for CI |
 
 ### JSON-RPC
 
@@ -122,7 +129,7 @@ TypeScript clients are auto-generated at `/v1/rpc/api.ts` and `/v1/vt/api.ts`.
 
 ## Review Types and Severity
 
-**Review types:** `architecture`, `code`, `security`, `tests`
+**Review types:** `architecture`, `code`, `security`, `tests`, `operability`
 
 **Severity levels:** `critical`, `high`, `medium`, `low`
 
@@ -130,6 +137,33 @@ TypeScript clients are auto-generated at `/v1/rpc/api.ts` and `/v1/vt/api.ts`.
 - Red: 1+ critical OR 2+ high issues
 - Yellow: 1+ high OR 3+ medium issues
 - Green: all other cases
+
+## reviewctl
+
+`reviewctl` is a Go CLI that replaces the old bash + Node.js CI scripts with a single binary.
+
+```bash
+reviewctl review    # Full cycle: prompt -> Claude -> upload -> GitLab comments -> HTML
+reviewctl upload    # Upload local review.json + R*.md to server
+reviewctl comment   # Post MR comments for an existing review
+reviewctl version   # Print version
+```
+
+Key flags: `--key`, `--url`, `--model`, `--session` (prompt cache reuse), `--continue` (resume last session). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+
+```bash
+make build-reviewctl   # Build reviewctl binary
+```
+
+## Auto-migrations
+
+The server can apply SQL patches automatically on startup using pgmigrator (integrated as Go library):
+
+```bash
+reviewsrv -config config.toml -patches /patches
+```
+
+Patches are stored in `docs/patches/*.sql` with `YYYY-MM-DD-description.sql` naming. The Docker image includes patches at `/patches/`. Docker Compose runs with `--patches` by default.
 
 ## CI Integration
 
@@ -140,9 +174,10 @@ The admin panel (`/vt/`) provides ready-to-use CI configuration:
 3. Add CI/CD variables to your GitLab project:
    - `PROJECT_KEY` — project key from reviewer
    - `ANTHROPIC_API_KEY` — Claude API key
+   - `REVIEWER_GITLAB_TOKEN` — GitLab token for MR comments (optional)
 4. Paste the generated YAML into your repository's `.gitlab-ci.yml`.
 
-The CI job runs on merge requests as a manual step. It fetches the prompt, runs Claude Code review, and uploads results back to the reviewer server.
+The CI job runs `reviewctl review` on merge requests. It fetches the prompt, runs Claude Code review, uploads results, and posts inline comments to the MR.
 
 For local runs, click the **Run** button on a specific project row to get a ready-to-use bash script.
 
@@ -186,7 +221,8 @@ location /v1/prompt/ { deny all; }
 
 ```bash
 make run              # Run server in dev mode
-make build            # Build binary
+make build            # Build server binary
+make build-reviewctl  # Build reviewctl CLI
 make frontend-dev     # Run frontend dev server (Vite)
 make frontend-build   # Build frontend (main + admin)
 make generate         # Generate RPC/VT code

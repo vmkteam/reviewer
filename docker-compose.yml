@@ -19,6 +19,7 @@ services:
 
   app:
     build: .
+    command: ["/reviewsrv", "-config", "/config.toml", "-patches", "/patches"]
     ports:
       - "8080:8080"
     volumes:

@@ -1,0 +1,23 @@
+{
+  "review": {
+    "externalId": "1",
+    "title": "Fix typo",
+    "description": "",
+    "commitHash": "aaa111",
+    "sourceBranch": "fix/typo",
+    "targetBranch": "master",
+    "author": "dev",
+    "createdAt": "2026-04-08T12:00:00Z",
+    "durationMs": 5000,
+    "modelInfo": {
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 100,
+      "outputTokens": 50,
+      "costUsd": 0.01
+    }
+  },
+  "files": [
+    {"reviewType": "code", "summary": "All good", "isAccepted": true}
+  ],
+  "issues": []
+}
