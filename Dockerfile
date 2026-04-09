@@ -23,6 +23,7 @@ RUN apk --no-cache add ca-certificates tzdata && cp -r -f /usr/share/zoneinfo/$T
 
 COPY --from=builder /go/bin/reviewsrv .
 COPY --from=builder /go/bin/reviewctl .
+COPY docs/patches/*.sql /patches/
 
 ENTRYPOINT ["/reviewsrv"]
 EXPOSE 8075
