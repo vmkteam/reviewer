@@ -9,7 +9,5 @@ node_modules
 tsconfig.tsbuildinfo
 .DS_Store
 docs/patches/pgmigrator.toml
-frontend/dist/*
-!frontend/dist/.gitkeep
-frontend/dist-vt/*
-!frontend/dist-vt/.gitkeep
+frontend/dist/
+frontend/dist-vt/
