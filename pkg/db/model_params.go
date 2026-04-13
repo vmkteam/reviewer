@@ -12,4 +12,10 @@ type ReviewModelInfo struct {
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUsd      float64 `json:"costUsd"`
+
+	CacheCreationInputTokens int    `json:"cacheCreationInputTokens,omitempty"`
+	CacheReadInputTokens     int    `json:"cacheReadInputTokens,omitempty"`
+	NumTurns                 int    `json:"numTurns,omitempty"`
+	SessionID                string `json:"sessionId,omitempty"`
+	DurationAPIMs            int    `json:"durationApiMs,omitempty"`
 }

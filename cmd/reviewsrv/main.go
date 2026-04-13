@@ -21,6 +21,7 @@ import (
 	"github.com/namsral/flag"
 	"github.com/vmkteam/appkit"
 	"github.com/vmkteam/embedlog"
+	"github.com/vmkteam/pgmigrator/pkg/migrator"
 )
 
 const appName = "reviewsrv"
@@ -32,6 +33,7 @@ var (
 	flJSONLogs         = fs.Bool("json", false, "enable json output")
 	flDev              = fs.Bool("dev", false, "enable dev mode")
 	flGenerateTSClient = fs.String("ts_client", "", "generate TypeScript vt rpc client and exit")
+	flPatchesDir       = fs.String("patches", "", "path to SQL patches directory for auto-migration")
 	cfg                app.Config
 )
 
@@ -70,6 +72,11 @@ func main() {
 	v, err := dbc.Version()
 	exitOnError(err)
 	sl.Print(ctx, "connected to db", "version", v)
+
+	// run migrations if patches dir is set
+	if *flPatchesDir != "" {
+		exitOnError(runMigrations(ctx, pgdb, *flPatchesDir, sl))
+	}
 
 	// log all sql queries
 	if *flDev {
@@ -115,6 +122,36 @@ func main() {
 	if err = a.Shutdown(5 * time.Second); err != nil {
 		a.Error(ctx, "shutting down service", "err", err)
 	}
+}
+
+// runMigrations applies pending SQL patches using pgmigrator.
+func runMigrations(ctx context.Context, pgdb *pg.DB, dir string, sl embedlog.Logger) error {
+	m := migrator.NewMigrator(pgdb, migrator.NewDefaultConfig(), dir)
+
+	filenames, err := m.Plan(ctx)
+	if err != nil {
+		return fmt.Errorf("migration plan: %w", err)
+	}
+
+	if len(filenames) == 0 {
+		sl.Print(ctx, "no pending migrations")
+		return nil
+	}
+
+	sl.Print(ctx, "applying migrations", "count", len(filenames), "files", filenames)
+
+	ch := make(chan string, len(filenames))
+	go func() {
+		for f := range ch {
+			sl.Print(ctx, "applied migration", "file", f)
+		}
+	}()
+
+	if err := m.Run(ctx, filenames, ch); err != nil {
+		return fmt.Errorf("migration run: %w", err)
+	}
+
+	return nil
 }
 
 // exitOnError calls log.Fatal if err wasn't nil.

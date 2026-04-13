@@ -167,6 +167,11 @@ func calcIssueStats(issues Issues) IssueStats {
 	return s
 }
 
+// CalcTrafficLight returns "red", "yellow", or "green" based on issue severity counts.
+func CalcTrafficLight(s IssueStats) string {
+	return calcTrafficLight(s)
+}
+
 func calcTrafficLight(s IssueStats) string {
 	switch {
 	case s.Critical >= 1 || s.High >= 2:

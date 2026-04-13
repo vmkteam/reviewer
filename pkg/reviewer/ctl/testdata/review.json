@@ -1,0 +1,52 @@
+{
+  "review": {
+    "externalId": "42",
+    "title": "Add user authentication",
+    "description": "Implements OAuth2 login flow",
+    "commitHash": "abc123def",
+    "sourceBranch": "feature/auth",
+    "targetBranch": "master",
+    "author": "developer",
+    "createdAt": "2026-04-08T12:00:00Z",
+    "durationMs": 92865,
+    "effortMinutes": 15,
+    "aiSlopScore": 0.1,
+    "modelInfo": {
+      "model": "claude-opus-4-6",
+      "inputTokens": 2500,
+      "outputTokens": 8500,
+      "costUsd": 1.52
+    }
+  },
+  "files": [
+    {"reviewType": "architecture", "summary": "Clean architecture", "isAccepted": true},
+    {"reviewType": "code", "summary": "Minor issues found", "isAccepted": false},
+    {"reviewType": "security", "summary": "No issues", "isAccepted": true},
+    {"reviewType": "tests", "summary": "Missing tests", "isAccepted": false}
+  ],
+  "issues": [
+    {
+      "localId": "C1",
+      "severity": "critical",
+      "title": "Missing error handling",
+      "description": "Handler ignores error from database query",
+      "content": "result := db.Query(ctx)",
+      "file": "pkg/api/handler.go",
+      "lines": "42-45",
+      "issueType": "error-handling",
+      "fileType": "code",
+      "suggestedFix": "```go\nresult, err := db.Query(ctx)\nif err != nil {\n    return fmt.Errorf(\"handler: %w\", err)\n}\n```"
+    },
+    {
+      "localId": "C2",
+      "severity": "high",
+      "title": "Missing test coverage",
+      "description": "New handler has no tests",
+      "content": "",
+      "file": "pkg/api/handler_test.go",
+      "lines": "",
+      "issueType": "tests",
+      "fileType": "tests"
+    }
+  ]
+}

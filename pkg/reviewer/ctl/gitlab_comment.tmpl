@@ -1,0 +1,22 @@
+## {{ .TrafficLightEmoji }} Reviewer
+
+**Model:** {{ .Model }} | **Cost:** ${{ printf "%.2f" .CostUsd }} | **Duration:** {{ .Duration }}{{ if .EffortMinutes }} | **Effort:** ~{{ .EffortMinutes }} min{{ end }}
+{{ if .Description }}
+{{ .Description }}
+{{ end }}
+| Type | Summary | Issues | Traffic Light |
+|------|---------|--------|--------------|
+{{ range .Files -}}
+| {{ .ReviewType }} | {{ .Summary }} | {{ .IssuesSummary }} | {{ .TrafficLightEmoji }} |
+{{ end }}
+{{ if .CriticalIssues -}}
+### Critical & High Issues
+{{ range .CriticalIssues }}
+**{{ .LocalID }}.** {{ .Title }} in `{{ .File }}{{ if .Lines }}:{{ .Lines }}{{ end }}` ({{ .IssueType }})
+> {{ .Description }}
+{{ end }}
+{{ end -}}
+
+---
+*[Full review →]({{ .ReviewURL }})*
+<!-- reviewer -->

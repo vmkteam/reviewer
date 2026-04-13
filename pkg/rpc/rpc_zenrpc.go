@@ -532,6 +532,26 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Name: "costUsd",
 									Type: smd.Float,
 								},
+								{
+									Name: "cacheCreationInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "cacheReadInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "numTurns",
+									Type: smd.Integer,
+								},
+								{
+									Name: "sessionId",
+									Type: smd.String,
+								},
+								{
+									Name: "durationApiMs",
+									Type: smd.Integer,
+								},
 							},
 						},
 						"ReviewFile": {

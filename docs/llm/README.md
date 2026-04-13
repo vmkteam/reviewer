@@ -1,24 +1,74 @@
-
 # reviewsrv
 
-Создать хорошую интеграцию в CI для трекинга ревью в разных проектах с разными промтами и хорошей нотификацией в слак, светофором ревью и разработчиков со статистикой
+AI code review сервер с интеграцией в CI, трекингом ревью, нотификацией в Slack, светофором и статистикой.
 
-# Концепция
+## Концепция
 
-1. запускаем в claude-code c промтом. На выходе ревью файлы и данные json.
-2. В JSON уже есть данные по issues из MD файлов (генерит LLM)
-3. Данные отправляются на сервер
+1. `reviewctl review` запускает Claude Code с промтом. На выходе — review.json + R*.md файлы
+2. В JSON есть structured issues из MD файлов (генерит LLM)
+3. Данные загружаются на сервер, комментарии постятся в GitLab MR
+
+## Компоненты
+
+| Компонент | Описание |
+|-----------|----------|
+| `reviewsrv` | HTTP-сервер: API, RPC, фронтенды |
+| `reviewctl` | CLI-оркестратор: Claude → upload → GitLab comments |
+| `frontend/` | Два SPA: review (публичный) и VT (админка) |
 
 ## Соглашения
 
 - JSON: `lowerCamelCase` для всех ключей (`trafficLight`, `issuesStats`, `fileType`, ...)
 
 ## Файлы
+
 * [reviewsrv.sql](../reviewsrv.sql) — БД-схема (источник истины)
 * ObjectModel.md — объектная модель (RU)
 * Model.md — детальная объектная модель (EN)
-* Prompt.md — промт для LLM
-* [CI.md](CI.md) — план CI-интеграции (GitLab CI кнопка в VT)
+* [reviewctl.md](reviewctl.md) — CLI-оркестратор (детальная документация)
+
+## reviewsrv
+
+### Флаги
+
+| Флаг | Default | Описание |
+|------|---------|----------|
+| `--config` | `config.toml` | Путь к конфигу |
+| `--verbose` | `false` | Debug output |
+| `--json` | `false` | JSON логи |
+| `--dev` | `false` | Dev mode |
+| `--patches` | — | Путь к SQL-патчам для авто-миграции |
+| `--ts_client` | — | Генерация TS-клиента (exit после) |
+
+### Авто-миграции (pgmigrator)
+
+При запуске с `--patches /patches` сервер автоматически применяет SQL-миграции перед стартом:
+
+```
+reviewsrv --config config.toml --patches /patches
+```
+
+Используется библиотека `github.com/vmkteam/pgmigrator/pkg/migrator` — тот же `*pg.DB` что и для приложения, отдельный конфиг не нужен.
+
+Миграции лежат в `docs/patches/*.sql`, формат: `YYYY-MM-DD-description.sql`.
+
+### Dockerfile
+
+```dockerfile
+# Build
+FROM golang:1.25-alpine AS builder
+RUN cd /build && go install -mod=vendor ./cmd/reviewsrv
+RUN cd /build && CGO_ENABLED=0 go build -mod=vendor -ldflags "-s -w" -o /go/bin/reviewctl ./cmd/reviewctl
+
+# Final
+FROM alpine:latest
+COPY --from=builder /go/bin/reviewsrv .
+COPY --from=builder /go/bin/reviewctl .
+COPY docs/patches/*.sql /patches/
+ENTRYPOINT ["/reviewsrv"]
+```
+
+Патчи копируются как `*.sql` из корня `docs/patches/` (без подпапок). pgmigrator читает только файлы из корневой директории.
 
 ## TypeScript API-клиенты
 
@@ -48,100 +98,14 @@
 | `factory.generated.ts` | `factory.ts` | `client.ts` (`/v1/rpc/`) | `/v1/rpc/api.ts` |
 | `vt.generated.ts` | `vt.ts` | `vtClient.ts` (`/v1/vt/`) | `/v1/vt/api.ts` |
 
-Враппер адаптирует:
-- Сигнатуры методов: `getByID({id})` → `getByID(id)` (плоские аргументы для composables)
-- Неймспейсы: `slackchannel` → `slackChannel`, `tasktracker` → `taskTracker`
-- Типы: реэкспорт `IProject` → `Project`, `IFieldError` → `FieldError` и т.д.
+## REST API загрузки
 
+Используется `reviewctl`, но можно вызывать напрямую:
 
-# Загрузка
-* review.json загружаем через curl по адресу /v1/upload/<projectKey>/
-  * возвращается reviewId в сыром виде (подставляется дальше)
-  * 200 – успешно
-  * 404 - project key не найден
-  * 400 - ошибка входных данных
-  * 500 - ошибка сервера
-* все остальные файлы загружаем через curl как /v1/upload/<projectKey>/<reviewId>/<reviewType>/
-  * 200 – успешно
-  * 404 - project key не найден
-  * 400 - ошибка входных данных
-  * 500 - ошибка сервера
-* получить prompt /v1/prompt/<projectKey>/
-  * 200 – успешно
-  * 404 - project key не найден
-  * 500 - ошибка сервера
-
-### Примеры
-
-#### 1. Загрузка review.json
-
-```bash
-PROJECT_KEY="93b90214-3b5d-4fa6-b497-f064ff7bf8a9"
-REVIEW_ID=$(curl -s -X POST \
-  -H "Content-Type: application/json" \
-  -d @review.json \
-  http://localhost:8075/v1/upload/${PROJECT_KEY}/)
+```
+POST /v1/upload/{projectKey}/                    → reviewId (plain text)
+POST /v1/upload/{projectKey}/{reviewId}/{type}/  → 200
+GET  /v1/prompt/{projectKey}/                    → prompt text
 ```
 
-#### 2. Загрузка файлов ревью
-
-```bash
-curl -s -X POST \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @architecture.md \
-  http://localhost:8075/v1/upload/${PROJECT_KEY}/${REVIEW_ID}/architecture/
-
-curl -s -X POST \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @code.md \
-  http://localhost:8075/v1/upload/${PROJECT_KEY}/${REVIEW_ID}/code/
-
-curl -s -X POST \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @security.md \
-  http://localhost:8075/v1/upload/${PROJECT_KEY}/${REVIEW_ID}/security/
-
-curl -s -X POST \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @tests.md \
-  http://localhost:8075/v1/upload/${PROJECT_KEY}/${REVIEW_ID}/tests/
-```
-
-#### 3. CI скрипт (Node.js)
-
-```js
-const fs = require("fs");
-const path = require("path");
-
-const BASE_URL = process.env.REVIEWSRV_URL || "http://localhost:8075";
-const PROJECT_KEY = process.env.PROJECT_KEY;
-const DIR = process.env.REVIEW_DIR || ".";
-
-const TYPES = { R1: "architecture", R2: "code", R3: "security", R4: "tests" };
-
-async function upload(url, body, contentType = "application/octet-stream") {
-  const res = await fetch(url, { method: "POST", body, headers: { "Content-Type": contentType } });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${text}`);
-  }
-  return text;
-}
-
-async function main() {
-  const reviewJSON = fs.readFileSync(path.join(DIR, "review.json"));
-  const reviewId = await upload(`${BASE_URL}/v1/upload/${PROJECT_KEY}/`, reviewJSON, "application/json");
-  console.log(`reviewId=${reviewId}`);
-
-  const files = fs.readdirSync(DIR);
-  for (const [prefix, type] of Object.entries(TYPES)) {
-    const file = files.find((f) => f.startsWith(prefix + ".") && f.endsWith(".md"));
-    if (!file) continue;
-    const content = fs.readFileSync(path.join(DIR, file));
-    await upload(`${BASE_URL}/v1/upload/${PROJECT_KEY}/${reviewId}/${type}/`, content);
-    console.log(`uploaded ${file}`);
-  }
-}
-
-main().catch((e) => { console.error(e.message); process.exit(1); });
-```
+Коды ответов: 200 — ок, 404 — project key не найден, 400 — ошибка данных, 500 — ошибка сервера.

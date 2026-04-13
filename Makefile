@@ -58,9 +58,16 @@ frontend-build:
 	@cd frontend && npm run build:all
 
 build:
+	@mkdir -p frontend/dist frontend/dist-vt
 	@CGO_ENABLED=0 go build $(GOFLAGS) -o ${NAME} $(MAIN)
 
+build-reviewctl:
+	@CGO_ENABLED=0 go build $(GOFLAGS) \
+		-ldflags "-s -w -X main.version=$(VERSION)" \
+		-o bin/reviewctl ./cmd/reviewctl
+
 run:
+	@mkdir -p frontend/dist frontend/dist-vt
 	@echo "Compiling"
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -dev
 

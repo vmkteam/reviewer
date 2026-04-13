@@ -1,15 +1,12 @@
 package rest
 
 import (
-	"bytes"
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
-	"text/template"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer"
@@ -18,11 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
-
-//go:embed upload.js.tmpl
-var uploadScriptTmpl string
-
-var uploadScriptTemplate = template.Must(template.New("upload.js").Parse(uploadScriptTmpl))
 
 type Handler struct {
 	pm       *reviewer.ProjectManager
@@ -148,16 +140,6 @@ func (h *Handler) UploadReviewFile(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
-}
-
-// GetUploadScript renders the JavaScript upload helper with the configured base URL.
-func (h *Handler) GetUploadScript(c echo.Context) error {
-	var buf bytes.Buffer
-	if err := uploadScriptTemplate.Execute(&buf, map[string]string{"BaseURL": h.baseURL}); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return c.Blob(http.StatusOK, "application/javascript", buf.Bytes())
 }
 
 // GetPrompt returns the assembled review prompt for the given project.
