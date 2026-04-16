@@ -1,0 +1,39 @@
+version: 2
+
+project_name: reviewctl
+
+before:
+  hooks:
+    - mkdir -p frontend/dist frontend/dist-vt
+    - touch frontend/dist/.gitkeep frontend/dist-vt/.gitkeep
+
+builds:
+  - main: ./cmd/reviewctl
+    binary: reviewctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -mod=vendor
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
