@@ -30,3 +30,31 @@ jobs:
 
       - name: Test
         run: go test -v -test.short -test.run="Test[^D][^B]" ./...
+
+      - name: GoReleaser check
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: check
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+
+      - name: Release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

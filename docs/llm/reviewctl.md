@@ -180,9 +180,38 @@ pkg/reviewer/ctl/
 
 ---
 
+## Releases
+
+### GoReleaser
+
+Бинарник `reviewctl` публикуется через GoReleaser в GitHub Releases при создании тега `v*`.
+
+- Платформа: `linux/amd64`, статическая линковка (`CGO_ENABLED=0`)
+- Архив: `reviewctl_{version}_linux_amd64.tar.gz`
+- Версия инжектится через `-X main.version={{.Version}}`
+- Конфиг: `.goreleaser.yml`
+
+```bash
+# создание релиза
+git tag v0.1.3
+git push origin v0.1.3
+# GitHub Actions: test → goreleaser release → GitHub Release с артефактом
+```
+
+### Установка reviewctl
+
+```bash
+# скачать последнюю версию
+LATEST=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/vmkteam/reviewer/releases/latest | grep -oE '[^/]+$')
+curl -sL "https://github.com/vmkteam/reviewer/releases/download/${LATEST}/reviewctl_${LATEST#v}_linux_amd64.tar.gz" \
+  | tar -xz -C /usr/local/bin reviewctl
+```
+
+---
+
 ## Docker / CI
 
-### Dockerfile
+### Dockerfile (reviewsrv)
 
 ```dockerfile
 COPY --from=builder /go/bin/reviewsrv .
@@ -192,14 +221,21 @@ COPY docs/patches/*.sql /patches/
 ENTRYPOINT ["/reviewsrv"]
 ```
 
+Docker-образ `vmkteam/reviewer` публикуется через `.github/workflows/docker.yml` при создании GitHub Release.
+
 ### CI image (vmkteam/claude-ci)
 
 ```dockerfile
-FROM vmkteam/reviewer:latest AS source
 FROM node:20-alpine
+ARG REVIEWCTL_VERSION=latest
+RUN apk add --no-cache curl git \
+ && LATEST=$(curl -sL -o /dev/null -w '%{url_effective}' https://github.com/vmkteam/reviewer/releases/${REVIEWCTL_VERSION} | grep -oE '[^/]+$') \
+ && curl -sL "https://github.com/vmkteam/reviewer/releases/download/${LATEST}/reviewctl_${LATEST#v}_linux_amd64.tar.gz" \
+    | tar -xz -C /usr/local/bin reviewctl
 RUN npm install -g @anthropic-ai/claude-code
-COPY --from=source /reviewctl /usr/local/bin/reviewctl
 ```
+
+Бинарник `reviewctl` скачивается из GitHub Releases — не требуется пересборка Docker-образа `vmkteam/reviewer` при обновлении только `reviewctl`.
 
 ### GitLab CI
 
