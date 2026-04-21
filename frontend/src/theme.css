@@ -1,6 +1,12 @@
 /* Dark theme: class-based variant */
 @variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v4 no longer sets cursor: pointer on buttons by default. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 /* Semantic design tokens — light values (default) */
 @theme {
   --color-surface: #ffffff;

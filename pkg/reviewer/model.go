@@ -28,6 +28,7 @@ var (
 	Severities             = []string{SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow}
 	ErrInvalidReviewType   = errors.New("invalid review type")
 	ErrDuplicateReviewType = errors.New("duplicate review type")
+	ErrReviewNotFound      = errors.New("review not found")
 )
 
 // IsValidReviewType checks if the given review type is supported.
@@ -78,14 +79,17 @@ type Issue struct {
 }
 
 // NewIssue converts a db.Issue to the domain model, returning nil for nil input.
+// Deduplicates Content when it matches Description (common in LLM-generated issues).
 func NewIssue(in *db.Issue) *Issue {
 	if in == nil {
 		return nil
 	}
 
-	return &Issue{
-		Issue: *in,
+	out := &Issue{Issue: *in}
+	if out.Content == out.Description {
+		out.Content = ""
 	}
+	return out
 }
 
 type Project struct {

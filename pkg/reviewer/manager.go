@@ -273,6 +273,47 @@ func (rm *ReviewManager) CountIssues(ctx context.Context, search *IssueSearch) (
 	return rm.repo.CountIssues(ctx, search.ToDB(), rm.repo.FullIssue())
 }
 
+// ListValidIssues returns all valid (statusId=StatusValid) issues for a review.
+func (rm *ReviewManager) ListValidIssues(ctx context.Context, reviewID int) (Issues, error) {
+	search := &IssueSearch{
+		ReviewID:  reviewID,
+		StatusIDs: []int{db.StatusValid},
+	}
+	dbIssues, err := rm.repo.IssuesByFilters(ctx, search.ToDB(), db.PagerNoLimit, rm.repo.FullIssue())
+	if err != nil {
+		return nil, err
+	}
+	return NewIssues(dbIssues), nil
+}
+
+// RenderFixMarkdown returns the fix-task markdown for a review.
+// Returns ErrReviewNotFound if the review or its project is missing.
+func (rm *ReviewManager) RenderFixMarkdown(ctx context.Context, pm *ProjectManager, reviewID int) (string, error) {
+	dbReview, err := rm.repo.ReviewByID(ctx, reviewID)
+	if err != nil {
+		return "", err
+	}
+	if dbReview == nil {
+		return "", ErrReviewNotFound
+	}
+	rv := NewReview(dbReview)
+
+	project, err := pm.GetByID(ctx, rv.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	if project == nil {
+		return "", ErrReviewNotFound
+	}
+
+	issues, err := rm.ListValidIssues(ctx, reviewID)
+	if err != nil {
+		return "", err
+	}
+
+	return BuildFixMarkdown(rv, project, issues)
+}
+
 // ListIssuesByProject returns issues for a project matching search, sorted by issueId ASC.
 func (rm *ReviewManager) ListIssuesByProject(ctx context.Context, search *IssueSearch, count int) (Issues, error) {
 	dbIssues, err := rm.repo.IssuesByFilters(ctx, search.ToDB(), db.NewPager(0, count),

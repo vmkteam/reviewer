@@ -384,3 +384,99 @@ func TestDBReviewManager_ListIssuesByProject(t *testing.T) {
 		assert.Less(t, issues[i-1].ID, issues[i].ID)
 	}
 }
+
+// collectIssueIDs returns all issue IDs from a review's files in stable order.
+func collectIssueIDs(rv *Review) []int {
+	var ids []int
+	for _, rf := range rv.ReviewFiles {
+		for _, iss := range rf.Issues {
+			ids = append(ids, iss.ID)
+		}
+	}
+	return ids
+}
+
+func TestDBReviewManager_ListValidIssues(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	rv := createTestReview(t, rm, pr)
+	cleanupReview(t, dbc, rv)
+
+	issueIDs := collectIssueIDs(rv)
+	require.GreaterOrEqual(t, len(issueIDs), 3, "fixture must have at least 3 issues")
+
+	ctx := t.Context()
+	_, err := rm.SetFeedback(ctx, issueIDs[0], db.StatusValid)
+	require.NoError(t, err)
+	_, err = rm.SetFeedback(ctx, issueIDs[1], db.StatusIgnored)
+	require.NoError(t, err)
+	// issueIDs[2] stays at StatusEnabled
+
+	t.Run("returns only valid issues for the review", func(t *testing.T) {
+		got, err := rm.ListValidIssues(ctx, rv.ID)
+		require.NoError(t, err)
+		assert.Len(t, got, 1)
+		assert.Equal(t, issueIDs[0], got[0].ID)
+		assert.Equal(t, db.StatusValid, got[0].StatusID)
+	})
+
+	t.Run("does not leak issues from other reviews", func(t *testing.T) {
+		otherRv := createTestReview(t, rm, pr)
+		cleanupReview(t, dbc, otherRv)
+
+		otherIDs := collectIssueIDs(otherRv)
+		require.NotEmpty(t, otherIDs)
+		_, err := rm.SetFeedback(ctx, otherIDs[0], db.StatusValid)
+		require.NoError(t, err)
+
+		got, err := rm.ListValidIssues(ctx, rv.ID)
+		require.NoError(t, err)
+		assert.Len(t, got, 1, "ListValidIssues must filter by reviewID")
+		assert.Equal(t, rv.ID, got[0].ReviewID)
+	})
+}
+
+func TestDBReviewManager_RenderFixMarkdown(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pm := NewProjectManager(dbc)
+
+	t.Run("review not found returns ErrReviewNotFound", func(t *testing.T) {
+		_, err := rm.RenderFixMarkdown(t.Context(), pm, -1)
+		assert.ErrorIs(t, err, ErrReviewNotFound)
+	})
+
+	t.Run("happy path renders valid issues with disclaimer", func(t *testing.T) {
+		pr, prCl := createTestProject(t, dbc)
+		t.Cleanup(prCl)
+
+		rv := createTestReview(t, rm, pr)
+		cleanupReview(t, dbc, rv)
+
+		firstIssueID := collectIssueIDs(rv)[0]
+		_, err := rm.SetFeedback(t.Context(), firstIssueID, db.StatusValid)
+		require.NoError(t, err)
+
+		md, err := rm.RenderFixMarkdown(t.Context(), pm, rv.ID)
+		require.NoError(t, err)
+		assert.Contains(t, md, "# Fix valid issues from review: "+rv.Title)
+		assert.Contains(t, md, "- **Valid issues:** 1")
+		assert.Contains(t, md, "**Security note:**")
+		assert.Contains(t, md, "## Issues")
+	})
+
+	t.Run("disabled project returns ErrReviewNotFound", func(t *testing.T) {
+		// ProjectManager.repo is WithEnabledOnly, so a review pointing to a
+		// disabled project behaves the same as a missing project.
+		disabledProject := &db.Project{StatusID: db.StatusDisabled}
+		pr, prCl := test.Project(t, dbc, disabledProject, test.WithProjectRelations, test.WithFakeProject)
+		t.Cleanup(prCl)
+
+		rv := createTestReview(t, rm, NewProject(pr))
+		cleanupReview(t, dbc, rv)
+
+		_, err := rm.RenderFixMarkdown(t.Context(), pm, rv.ID)
+		assert.ErrorIs(t, err, ErrReviewNotFound)
+	})
+}
