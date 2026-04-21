@@ -552,6 +552,68 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Name: "durationApiMs",
 									Type: smd.Integer,
 								},
+								{
+									Name: "durationTotalMs",
+									Type: smd.Integer,
+								},
+								{
+									Name: "cacheCreate1hInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "cacheCreate5mInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "webSearchRequests",
+									Type: smd.Integer,
+								},
+								{
+									Name: "webFetchRequests",
+									Type: smd.Integer,
+								},
+								{
+									Name: "stopReason",
+									Type: smd.String,
+								},
+								{
+									Name: "terminalReason",
+									Type: smd.String,
+								},
+								{
+									Name: "isError",
+									Type: smd.Boolean,
+								},
+								{
+									Name: "models",
+									Ref:  "#/definitions/ModelUseStats",
+									Type: smd.Object,
+								},
+							},
+						},
+						"ModelUseStats": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "inputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "outputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "cacheReadInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "cacheCreationInputTokens",
+									Type: smd.Integer,
+								},
+								{
+									Name: "costUsd",
+									Type: smd.Float,
+								},
 							},
 						},
 						"ReviewFile": {

@@ -4,6 +4,7 @@
   "is_error": false,
   "result": "Review completed.",
   "stop_reason": "end_turn",
+  "terminal_reason": "completed",
   "duration_ms": 145780,
   "duration_api_ms": 142410,
   "num_turns": 15,
@@ -13,7 +14,15 @@
     "input_tokens": 2680,
     "cache_creation_input_tokens": 154964,
     "cache_read_input_tokens": 1879403,
-    "output_tokens": 6636
+    "output_tokens": 6636,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 2
+    },
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 100000,
+      "ephemeral_5m_input_tokens": 54964
+    }
   },
   "modelUsage": {
     "claude-opus-4-6": {

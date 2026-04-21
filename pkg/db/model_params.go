@@ -18,4 +18,31 @@ type ReviewModelInfo struct {
 	NumTurns                 int    `json:"numTurns,omitempty"`
 	SessionID                string `json:"sessionId,omitempty"`
 	DurationAPIMs            int    `json:"durationApiMs,omitempty"`
+
+	// Wall-clock timing — diverges from API timing on network/ratelimit overhead.
+	DurationTotalMs int `json:"durationTotalMs,omitempty"`
+
+	// Cache-write split by TTL: 1h is ×3 the price of 5m on Opus.
+	CacheCreate1hInputTokens int `json:"cacheCreate1hInputTokens,omitempty"`
+	CacheCreate5mInputTokens int `json:"cacheCreate5mInputTokens,omitempty"`
+
+	// Server-side tools (billed separately from tokens).
+	WebSearchRequests int `json:"webSearchRequests,omitempty"`
+	WebFetchRequests  int `json:"webFetchRequests,omitempty"`
+
+	StopReason     string `json:"stopReason,omitempty"`
+	TerminalReason string `json:"terminalReason,omitempty"`
+	IsError        bool   `json:"isError,omitempty"`
+
+	// Per-model breakdown (e.g. opus + haiku for compaction).
+	Models map[string]ModelUseStats `json:"models,omitempty"`
+}
+
+// ModelUseStats — per-model tokens and cost within a single run.
+type ModelUseStats struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens,omitempty"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens,omitempty"`
+	CostUsd                  float64 `json:"costUsd"`
 }

@@ -19,20 +19,54 @@ const claudeResultType = "result"
 
 // ClaudeResult represents the JSON output from claude --output-format json.
 type ClaudeResult struct {
-	Type          string  `json:"type"`
-	Subtype       string  `json:"subtype"`
-	Result        string  `json:"result"`
-	TotalCostUSD  float64 `json:"total_cost_usd"`
-	DurationMs    int     `json:"duration_ms"`
-	DurationAPIMs int     `json:"duration_api_ms"`
-	NumTurns      int     `json:"num_turns"`
-	SessionID     string  `json:"session_id"`
-	Usage         struct {
-		InputTokens              int `json:"input_tokens"`
-		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
-		OutputTokens             int `json:"output_tokens"`
-	} `json:"usage"`
+	Type              string                    `json:"type"`
+	Subtype           string                    `json:"subtype"`
+	Result            string                    `json:"result"`
+	TotalCostUSD      float64                   `json:"total_cost_usd"`
+	DurationMs        int                       `json:"duration_ms"`
+	DurationAPIMs     int                       `json:"duration_api_ms"`
+	NumTurns          int                       `json:"num_turns"`
+	SessionID         string                    `json:"session_id"`
+	IsError           bool                      `json:"is_error"`
+	StopReason        string                    `json:"stop_reason"`
+	TerminalReason    string                    `json:"terminal_reason"`
+	PermissionDenials []any                     `json:"permission_denials"`
+	Usage             ClaudeUsage               `json:"usage"`
+	ModelUsage        map[string]ClaudeModelUse `json:"modelUsage"`
+}
+
+// ClaudeUsage captures aggregated token usage across all models.
+type ClaudeUsage struct {
+	InputTokens              int                 `json:"input_tokens"`
+	CacheCreationInputTokens int                 `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int                 `json:"cache_read_input_tokens"`
+	OutputTokens             int                 `json:"output_tokens"`
+	ServerToolUse            ClaudeServerToolUse `json:"server_tool_use"`
+	CacheCreation            ClaudeCacheCreation `json:"cache_creation"`
+}
+
+// ClaudeServerToolUse counts billable server-side tool invocations.
+type ClaudeServerToolUse struct {
+	WebSearchRequests int `json:"web_search_requests"`
+	WebFetchRequests  int `json:"web_fetch_requests"`
+}
+
+// ClaudeCacheCreation splits cache-write tokens by TTL ($3.75 vs $1.25 per MTok on Opus).
+type ClaudeCacheCreation struct {
+	Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+	Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+}
+
+// ClaudeModelUse is the per-model breakdown under "modelUsage".
+type ClaudeModelUse struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
+	WebSearchRequests        int     `json:"webSearchRequests"`
+	CostUSD                  float64 `json:"costUSD"`
+	ContextWindow            int     `json:"contextWindow"`
+	MaxOutputTokens          int     `json:"maxOutputTokens"`
 }
 
 // ParseClaudeResult parses the JSON output from Claude CLI.
@@ -97,9 +131,11 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 }
 
 // ToModelInfo converts ClaudeResult to db.ReviewModelInfo.
+// The fallback model name (CLI -m flag) is replaced by the full model id
+// from modelUsage when available — e.g. "opus" → "claude-opus-4-7".
 func (cr *ClaudeResult) ToModelInfo(model string) db.ReviewModelInfo {
-	return db.ReviewModelInfo{
-		Model:        model,
+	mi := db.ReviewModelInfo{
+		Model:        primaryModelName(cr.ModelUsage, model),
 		InputTokens:  cr.Usage.InputTokens,
 		OutputTokens: cr.Usage.OutputTokens,
 		CostUsd:      cr.TotalCostUSD,
@@ -109,7 +145,51 @@ func (cr *ClaudeResult) ToModelInfo(model string) db.ReviewModelInfo {
 		NumTurns:                 cr.NumTurns,
 		SessionID:                cr.SessionID,
 		DurationAPIMs:            cr.DurationAPIMs,
+
+		DurationTotalMs:          cr.DurationMs,
+		CacheCreate1hInputTokens: cr.Usage.CacheCreation.Ephemeral1hInputTokens,
+		CacheCreate5mInputTokens: cr.Usage.CacheCreation.Ephemeral5mInputTokens,
+		WebSearchRequests:        cr.Usage.ServerToolUse.WebSearchRequests,
+		WebFetchRequests:         cr.Usage.ServerToolUse.WebFetchRequests,
+		StopReason:               cr.StopReason,
+		TerminalReason:           cr.TerminalReason,
+		IsError:                  cr.IsError,
 	}
+
+	if len(cr.ModelUsage) > 0 {
+		mi.Models = make(map[string]db.ModelUseStats, len(cr.ModelUsage))
+		for name, u := range cr.ModelUsage {
+			mi.Models[name] = db.ModelUseStats{
+				InputTokens:              u.InputTokens,
+				OutputTokens:             u.OutputTokens,
+				CacheReadInputTokens:     u.CacheReadInputTokens,
+				CacheCreationInputTokens: u.CacheCreationInputTokens,
+				CostUsd:                  u.CostUSD,
+			}
+		}
+	}
+
+	return mi
+}
+
+// primaryModelName returns the full model id of the most expensive run
+// (typically the Opus pass vs. a Haiku compaction side-run). Falls back
+// to the CLI alias when modelUsage is missing.
+func primaryModelName(modelUsage map[string]ClaudeModelUse, fallback string) string {
+	var (
+		best     string
+		bestCost = -1.0
+	)
+	for name, u := range modelUsage {
+		if u.CostUSD > bestCost {
+			best = name
+			bestCost = u.CostUSD
+		}
+	}
+	if best == "" {
+		return fallback
+	}
+	return best
 }
 
 // ClaudeRunner abstracts the Claude CLI subprocess for testability.
@@ -202,15 +282,41 @@ func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResul
 		return nil, parseErr
 	}
 
+	r.logResult(ctx, cr)
+
+	return cr, nil
+}
+
+func (r *ExecClaudeRunner) logResult(ctx context.Context, cr *ClaudeResult) {
 	r.Log.InfoContext(ctx, "claude result parsed",
 		"cost", cr.TotalCostUSD,
 		"turns", cr.NumTurns,
 		"inputTokens", cr.Usage.InputTokens,
 		"outputTokens", cr.Usage.OutputTokens,
 		"cacheRead", cr.Usage.CacheReadInputTokens,
+		"cacheCreate1h", cr.Usage.CacheCreation.Ephemeral1hInputTokens,
+		"cacheCreate5m", cr.Usage.CacheCreation.Ephemeral5mInputTokens,
+		"webFetch", cr.Usage.ServerToolUse.WebFetchRequests,
+		"webSearch", cr.Usage.ServerToolUse.WebSearchRequests,
+		"models", len(cr.ModelUsage),
+		"stopReason", cr.StopReason,
 	)
 
-	return cr, nil
+	if cr.IsError {
+		r.Log.ErrorContext(ctx, "claude run reported is_error",
+			"stopReason", cr.StopReason,
+			"terminalReason", cr.TerminalReason,
+			"sessionId", cr.SessionID,
+			"subtype", cr.Subtype,
+		)
+	}
+
+	if len(cr.PermissionDenials) > 0 {
+		r.Log.WarnContext(ctx, "claude permission denials",
+			"count", len(cr.PermissionDenials),
+			"sessionId", cr.SessionID,
+		)
+	}
 }
 
 func (r *ExecClaudeRunner) saveOutput(data []byte) {
