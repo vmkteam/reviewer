@@ -89,7 +89,12 @@
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Duration</div>
-            <div class="text-sm text-fg-secondary">{{ formatDuration(review.durationMs) }}</div>
+            <div
+              class="text-sm text-fg-secondary"
+              :title="durationDiffersFromApi
+                ? `API ${formatDuration(review.modelInfo.durationApiMs)} · wall-clock ${formatDuration(review.modelInfo.durationTotalMs)}`
+                : undefined"
+            >{{ formatDuration(review.durationMs) }}</div>
           </div>
           <div v-if="review.effortMinutes">
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Effort</div>
@@ -97,11 +102,28 @@
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Model</div>
-            <div class="text-sm text-fg-secondary">{{ review.modelInfo.model }}</div>
+            <div
+              class="text-sm text-fg-secondary"
+              :title="modelBreakdown.length > 0
+                ? modelBreakdown.map(m => `${m.name}: ${formatCost(m.costUsd)} · in ${m.inputTokens.toLocaleString()} / out ${m.outputTokens.toLocaleString()}`).join('\n')
+                : undefined"
+            >
+              {{ review.modelInfo.model }}<span
+                v-if="modelBreakdown.length > 1"
+                class="ml-1 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-accent-light text-accent"
+              >+{{ modelBreakdown.length - 1 }}</span>
+            </div>
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Tokens</div>
             <div class="text-sm text-fg-secondary tabular-nums">{{ review.modelInfo.inputTokens.toLocaleString() }} / {{ review.modelInfo.outputTokens.toLocaleString() }}</div>
+          </div>
+          <div v-if="cacheHitRatio !== null">
+            <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Cache hit</div>
+            <div
+              class="text-sm text-fg-secondary tabular-nums"
+              :title="`read ${review.modelInfo.cacheReadInputTokens.toLocaleString()} · write ${review.modelInfo.cacheCreationInputTokens.toLocaleString()} · input ${review.modelInfo.inputTokens.toLocaleString()}`"
+            >{{ (cacheHitRatio * 100).toFixed(1) }}%</div>
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Cost</div>
@@ -194,6 +216,20 @@
               <span v-if="issueCount !== null" class="ml-auto text-xs text-fg-subtle">
                 {{ issueCount }} issue{{ issueCount !== 1 ? 's' : '' }}
               </span>
+              <button
+                type="button"
+                :disabled="validIssuesCount === 0"
+                :title="validIssuesCount === 0
+                  ? 'No valid issues to fix'
+                  : `Copy Claude Code prompt for ${validIssuesCount} valid issue${validIssuesCount !== 1 ? 's' : ''}`"
+                @click="copyFixPrompt"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-edge text-fg-secondary hover:text-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-fg-secondary disabled:hover:border-edge transition-colors"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                {{ fixPromptCopied ? 'Copied!' : 'Copy Fix Prompt' }}
+              </button>
             </div>
 
             <!-- Loading issues -->
@@ -242,7 +278,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import { useRouter } from 'vue-router'
-import api, { type Review, type Issue, type Project, type ReviewSummary } from '../api/factory'
+import api, { type Review, type Issue, type Project, type ReviewSummary, type ModelUseStats } from '../api/factory'
 import TrafficLight from '../components/TrafficLight.vue'
 import IssueStatsBar from '../components/IssueStatsBar.vue'
 import MarkdownContent from '../components/MarkdownContent.vue'
@@ -256,6 +292,9 @@ import ReviewsTable from '../components/ReviewsTable.vue'
 import { useFormat, reviewTypes } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 import { linkifyTaskIds } from '../composables/useTaskLink'
+import { buildFixPrompt } from '../composables/useFixPrompt'
+import { useClipboard } from '../composables/useClipboard'
+import { StatusValid } from '../constants/status'
 
 const { shortHash, formatDateTime, formatDuration, formatCost, reviewTypeFullName, buildVcsCommitURL, buildVcsMrURL } = useFormat()
 const { setProject: setProjectCrumb, setReview: setReviewCrumb } = useBreadcrumbs()
@@ -285,7 +324,8 @@ const issueFilters = reactive<{ severity: string; issueType: string; reviewType:
 const selectedTab = ref(0)
 const typeOrder = reviewTypes
 const targetIssueId = ref<number | null>(null)
-const copiedIssueId = ref<number | null>(null)
+const { copied: copiedIssueId, copy: copyText } = useClipboard<number>()
+const { copied: fixPromptCopied, copy: copyFixPromptText } = useClipboard()
 
 // Previous Reviews
 const previousCount = ref(0)
@@ -321,11 +361,7 @@ function updateHash(hash: string) {
 
 function copyIssueLink(issueId: number) {
   const url = window.location.origin + window.location.pathname + '#issues-' + issueId
-  navigator.clipboard.writeText(url)
-  copiedIssueId.value = issueId
-  setTimeout(() => {
-    if (copiedIssueId.value === issueId) copiedIssueId.value = null
-  }, 1500)
+  copyText(url, issueId)
 }
 
 function downloadMarkdown(content: string, reviewType: string) {
@@ -355,6 +391,28 @@ async function scrollToIssue(issueId: number) {
 const allAccepted = computed(() => {
   if (!review.value || review.value.reviewFiles.length === 0) return false
   return review.value.reviewFiles.every(rf => rf.isAccepted)
+})
+
+// rpcgen types the `models` Go map as a single interface; cast back to a record here.
+const modelBreakdown = computed<Array<{ name: string } & ModelUseStats>>(() => {
+  const models = review.value?.modelInfo.models as unknown as Record<string, ModelUseStats> | null | undefined
+  if (!models) return []
+  return Object.entries(models).map(([name, s]) => ({ name, ...s }))
+})
+
+const cacheHitRatio = computed<number | null>(() => {
+  const mi = review.value?.modelInfo
+  if (!mi) return null
+  const total = mi.cacheReadInputTokens + mi.cacheCreationInputTokens + mi.inputTokens
+  if (total === 0) return null
+  return mi.cacheReadInputTokens / total
+})
+
+const durationDiffersFromApi = computed(() => {
+  const mi = review.value?.modelInfo
+  if (!mi) return false
+  if (mi.durationTotalMs === 0 || mi.durationApiMs === 0) return false
+  return Math.abs(mi.durationTotalMs - mi.durationApiMs) >= 1000
 })
 
 const orderedReviewFiles = computed(() => {
@@ -392,6 +450,15 @@ const filteredIssues = computed(() => {
 })
 
 const issueCount = computed(() => filteredIssues.value.length)
+
+const validIssuesCount = computed(() =>
+  allIssues.value.filter(i => i.statusId === StatusValid).length
+)
+
+function copyFixPrompt() {
+  if (validIssuesCount.value === 0) return
+  copyFixPromptText(buildFixPrompt(reviewId.value))
+}
 
 function onExpandedIdChange(id: number | null) {
   expandedIssueId.value = id

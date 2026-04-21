@@ -129,6 +129,7 @@ import ExternalLink from '../components/ExternalLink.vue'
 import IssuesTable from '../components/IssuesTable.vue'
 import { StatusFalsePositive, StatusIgnored } from '../constants/status'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
+import { useClipboard } from '../composables/useClipboard'
 
 const { setProject: setProjectCrumb } = useBreadcrumbs()
 
@@ -163,7 +164,7 @@ const risksHasMore = ref(true)
 const risksError = ref('')
 const risksLoaded = ref(false)
 const expandedIssueId = ref<number | null>(null)
-const copiedIssueId = ref<number | null>(null)
+const { copied: copiedIssueId, copy: copyText } = useClipboard<number>()
 
 const risksFilters = { statusIds: [StatusFalsePositive, StatusIgnored] }
 
@@ -171,12 +172,7 @@ function copyIssueLink(issueId: number) {
   const issue = risks.value.find(i => i.issueId === issueId)
   if (!issue) return
   const route = router.resolve({ name: 'review', params: { id: issue.reviewId } })
-  const url = window.location.origin + route.href + '#issues-' + issueId
-  navigator.clipboard.writeText(url)
-  copiedIssueId.value = issueId
-  setTimeout(() => {
-    if (copiedIssueId.value === issueId) copiedIssueId.value = null
-  }, 1500)
+  copyText(window.location.origin + route.href + '#issues-' + issueId, issueId)
 }
 
 function buildFilters(): ReviewFilters | undefined {

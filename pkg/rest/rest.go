@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer"
@@ -140,6 +141,30 @@ func (h *Handler) UploadReviewFile(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+// ReviewFixMarkdown returns a markdown document listing valid issues of a review,
+// intended to be consumed by Claude Code as a fix task prompt.
+// URL contract: /v1/rpc/review-fix-<id>.md — .md suffix is required.
+func (h *Handler) ReviewFixMarkdown(c echo.Context) error {
+	param := c.Param("id")
+	if !strings.HasSuffix(param, ".md") {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid review id")
+	}
+	reviewID, err := strconv.Atoi(strings.TrimSuffix(param, ".md"))
+	if err != nil || reviewID <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid review id")
+	}
+
+	md, err := h.rm.RenderFixMarkdown(c.Request().Context(), h.pm, reviewID)
+	if err != nil {
+		if errors.Is(err, reviewer.ErrReviewNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "review not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
 }
 
 // GetPrompt returns the assembled review prompt for the given project.

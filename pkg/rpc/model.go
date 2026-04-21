@@ -29,6 +29,27 @@ type ModelInfo struct {
 	NumTurns                 int    `json:"numTurns,omitempty"`
 	SessionID                string `json:"sessionId,omitempty"`
 	DurationAPIMs            int    `json:"durationApiMs,omitempty"`
+
+	DurationTotalMs          int `json:"durationTotalMs,omitempty"`
+	CacheCreate1hInputTokens int `json:"cacheCreate1hInputTokens,omitempty"`
+	CacheCreate5mInputTokens int `json:"cacheCreate5mInputTokens,omitempty"`
+	WebSearchRequests        int `json:"webSearchRequests,omitempty"`
+	WebFetchRequests         int `json:"webFetchRequests,omitempty"`
+
+	StopReason     string `json:"stopReason,omitempty"`
+	TerminalReason string `json:"terminalReason,omitempty"`
+	IsError        bool   `json:"isError,omitempty"`
+
+	Models map[string]ModelUseStats `json:"models,omitempty"`
+}
+
+// ModelUseStats — per-model breakdown (e.g. opus + haiku compaction).
+type ModelUseStats struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens,omitempty"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens,omitempty"`
+	CostUsd                  float64 `json:"costUsd"`
 }
 
 func newIssueStats(in db.ReviewFileIssueStats) IssueStats {
@@ -42,7 +63,7 @@ func newIssueStats(in db.ReviewFileIssueStats) IssueStats {
 }
 
 func newModelInfo(in db.ReviewModelInfo) ModelInfo {
-	return ModelInfo{
+	out := ModelInfo{
 		Model:        in.Model,
 		InputTokens:  in.InputTokens,
 		OutputTokens: in.OutputTokens,
@@ -53,7 +74,32 @@ func newModelInfo(in db.ReviewModelInfo) ModelInfo {
 		NumTurns:                 in.NumTurns,
 		SessionID:                in.SessionID,
 		DurationAPIMs:            in.DurationAPIMs,
+
+		DurationTotalMs:          in.DurationTotalMs,
+		CacheCreate1hInputTokens: in.CacheCreate1hInputTokens,
+		CacheCreate5mInputTokens: in.CacheCreate5mInputTokens,
+		WebSearchRequests:        in.WebSearchRequests,
+		WebFetchRequests:         in.WebFetchRequests,
+
+		StopReason:     in.StopReason,
+		TerminalReason: in.TerminalReason,
+		IsError:        in.IsError,
 	}
+
+	if len(in.Models) > 0 {
+		out.Models = make(map[string]ModelUseStats, len(in.Models))
+		for name, s := range in.Models {
+			out.Models[name] = ModelUseStats{
+				InputTokens:              s.InputTokens,
+				OutputTokens:             s.OutputTokens,
+				CacheReadInputTokens:     s.CacheReadInputTokens,
+				CacheCreationInputTokens: s.CacheCreationInputTokens,
+				CostUsd:                  s.CostUsd,
+			}
+		}
+	}
+
+	return out
 }
 
 // Project — карточка проекта для /reviews/.

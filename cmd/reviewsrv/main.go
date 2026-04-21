@@ -26,6 +26,11 @@ import (
 
 const appName = "reviewsrv"
 
+// version is injected at build time via -ldflags "-X main.version=...".
+// When empty (local `go run` / `go build`) we fall back to appkit.Version(),
+// which reads vcs.revision from runtime/debug.BuildInfo.
+var version string
+
 var (
 	fs                 = flag.NewFlagSetWithEnvPrefix(os.Args[0], strings.ToUpper(appName), 0)
 	flConfigPath       = fs.String("config", "config.toml", "Path to config file")
@@ -50,7 +55,9 @@ func main() {
 	ql := db.NewQueryLogger(sl)
 	pg.SetLogger(ql)
 
-	version := appkit.Version()
+	if version == "" {
+		version = appkit.Version()
+	}
 	sl.Print(ctx, "starting", "app", appName, "version", version)
 	if _, err := toml.DecodeFile(*flConfigPath, &cfg); err != nil {
 		exitOnError(err)

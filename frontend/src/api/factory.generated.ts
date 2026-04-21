@@ -44,6 +44,28 @@ export interface IModelInfo {
   model: string,
   inputTokens: number,
   outputTokens: number,
+  costUsd: number,
+  cacheCreationInputTokens: number,
+  cacheReadInputTokens: number,
+  numTurns: number,
+  sessionId: string,
+  durationApiMs: number,
+  durationTotalMs: number,
+  cacheCreate1hInputTokens: number,
+  cacheCreate5mInputTokens: number,
+  webSearchRequests: number,
+  webFetchRequests: number,
+  stopReason: string,
+  terminalReason: string,
+  isError: boolean,
+  models: IModelUseStats
+}
+
+export interface IModelUseStats {
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadInputTokens: number,
+  cacheCreationInputTokens: number,
   costUsd: number
 }
 
@@ -219,6 +241,30 @@ export class ModelInfo implements IModelInfo {
   model: string = null;
   inputTokens: number = 0;
   outputTokens: number = 0;
+  costUsd: number = 0;
+  cacheCreationInputTokens: number = 0;
+  cacheReadInputTokens: number = 0;
+  numTurns: number = 0;
+  sessionId: string = null;
+  durationApiMs: number = 0;
+  durationTotalMs: number = 0;
+  cacheCreate1hInputTokens: number = 0;
+  cacheCreate5mInputTokens: number = 0;
+  webSearchRequests: number = 0;
+  webFetchRequests: number = 0;
+  stopReason: string = null;
+  terminalReason: string = null;
+  isError: boolean = false;
+  models: IModelUseStats = null;
+}
+
+export class ModelUseStats implements IModelUseStats {
+  static entityName = "modelusestats";
+
+  inputTokens: number = 0;
+  outputTokens: number = 0;
+  cacheReadInputTokens: number = 0;
+  cacheCreationInputTokens: number = 0;
   costUsd: number = 0;
 }
 

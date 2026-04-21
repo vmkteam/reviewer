@@ -10,6 +10,8 @@ endif
 
 LINT_VERSION := v2.8.0
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
 MAIN := ${NAME}/cmd/${NAME}
 
 export PGDATABASE
@@ -59,7 +61,7 @@ frontend-build:
 
 build:
 	@mkdir -p frontend/dist frontend/dist-vt
-	@CGO_ENABLED=0 go build $(GOFLAGS) -o ${NAME} $(MAIN)
+	@CGO_ENABLED=0 go build $(GOFLAGS) -ldflags "-s -w -X main.version=$(VERSION)" -o ${NAME} $(MAIN)
 
 build-reviewctl:
 	@CGO_ENABLED=0 go build $(GOFLAGS) \

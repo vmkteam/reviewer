@@ -26,6 +26,20 @@ func TestParseClaudeResult(t *testing.T) {
 	assert.Equal(t, 154964, cr.Usage.CacheCreationInputTokens)
 	assert.Equal(t, 1879403, cr.Usage.CacheReadInputTokens)
 	assert.Equal(t, 6636, cr.Usage.OutputTokens)
+
+	assert.False(t, cr.IsError)
+	assert.Equal(t, "end_turn", cr.StopReason)
+	assert.Equal(t, "completed", cr.TerminalReason)
+	assert.Equal(t, 100000, cr.Usage.CacheCreation.Ephemeral1hInputTokens)
+	assert.Equal(t, 54964, cr.Usage.CacheCreation.Ephemeral5mInputTokens)
+	assert.Equal(t, 2, cr.Usage.ServerToolUse.WebFetchRequests)
+	assert.Equal(t, 0, cr.Usage.ServerToolUse.WebSearchRequests)
+
+	require.Contains(t, cr.ModelUsage, "claude-opus-4-6")
+	opus := cr.ModelUsage["claude-opus-4-6"]
+	assert.Equal(t, 2680, opus.InputTokens)
+	assert.Equal(t, 6636, opus.OutputTokens)
+	assert.InDelta(t, 2.0875265, opus.CostUSD, 0.0001)
 }
 
 func TestParseClaudeResult_Error(t *testing.T) {
@@ -115,7 +129,8 @@ func TestClaudeResultToModelInfo(t *testing.T) {
 
 	mi := cr.ToModelInfo("opus")
 
-	assert.Equal(t, "opus", mi.Model)
+	// Full model id from modelUsage overrides the CLI alias.
+	assert.Equal(t, "claude-opus-4-6", mi.Model)
 	assert.Equal(t, 2680, mi.InputTokens)
 	assert.Equal(t, 6636, mi.OutputTokens)
 	assert.InDelta(t, 2.0875265, mi.CostUsd, 0.0001)
@@ -124,4 +139,36 @@ func TestClaudeResultToModelInfo(t *testing.T) {
 	assert.Equal(t, 15, mi.NumTurns)
 	assert.Equal(t, "34ee826b-a176-42dc-abd0-2a4ea59f47be", mi.SessionID)
 	assert.Equal(t, 142410, mi.DurationAPIMs)
+
+	assert.Equal(t, 145780, mi.DurationTotalMs)
+	assert.Equal(t, 100000, mi.CacheCreate1hInputTokens)
+	assert.Equal(t, 54964, mi.CacheCreate5mInputTokens)
+	assert.Equal(t, 2, mi.WebFetchRequests)
+	assert.Equal(t, "end_turn", mi.StopReason)
+	assert.Equal(t, "completed", mi.TerminalReason)
+	assert.False(t, mi.IsError)
+
+	require.Contains(t, mi.Models, "claude-opus-4-6")
+	opus := mi.Models["claude-opus-4-6"]
+	assert.Equal(t, 2680, opus.InputTokens)
+	assert.InDelta(t, 2.0875265, opus.CostUsd, 0.0001)
+}
+
+func TestClaudeResultToModelInfo_PrimaryModelPicksHighestCost(t *testing.T) {
+	cr := &ClaudeResult{
+		Type:    claudeResultType,
+		Subtype: "success",
+		ModelUsage: map[string]ClaudeModelUse{
+			"claude-opus-4-7":         {CostUSD: 2.45},
+			"claude-haiku-4-5-202510": {CostUSD: 0.14},
+		},
+	}
+
+	assert.Equal(t, "claude-opus-4-7", cr.ToModelInfo("opus").Model)
+}
+
+func TestClaudeResultToModelInfo_FallbackWhenNoModelUsage(t *testing.T) {
+	cr := &ClaudeResult{Type: claudeResultType, Subtype: "success"}
+
+	assert.Equal(t, "opus", cr.ToModelInfo("opus").Model)
 }

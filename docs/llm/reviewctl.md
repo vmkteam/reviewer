@@ -47,7 +47,8 @@ reviewctl version   — версия бинарника
 | Флаг | Env Variable | Default | Описание |
 |------|-------------|---------|----------|
 | `--key` | `$PROJECT_KEY` | required | UUID проекта |
-| `--url` | `$REVIEWSRV_URL` | required | URL сервера reviewsrv |
+| `--url` | `$REVIEWSRV_URL` | required | URL сервера reviewsrv для API-вызовов из CI |
+| `--public-url` | `$REVIEWSRV_PUBLIC_URL` | fallback на `--url` | Внешний URL для ссылок в комментах MR (если API и browser URL разные) |
 | `--model` | `$REVIEW_MODEL` | `opus` | Модель Claude |
 | `--dir` | `$REVIEW_DIR` | `.` | Рабочая директория |
 | `--verbose` | `$REVIEW_VERBOSE` | `false` | Подробный вывод |

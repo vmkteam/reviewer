@@ -70,6 +70,7 @@ func (a *App) registerHandlers() {
 	a.echo.GET("/v1/prompt/:projectKey/", h.GetPrompt, lg)
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
+	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
 }
 
 // registerDebugHandlers adds /debug/pprof handlers into a.echo instance.

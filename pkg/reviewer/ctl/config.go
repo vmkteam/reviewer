@@ -4,11 +4,12 @@ import "errors"
 
 // Config holds all CLI flags and CI environment variables for reviewctl.
 type Config struct {
-	Key     string
-	URL     string
-	Model   string
-	Dir     string
-	Verbose bool
+	Key       string
+	URL       string
+	PublicURL string // browser-facing base URL for links in MR comments; falls back to URL
+	Model     string
+	Dir       string
+	Verbose   bool
 
 	// GitLab MR comment settings.
 	GitLabURL   string
@@ -52,4 +53,13 @@ func (c *Config) Validate(cmd string) error {
 // HasGitLab returns true if GitLab MR comment settings are configured.
 func (c *Config) HasGitLab() bool {
 	return c.GitLabToken != "" && c.GitLabURL != "" && c.MRIID != "" && c.ProjectID != ""
+}
+
+// PublicBaseURL returns the browser-facing base URL for links shown to users,
+// falling back to URL when PublicURL is not set.
+func (c *Config) PublicBaseURL() string {
+	if c.PublicURL != "" {
+		return c.PublicURL
+	}
+	return c.URL
 }
