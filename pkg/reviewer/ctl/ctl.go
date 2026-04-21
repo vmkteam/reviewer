@@ -163,7 +163,7 @@ func (c *Controller) postComments(ctx context.Context, draft *rest.ReviewDraft, 
 }
 
 func (c *Controller) reviewURL(reviewID int) string {
-	return fmt.Sprintf("%s/reviews/%d/", strings.TrimRight(c.cfg.URL, "/"), reviewID)
+	return fmt.Sprintf("%s/reviews/%d/", strings.TrimRight(c.cfg.PublicBaseURL(), "/"), reviewID)
 }
 
 func (c *Controller) generateHTML(draft *rest.ReviewDraft, mdFiles map[string]string) {

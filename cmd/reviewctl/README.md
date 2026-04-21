@@ -18,7 +18,8 @@ All flags have environment variable defaults for backward compatibility with CI.
 | Flag | Env Variable | Default | Description |
 |------|-------------|---------|-------------|
 | `--key` | `$PROJECT_KEY` | *required* | Project key (UUID) |
-| `--url` | `$REVIEWSRV_URL` | *required* | Reviewer server URL |
+| `--url` | `$REVIEWSRV_URL` | *required* | Reviewer server URL used for API calls from CI |
+| `--public-url` | `$REVIEWSRV_PUBLIC_URL` | *falls back to `--url`* | Browser-facing base URL used in MR comment links |
 | `--model` | `$REVIEW_MODEL` | `opus` | Claude model |
 | `--dir` | `$REVIEW_DIR` | `.` | Working directory with review files |
 | `--verbose` | `$REVIEW_VERBOSE` | `false` | Verbose output |

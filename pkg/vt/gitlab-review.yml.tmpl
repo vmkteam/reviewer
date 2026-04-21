@@ -40,6 +40,7 @@ pipeline-ok:
   rules: $[[ inputs.stub_rules ]]
 
 # Required CI/CD variables: PROJECT_KEY, ANTHROPIC_API_KEY, REVIEWSRV_URL
+# Optional: REVIEWSRV_PUBLIC_URL — browser-facing URL for MR comment links when it differs from REVIEWSRV_URL (e.g. internal vs public DNS).
 $[[ inputs.job_name ]]:
   image: $[[ inputs.dockerimage ]]
   stage: $[[ inputs.stage ]]
