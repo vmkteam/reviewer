@@ -3,6 +3,11 @@ name: Publish Docker image
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to build (e.g. v0.2.1)'
+        required: true
 
 jobs:
   push_to_registries:
@@ -15,7 +20,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v5
         with:
-          fetch-tags: true
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -37,6 +42,8 @@ jobs:
           images: |
             vmkteam/reviewer
             ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v6
@@ -46,4 +53,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ inputs.tag || github.ref_name }}
