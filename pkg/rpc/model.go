@@ -24,21 +24,21 @@ type ModelInfo struct {
 	OutputTokens int     `json:"outputTokens"`
 	CostUsd      float64 `json:"costUsd"`
 
-	CacheCreationInputTokens int    `json:"cacheCreationInputTokens,omitempty"`
-	CacheReadInputTokens     int    `json:"cacheReadInputTokens,omitempty"`
-	NumTurns                 int    `json:"numTurns,omitempty"`
-	SessionID                string `json:"sessionId,omitempty"`
-	DurationAPIMs            int    `json:"durationApiMs,omitempty"`
+	CacheCreationInputTokens int    `json:"cacheCreationInputTokens"`
+	CacheReadInputTokens     int    `json:"cacheReadInputTokens"`
+	NumTurns                 int    `json:"numTurns"`
+	SessionID                string `json:"sessionId"`
+	DurationAPIMs            int    `json:"durationApiMs"`
 
-	DurationTotalMs          int `json:"durationTotalMs,omitempty"`
-	CacheCreate1hInputTokens int `json:"cacheCreate1hInputTokens,omitempty"`
-	CacheCreate5mInputTokens int `json:"cacheCreate5mInputTokens,omitempty"`
-	WebSearchRequests        int `json:"webSearchRequests,omitempty"`
-	WebFetchRequests         int `json:"webFetchRequests,omitempty"`
+	DurationTotalMs          int `json:"durationTotalMs"`
+	CacheCreate1hInputTokens int `json:"cacheCreate1hInputTokens"`
+	CacheCreate5mInputTokens int `json:"cacheCreate5mInputTokens"`
+	WebSearchRequests        int `json:"webSearchRequests"`
+	WebFetchRequests         int `json:"webFetchRequests"`
 
-	StopReason     string `json:"stopReason,omitempty"`
-	TerminalReason string `json:"terminalReason,omitempty"`
-	IsError        bool   `json:"isError,omitempty"`
+	StopReason     string `json:"stopReason"`
+	TerminalReason string `json:"terminalReason"`
+	IsError        bool   `json:"isError"`
 
 	Models map[string]ModelUseStats `json:"models,omitempty"`
 }
@@ -47,8 +47,8 @@ type ModelInfo struct {
 type ModelUseStats struct {
 	InputTokens              int     `json:"inputTokens"`
 	OutputTokens             int     `json:"outputTokens"`
-	CacheReadInputTokens     int     `json:"cacheReadInputTokens,omitempty"`
-	CacheCreationInputTokens int     `json:"cacheCreationInputTokens,omitempty"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
 	CostUsd                  float64 `json:"costUsd"`
 }
 

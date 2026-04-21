@@ -105,7 +105,7 @@
             <div
               class="text-sm text-fg-secondary"
               :title="modelBreakdown.length > 0
-                ? modelBreakdown.map(m => `${m.name}: ${formatCost(m.costUsd)} · in ${m.inputTokens.toLocaleString()} / out ${m.outputTokens.toLocaleString()}`).join('\n')
+                ? modelBreakdown.map(m => `${m.name}: ${formatCost(m.costUsd)} · in ${(m.inputTokens ?? 0).toLocaleString()} / out ${(m.outputTokens ?? 0).toLocaleString()}`).join('\n')
                 : undefined"
             >
               {{ review.modelInfo.model }}<span
@@ -116,13 +116,13 @@
           </div>
           <div>
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Tokens</div>
-            <div class="text-sm text-fg-secondary tabular-nums">{{ review.modelInfo.inputTokens.toLocaleString() }} / {{ review.modelInfo.outputTokens.toLocaleString() }}</div>
+            <div class="text-sm text-fg-secondary tabular-nums">{{ (review.modelInfo.inputTokens ?? 0).toLocaleString() }} / {{ (review.modelInfo.outputTokens ?? 0).toLocaleString() }}</div>
           </div>
           <div v-if="cacheHitRatio !== null">
             <div class="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-1">Cache hit</div>
             <div
               class="text-sm text-fg-secondary tabular-nums"
-              :title="`read ${review.modelInfo.cacheReadInputTokens.toLocaleString()} · write ${review.modelInfo.cacheCreationInputTokens.toLocaleString()} · input ${review.modelInfo.inputTokens.toLocaleString()}`"
+              :title="`read ${(review.modelInfo.cacheReadInputTokens ?? 0).toLocaleString()} · write ${(review.modelInfo.cacheCreationInputTokens ?? 0).toLocaleString()} · input ${(review.modelInfo.inputTokens ?? 0).toLocaleString()}`"
             >{{ (cacheHitRatio * 100).toFixed(1) }}%</div>
           </div>
           <div>
@@ -403,16 +403,21 @@ const modelBreakdown = computed<Array<{ name: string } & ModelUseStats>>(() => {
 const cacheHitRatio = computed<number | null>(() => {
   const mi = review.value?.modelInfo
   if (!mi) return null
-  const total = mi.cacheReadInputTokens + mi.cacheCreationInputTokens + mi.inputTokens
+  const read = mi.cacheReadInputTokens ?? 0
+  const write = mi.cacheCreationInputTokens ?? 0
+  const input = mi.inputTokens ?? 0
+  const total = read + write + input
   if (total === 0) return null
-  return mi.cacheReadInputTokens / total
+  return read / total
 })
 
 const durationDiffersFromApi = computed(() => {
   const mi = review.value?.modelInfo
   if (!mi) return false
-  if (mi.durationTotalMs === 0 || mi.durationApiMs === 0) return false
-  return Math.abs(mi.durationTotalMs - mi.durationApiMs) >= 1000
+  const total = mi.durationTotalMs ?? 0
+  const api = mi.durationApiMs ?? 0
+  if (total === 0 || api === 0) return false
+  return Math.abs(total - api) >= 1000
 })
 
 const orderedReviewFiles = computed(() => {
