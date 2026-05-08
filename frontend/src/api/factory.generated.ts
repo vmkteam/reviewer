@@ -23,7 +23,8 @@ export interface IIssueFilters {
   severity?: string,
   issueType?: string,
   reviewType?: string,
-  statusIds: Array<number>
+  statusIds: Array<number>,
+  excludeArchived: boolean
 }
 
 export interface IIssueStats {
@@ -98,6 +99,10 @@ export interface IReview {
   effortMinutes?: number,
   aiSlopScore?: number,
   lastVersionReviewId?: number
+}
+
+export interface IReviewArchiveAcceptedRisksParams {
+  projectId: number
 }
 
 export interface IReviewCountIssuesByProjectParams {
@@ -215,6 +220,7 @@ export class IssueFilters implements IIssueFilters {
   issueType?: string = null;
   reviewType?: string = null;
   statusIds: Array<number> = null;
+  excludeArchived: boolean = false;
 }
 
 export class IssueStats implements IIssueStats {
@@ -301,6 +307,12 @@ export class Review implements IReview {
   effortMinutes?: number = 0;
   aiSlopScore?: number = 0;
   lastVersionReviewId?: number = 0;
+}
+
+export class ReviewArchiveAcceptedRisksParams implements IReviewArchiveAcceptedRisksParams {
+  static entityName = "reviewarchiveacceptedrisksparams";
+
+  projectId: number = 0;
 }
 
 export class ReviewCountIssuesByProjectParams implements IReviewCountIssuesByProjectParams {
@@ -429,6 +441,13 @@ export const factory = (send: any) => ({
     }
   },
   review: {
+    /**
+     * ArchiveAcceptedRisks archives all non-archived accepted risks (FP + Ignored)
+for a project by setting archivedAt = NOW(). Returns count of archived issues.
+     */
+    archiveAcceptedRisks(params: IReviewArchiveAcceptedRisksParams): Promise<number> {
+      return send('review.ArchiveAcceptedRisks', params)
+    },
     /**
      * Count returns count of reviews for a project.
      */

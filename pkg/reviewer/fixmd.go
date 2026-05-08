@@ -16,19 +16,28 @@ type fixField struct {
 	Body  string
 }
 
-var fixMarkdownTemplate = template.Must(template.New("fix_markdown").Funcs(template.FuncMap{
-	"inc":   func(i int) int { return i + 1 },
-	"upper": strings.ToUpper,
-	"deref": derefString,
-	"trim":  strings.TrimSpace,
-	"field": func(label, body string) fixField { return fixField{Label: label, Body: body} },
-	// neutralise injected closing tags so attacker cannot escape <untrusted-data>.
-	// zero-width space between the name and '>' breaks the literal match while
-	// keeping the visual output identical.
-	"safeBody": func(s string) string {
-		return strings.ReplaceAll(s, "</untrusted-data>", "</untrusted-data\u200b>")
-	},
-}).Parse(fixMarkdownTmpl))
+// markdownTemplateFuncs returns the shared FuncMap used by issue-list markdown
+// templates (fix prompts, project instructions). Lives here so the security-
+// sensitive safeBody helper has exactly one definition.
+func markdownTemplateFuncs() template.FuncMap {
+	return template.FuncMap{
+		"inc":   func(i int) int { return i + 1 },
+		"upper": strings.ToUpper,
+		"deref": derefString,
+		"trim":  strings.TrimSpace,
+		"field": func(label, body string) fixField { return fixField{Label: label, Body: body} },
+		// neutralise injected closing tags so attacker cannot escape <untrusted-data>.
+		// zero-width space between the name and '>' breaks the literal match while
+		// keeping the visual output identical.
+		"safeBody": func(s string) string {
+			return strings.ReplaceAll(s, "</untrusted-data>", "</untrusted-data\u200b>")
+		},
+	}
+}
+
+var fixMarkdownTemplate = template.Must(template.New("fix_markdown").
+	Funcs(markdownTemplateFuncs()).
+	Parse(fixMarkdownTmpl))
 
 type fixMarkdownData struct {
 	Review  *Review

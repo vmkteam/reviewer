@@ -14,13 +14,13 @@
                 <Attribute Name="File" DBName="file" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
                 <Attribute Name="Lines" DBName="lines" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
                 <Attribute Name="Comment" DBName="comment" DBType="varchar" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
-
                 <Attribute Name="ProcessedAt" DBName="processedAt" DBType="timestamptz" GoType="*time.Time" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="UserID" DBName="userId" DBType="int4" GoType="*int" PK="false" FK="User" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="LocalID" DBName="localId" DBType="varchar" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="16"></Attribute>
                 <Attribute Name="SuggestedFix" DBName="suggestedFix" DBType="text" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="ArchivedAt" DBName="archivedAt" DBType="timestamptz" GoType="*time.Time" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
             </Attributes>
             <Searches>
                 <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
@@ -35,6 +35,7 @@
                 <Search Name="StatusIDs" AttrName="StatusID" SearchType="SEARCHTYPE_ARRAY"></Search>
                 <Search Name="ReviewFileReviewType" AttrName="ReviewFile.ReviewType" SearchType="SEARCHTYPE_EQUALS"></Search>
                 <Search Name="ReviewProjectID" AttrName="Review.ProjectID" SearchType="SEARCHTYPE_EQUALS"></Search>
+                <Search Name="ArchivedAtIsNull" AttrName="ArchivedAt" SearchType="SEARCHTYPE_NULL"></Search>
             </Searches>
         </Entity>
         <Entity Name="ReviewFile" Namespace="review" Table="reviewFiles">

@@ -236,6 +236,26 @@ func (s ReviewService) CountIssuesByProject(ctx context.Context, projectId int, 
 	return count, nil
 }
 
+// ArchiveAcceptedRisks archives all non-archived accepted risks (FP + Ignored)
+// for a project by setting archivedAt = NOW(). Returns count of archived issues.
+//
+//zenrpc:projectId Project ID
+//zenrpc:return int
+//zenrpc:404 Not Found
+//zenrpc:500 Internal Error
+func (s ReviewService) ArchiveAcceptedRisks(ctx context.Context, projectId int) (int, error) {
+	if err := s.checkProject(ctx, projectId); err != nil {
+		return 0, err
+	}
+
+	count, err := s.rm.ArchiveProjectAcceptedRisks(ctx, projectId)
+	if err != nil {
+		return 0, newInternalError(err)
+	}
+
+	return count, nil
+}
+
 // Feedback updates resolution status for an issue.
 //
 //zenrpc:issueId Issue ID

@@ -12,12 +12,12 @@ import (
 
 var RPC = struct {
 	AppService    struct{ Version string }
-	ReviewService struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }
+	ReviewService struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, ArchiveAcceptedRisks, Feedback, SetComment string }
 }{
 	AppService: struct{ Version string }{
 		Version: "version",
 	},
-	ReviewService: struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, Feedback, SetComment string }{
+	ReviewService: struct{ Projects, ProjectByID, Get, Count, GetByID, Issues, CountIssues, IssuesByProject, CountIssuesByProject, ArchiveAcceptedRisks, Feedback, SetComment string }{
 		Projects:             "projects",
 		ProjectByID:          "projectbyid",
 		Get:                  "get",
@@ -27,6 +27,7 @@ var RPC = struct {
 		CountIssues:          "countissues",
 		IssuesByProject:      "issuesbyproject",
 		CountIssuesByProject: "countissuesbyproject",
+		ArchiveAcceptedRisks: "archiveacceptedrisks",
 		Feedback:             "feedback",
 		SetComment:           "setcomment",
 	},
@@ -719,6 +720,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									"type": smd.Integer,
 								},
 							},
+							{
+								Name: "excludeArchived",
+								Type: smd.Boolean,
+							},
 						},
 					},
 				},
@@ -841,6 +846,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									"type": smd.Integer,
 								},
 							},
+							{
+								Name: "excludeArchived",
+								Type: smd.Boolean,
+							},
 						},
 					},
 				},
@@ -888,6 +897,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								Items: map[string]string{
 									"type": smd.Integer,
 								},
+							},
+							{
+								Name: "excludeArchived",
+								Type: smd.Boolean,
 							},
 						},
 					},
@@ -1018,6 +1031,10 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									"type": smd.Integer,
 								},
 							},
+							{
+								Name: "excludeArchived",
+								Type: smd.Boolean,
+							},
 						},
 					},
 				},
@@ -1028,6 +1045,25 @@ func (ReviewService) SMD() smd.ServiceInfo {
 				Errors: map[int]string{
 					500: "Internal Error",
 					404: "Not Found",
+				},
+			},
+			"ArchiveAcceptedRisks": {
+				Description: `ArchiveAcceptedRisks archives all non-archived accepted risks (FP + Ignored)
+for a project by setting archivedAt = NOW(). Returns count of archived issues.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "projectId",
+						Description: `Project ID`,
+						Type:        smd.Integer,
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `int`,
+					Type:        smd.Integer,
+				},
+				Errors: map[int]string{
+					404: "Not Found",
+					500: "Internal Error",
 				},
 			},
 			"Feedback": {
@@ -1250,6 +1286,25 @@ func (s ReviewService) Invoke(ctx context.Context, method string, params json.Ra
 		}
 
 		resp.Set(s.CountIssuesByProject(ctx, args.ProjectId, args.Filters))
+
+	case RPC.ReviewService.ArchiveAcceptedRisks:
+		var args = struct {
+			ProjectId int `json:"projectId"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"projectId"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.ArchiveAcceptedRisks(ctx, args.ProjectId))
 
 	case RPC.ReviewService.Feedback:
 		var args = struct {

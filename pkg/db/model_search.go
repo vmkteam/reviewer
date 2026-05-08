@@ -152,6 +152,7 @@ type IssueSearch struct {
 	StatusID             *int
 	LocalID              *string
 	SuggestedFix         *string
+	ArchivedAt           *time.Time
 	IDs                  []int
 	IssueTypeILike       *string
 	TitleILike           *string
@@ -164,6 +165,7 @@ type IssueSearch struct {
 	StatusIDs            []int
 	ReviewFileReviewType *string
 	ReviewProjectID      *int
+	ArchivedAtIsNull     *bool
 }
 
 func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
@@ -221,6 +223,9 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	if is.SuggestedFix != nil {
 		is.where(query, Tables.Issue.Alias, Columns.Issue.SuggestedFix, is.SuggestedFix)
 	}
+	if is.ArchivedAt != nil {
+		is.where(query, Tables.Issue.Alias, Columns.Issue.ArchivedAt, is.ArchivedAt)
+	}
 	if len(is.IDs) > 0 {
 		Filter{Columns.Issue.ID, is.IDs, SearchTypeArray, false}.Apply(query)
 	}
@@ -256,6 +261,9 @@ func (is *IssueSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if is.ReviewProjectID != nil {
 		Filter{"review.projectId", *is.ReviewProjectID, SearchTypeEquals, false}.Apply(query)
+	}
+	if is.ArchivedAtIsNull != nil {
+		Filter{Columns.Issue.ArchivedAt, *is.ArchivedAtIsNull, SearchTypeNull, false}.Apply(query)
 	}
 
 	is.apply(query)

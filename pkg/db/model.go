@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID string
 	}
 	Issue struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt string
 
 		ReviewFile, Review, User string
 	}
@@ -54,7 +54,7 @@ var Columns = struct {
 		StatusID:       "statusId",
 	},
 	Issue: struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt string
 
 		ReviewFile, Review, User string
 	}{
@@ -75,6 +75,7 @@ var Columns = struct {
 		StatusID:     "statusId",
 		LocalID:      "localId",
 		SuggestedFix: "suggestedFix",
+		ArchivedAt:   "archivedAt",
 
 		ReviewFile: "ReviewFile",
 		Review:     "Review",
@@ -289,6 +290,7 @@ type Issue struct {
 	StatusID     int        `pg:"statusId,use_zero"`
 	LocalID      *string    `pg:"localId"`
 	SuggestedFix *string    `pg:"suggestedFix"`
+	ArchivedAt   *time.Time `pg:"archivedAt"`
 
 	ReviewFile *ReviewFile `pg:"fk:reviewFileId,rel:has-one"`
 	Review     *Review     `pg:"fk:reviewId,rel:has-one"`
