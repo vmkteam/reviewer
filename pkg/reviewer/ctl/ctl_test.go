@@ -22,6 +22,7 @@ import (
 type testClaudeRunner struct {
 	fixturePath string
 	beforeRun   func() error
+	sessionID   string // captured from SetSession
 }
 
 func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, error) {
@@ -37,7 +38,8 @@ func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, erro
 	return ParseClaudeResult(data)
 }
 
-func (r *testClaudeRunner) Name() string { return RunnerClaude }
+func (r *testClaudeRunner) Name() string                { return RunnerClaude }
+func (r *testClaudeRunner) SetSession(sessionID string) { r.sessionID = sessionID }
 
 // setupTestDir copies testdata files to a temp dir for upload tests.
 func setupTestDir(t *testing.T) string {

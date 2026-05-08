@@ -10,6 +10,24 @@ import (
 	"time"
 )
 
+// CI metadata placeholders left in the prompt body and the review.json
+// skeleton when the corresponding cfg field is empty (local-run scenarios).
+// The prompt instructs the model to resolve these from git context.
+const (
+	PlaceholderSourceBranch = "%SOURCE_BRANCH%"
+	PlaceholderTargetBranch = "%TARGET_BRANCH%"
+	PlaceholderTitle        = "%TITLE%"
+	PlaceholderExternalID   = "%EXTERNAL_ID%"
+	PlaceholderCommitHash   = "%COMMIT_HASH%"
+	PlaceholderAuthor       = "%AUTHOR%"
+
+	// PlaceholderMRTitle is an alias kept for prompts authored before %TITLE%
+	// became canonical. New code should use PlaceholderTitle.
+	//
+	// Deprecated: use PlaceholderTitle.
+	PlaceholderMRTitle = "%MR_TITLE%"
+)
+
 // PromptClient fetches review prompts from the reviewsrv server.
 type PromptClient struct {
 	httpClient *http.Client
@@ -57,17 +75,19 @@ func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey st
 // values are skipped so the placeholder survives — the model is told to
 // resolve unresolved placeholders from git context (see promptReviewJSON).
 func SubstituteVariables(prompt string, cfg *Config) string {
-	pairs := []string{}
-	addIf := func(key, value string) {
-		if value != "" {
-			pairs = append(pairs, key, value)
+	all := []string{
+		PlaceholderSourceBranch, cfg.SourceBranch,
+		PlaceholderTargetBranch, cfg.TargetBranch,
+		PlaceholderMRTitle, cfg.MRTitle,
+		PlaceholderTitle, cfg.MRTitle,
+		PlaceholderExternalID, cfg.ExternalID,
+	}
+	pairs := make([]string, 0, len(all))
+	for i := 0; i < len(all); i += 2 {
+		if all[i+1] != "" {
+			pairs = append(pairs, all[i], all[i+1])
 		}
 	}
-	addIf("%SOURCE_BRANCH%", cfg.SourceBranch)
-	addIf("%TARGET_BRANCH%", cfg.TargetBranch)
-	addIf("%MR_TITLE%", cfg.MRTitle)
-	addIf("%TITLE%", cfg.MRTitle)
-	addIf("%EXTERNAL_ID%", cfg.ExternalID)
 	if len(pairs) == 0 {
 		return prompt
 	}

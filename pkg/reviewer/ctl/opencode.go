@@ -40,6 +40,13 @@ type ExecOpenCodeRunner struct {
 // Name implements ReviewRunner.
 func (r *ExecOpenCodeRunner) Name() string { return RunnerOpenCode }
 
+// SetSession implements ReviewRunner. Sets SessionID for `-s <id>` and clears
+// ContinueSession so the explicit ID wins over auto-continue.
+func (r *ExecOpenCodeRunner) SetSession(sessionID string) {
+	r.SessionID = sessionID
+	r.ContinueSession = false
+}
+
 func (r *ExecOpenCodeRunner) buildArgs() []string {
 	args := []string{
 		"run",

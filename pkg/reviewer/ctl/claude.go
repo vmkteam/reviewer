@@ -208,6 +208,17 @@ func primaryModelName(modelUsage map[string]ClaudeModelUse, fallback string) str
 type ReviewRunner interface {
 	Run(ctx context.Context, prompt string) (*ClaudeResult, error)
 	Name() string
+	// SetSession switches the runner to resume an existing CLI session on the
+	// next Run, reusing the prompt cache. Used by the auto-retry path to send
+	// a small Step 2 follow-up without re-billing the full original prompt.
+	//
+	// Security: today the only caller (Controller.runStep2Recovery) feeds in a
+	// sessionID returned by the previous Run — i.e. runner-supplied, never
+	// user-supplied. If a future caller exposes sessionID through a CLI flag
+	// or HTTP parameter, validate against the local CLI's session-id format
+	// (claude: alphanumeric+dash; opencode: `ses_` prefix + base32) before
+	// passing it here, or risk argv-injection through e.g. `; rm -rf /`.
+	SetSession(sessionID string)
 }
 
 // Compile-time assertions that both runners satisfy ReviewRunner.
@@ -227,6 +238,13 @@ type ExecClaudeRunner struct {
 
 // Name implements ReviewRunner.
 func (r *ExecClaudeRunner) Name() string { return RunnerClaude }
+
+// SetSession implements ReviewRunner. Sets SessionID for --resume and clears
+// ContinueSession so the explicit ID wins over auto-continue.
+func (r *ExecClaudeRunner) SetSession(sessionID string) {
+	r.SessionID = sessionID
+	r.ContinueSession = false
+}
 
 func (r *ExecClaudeRunner) buildArgs() []string {
 	args := []string{

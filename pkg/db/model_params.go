@@ -47,3 +47,39 @@ type ModelUseStats struct {
 	CacheCreationInputTokens int     `json:"cacheCreationInputTokens,omitempty"`
 	CostUsd                  float64 `json:"costUsd"`
 }
+
+// Add accumulates numeric counters and Models map entries from o into m.
+// Used by the Step 2 retry path to merge first-pass + retry billable spend
+// into one record so dashboards reflect total cost. Identity-shaped fields
+// (Model, Runner, SessionID, StopReason, TerminalReason, IsError) are left
+// alone — they describe the primary run.
+func (m *ReviewModelInfo) Add(o ReviewModelInfo) {
+	m.InputTokens += o.InputTokens
+	m.OutputTokens += o.OutputTokens
+	m.CostUsd += o.CostUsd
+	m.CacheCreationInputTokens += o.CacheCreationInputTokens
+	m.CacheReadInputTokens += o.CacheReadInputTokens
+	m.NumTurns += o.NumTurns
+	m.DurationAPIMs += o.DurationAPIMs
+	m.DurationTotalMs += o.DurationTotalMs
+	m.CacheCreate1hInputTokens += o.CacheCreate1hInputTokens
+	m.CacheCreate5mInputTokens += o.CacheCreate5mInputTokens
+	m.WebSearchRequests += o.WebSearchRequests
+	m.WebFetchRequests += o.WebFetchRequests
+
+	if len(o.Models) == 0 {
+		return
+	}
+	if m.Models == nil {
+		m.Models = make(map[string]ModelUseStats, len(o.Models))
+	}
+	for name, s := range o.Models {
+		cur := m.Models[name]
+		cur.InputTokens += s.InputTokens
+		cur.OutputTokens += s.OutputTokens
+		cur.CacheReadInputTokens += s.CacheReadInputTokens
+		cur.CacheCreationInputTokens += s.CacheCreationInputTokens
+		cur.CostUsd += s.CostUsd
+		m.Models[name] = cur
+	}
+}
