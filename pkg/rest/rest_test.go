@@ -39,7 +39,7 @@ func callInstructionsHandler(t *testing.T, h *Handler, param string) (*httptest.
 	return rec, err
 }
 
-func TestProjectInstructionsMarkdown_BadRequest(t *testing.T) {
+func TestDBProjectInstructionsMarkdown_BadRequest(t *testing.T) {
 	h := newTestHandler(t)
 
 	cases := []struct {
@@ -63,7 +63,7 @@ func TestProjectInstructionsMarkdown_BadRequest(t *testing.T) {
 	}
 }
 
-func TestProjectInstructionsMarkdown_NotFound(t *testing.T) {
+func TestDBProjectInstructionsMarkdown_NotFound(t *testing.T) {
 	h := newTestHandler(t)
 
 	// 999999 is never a real project id in the test DB.
@@ -73,7 +73,7 @@ func TestProjectInstructionsMarkdown_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, httpErr.Code)
 }
 
-func TestProjectInstructionsMarkdown_OK(t *testing.T) {
+func TestDBProjectInstructionsMarkdown_OK(t *testing.T) {
 	dbc, _ := dbtest.Setup(t)
 	pr, prCl := dbtest.Project(t, dbc, nil, dbtest.WithProjectRelations, dbtest.WithFakeProject)
 	t.Cleanup(prCl)
@@ -97,7 +97,7 @@ func TestProjectInstructionsMarkdown_OK(t *testing.T) {
 	_ = reviewer.ErrProjectNotFound
 }
 
-func TestProjectInstructionsMarkdown_RendersIgnoredIssues(t *testing.T) {
+func TestDBProjectInstructionsMarkdown_RendersIgnoredIssues(t *testing.T) {
 	// End-to-end happy path: project has ignored issues → markdown body
 	// contains their titles, grouped by reviewType. This is the real-world
 	// use case (project accumulated accepted risks); the empty-project
