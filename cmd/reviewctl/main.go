@@ -42,6 +42,7 @@ func main() {
 	pf.StringVar(&cfg.DiffBaseSHA, "diff-base-sha", os.Getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA"), "diff base SHA")
 	pf.StringVar(&cfg.SessionID, "session", "", "Claude session ID for --resume (reuses prompt cache)")
 	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
+	pf.BoolVar(&cfg.DebugUpload, "debug-upload", os.Getenv("REVIEW_DEBUG_UPLOAD") == "true", "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -107,7 +108,7 @@ func envDefault(key, fallback string) string {
 	return fallback
 }
 
-func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ClaudeRunner, error) {
+func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
 	model := cfg.Model
 	switch cfg.Runner {
 	case "", ctl.RunnerClaude:

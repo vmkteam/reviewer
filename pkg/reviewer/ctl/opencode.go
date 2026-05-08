@@ -20,7 +20,7 @@ import (
 const exportTimeout = 60 * time.Second
 
 // ExecOpenCodeRunner runs the real opencode CLI subprocess.
-// Implements ClaudeRunner so the rest of the controller stays runner-agnostic.
+// Implements ReviewRunner so the rest of the controller stays runner-agnostic.
 //
 // opencode emits a stream of NDJSON events (step_start / text / step_finish / tool).
 // This runner aggregates them into the same ClaudeResult shape that downstream
@@ -33,7 +33,7 @@ type ExecOpenCodeRunner struct {
 	Log             *slog.Logger
 }
 
-// Name implements ClaudeRunner.
+// Name implements ReviewRunner.
 func (r *ExecOpenCodeRunner) Name() string { return RunnerOpenCode }
 
 // Run executes `opencode run --format json` and parses the streamed events.

@@ -144,6 +144,51 @@ func TestController_Review(t *testing.T) {
 	assert.True(t, uploadedReview, "review was not uploaded")
 }
 
+func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
+	var debugUploaded bool
+	var debugError string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/v1/prompt/") && r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("prompt"))
+			return
+		}
+		if strings.HasPrefix(path, "/v1/upload/debug/") && r.Method == http.MethodPost {
+			if !assert.NoError(t, r.ParseMultipartForm(32<<20)) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			debugUploaded = true
+			if v := r.MultipartForm.Value["errorMsg"]; len(v) > 0 {
+				debugError = v[0]
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"x","url":"/v1/debug/storage/x/"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	// review.json with empty reviewType — reproduces the CI failure.
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "review.json"),
+		[]byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "claude-output.json"), []byte(`{"type":"result"}`), 0o644))
+
+	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: RunnerClaude}
+	runner := &testClaudeRunner{fixturePath: "testdata/claude_result.json"}
+	c := NewController(cfg, runner, slog.Default())
+
+	err := c.Review(context.Background())
+	require.Error(t, err, "Review must fail on invalid review.json")
+	assert.Contains(t, err.Error(), "invalid reviewType")
+	assert.True(t, debugUploaded, "debug bundle must be uploaded on failure")
+	assert.Contains(t, debugError, "files[0]", "errorMsg must carry verbose validation detail")
+}
+
 func TestController_Comment(t *testing.T) {
 	var commentPosted bool
 

@@ -199,13 +199,22 @@ func primaryModelName(modelUsage map[string]ClaudeModelUse, fallback string) str
 	return best
 }
 
-// ClaudeRunner abstracts the review LLM subprocess for testability.
+// ReviewRunner abstracts the review LLM subprocess for testability.
 // Name returns a stable runner identifier (RunnerClaude | RunnerOpenCode) that
 // gets stored alongside model usage in db.ReviewModelInfo.
-type ClaudeRunner interface {
+//
+// Implementations normalize their CLI output into ClaudeResult — the name
+// stays for backwards compatibility with persisted records.
+type ReviewRunner interface {
 	Run(ctx context.Context, prompt string) (*ClaudeResult, error)
 	Name() string
 }
+
+// Compile-time assertions that both runners satisfy ReviewRunner.
+var (
+	_ ReviewRunner = (*ExecClaudeRunner)(nil)
+	_ ReviewRunner = (*ExecOpenCodeRunner)(nil)
+)
 
 // ExecClaudeRunner runs the real claude CLI subprocess.
 type ExecClaudeRunner struct {
@@ -216,7 +225,7 @@ type ExecClaudeRunner struct {
 	Log             *slog.Logger
 }
 
-// Name implements ClaudeRunner.
+// Name implements ReviewRunner.
 func (r *ExecClaudeRunner) Name() string { return RunnerClaude }
 
 // Run executes claude --print --output-format json and parses the result.

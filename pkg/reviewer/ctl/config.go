@@ -2,7 +2,7 @@ package ctl
 
 import "errors"
 
-// Runner identifiers used by Config.Runner, ClaudeRunner.Name and db.ReviewModelInfo.Runner.
+// Runner identifiers used by Config.Runner, ReviewRunner.Name and db.ReviewModelInfo.Runner.
 const (
 	RunnerClaude   = "claude"
 	RunnerOpenCode = "opencode"
@@ -36,6 +36,10 @@ type Config struct {
 	// Claude session for --resume (reuses prompt cache).
 	SessionID       string
 	ContinueSession bool // use --continue instead of --resume
+
+	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
+	// On failure, the upload happens regardless of this flag.
+	DebugUpload bool
 
 	// For comment subcommand.
 	ReviewID int

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/debug"
 	"reviewsrv/pkg/rpc"
 	"reviewsrv/pkg/vt"
 
@@ -33,28 +34,34 @@ type Config struct {
 	}
 }
 
+// debugBufferCapacity caps the in-memory ring of recent reviewctl runs.
+// Sized for a handful of CI failures — bigger values just waste RAM.
+const debugBufferCapacity = 10
+
 type App struct {
 	embedlog.Logger
-	appName string
-	version string
-	cfg     Config
-	db      db.DB
-	dbc     *pg.DB
-	mon     *monitor.Monitor
-	echo    *echo.Echo
-	vtsrv   *zenrpc.Server
-	srv     *zenrpc.Server
+	appName      string
+	version      string
+	cfg          Config
+	db           db.DB
+	dbc          *pg.DB
+	mon          *monitor.Monitor
+	echo         *echo.Echo
+	vtsrv        *zenrpc.Server
+	srv          *zenrpc.Server
+	debugStorage *debug.Storage
 }
 
 func New(appName, version string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *App {
 	a := &App{
-		appName: appName,
-		version: version,
-		cfg:     cfg,
-		db:      db,
-		dbc:     dbc,
-		echo:    appkit.NewEcho(),
-		Logger:  sl,
+		appName:      appName,
+		version:      version,
+		cfg:          cfg,
+		db:           db,
+		dbc:          dbc,
+		echo:         appkit.NewEcho(),
+		Logger:       sl,
+		debugStorage: debug.New(debugBufferCapacity),
 	}
 
 	// add services
