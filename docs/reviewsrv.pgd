@@ -180,6 +180,7 @@
       <column name="userId" type="integer"></column>
       <column name="suggestedFix" type="text"></column>
       <column name="statusId" type="integer" nullable="false"></column>
+      <column name="archivedAt" type="timestamptz"></column>
       <pk name="issues_pkey">
         <column name="issueId"></column>
       </pk>
@@ -233,6 +234,9 @@
     </index>
     <index name="ix_issues_userId" table="issues" using="btree">
       <column name="userId"></column>
+    </index>
+    <index name="IX_issues_archivedAt" table="issues">
+      <column name="archivedAt"></column>
     </index>
     <index name="ix_projects_statusId" table="projects" using="btree">
       <column name="statusId"></column>

@@ -327,6 +327,73 @@ func (rm *ReviewManager) ListIssuesByProject(ctx context.Context, search *IssueS
 	return NewIssues(dbIssues), nil
 }
 
+// ProjectInstructionsIssueLimit caps how many ignored issues feed the
+// project-instructions markdown. Long-lived projects accumulate accepted risks
+// over months; without a cap the markdown can exceed practical LLM context
+// budgets and balloon server memory. Caller signals truncation via the
+// returned bool when the cap is hit — recommend the user archive older risks.
+const ProjectInstructionsIssueLimit = 500
+
+// ListIgnoredIssuesByProject returns up to ProjectInstructionsIssueLimit
+// non-archived ignored issues for a project, sorted by issueId ASC. The bool
+// is true when the limit was hit (more issues exist beyond the returned page).
+func (rm *ReviewManager) ListIgnoredIssuesByProject(ctx context.Context, projectID int) (Issues, bool, error) {
+	search := &IssueSearch{
+		ProjectID:       &projectID,
+		StatusIDs:       []int{db.StatusIgnored},
+		ExcludeArchived: true,
+	}
+	// Fetch limit+1 to detect overflow without a separate COUNT roundtrip.
+	dbIssues, err := rm.repo.IssuesByFilters(ctx, search.ToDB(), db.NewPager(0, ProjectInstructionsIssueLimit+1),
+		rm.repo.FullIssue(),
+		db.WithSort(db.SortField{Column: db.Columns.Issue.ID, Direction: db.SortAsc}),
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	truncated := len(dbIssues) > ProjectInstructionsIssueLimit
+	if truncated {
+		dbIssues = dbIssues[:ProjectInstructionsIssueLimit]
+	}
+	return NewIssues(dbIssues), truncated, nil
+}
+
+// RenderProjectInstructionsMarkdown returns the project-instructions markdown
+// for a project, listing its non-archived ignored issues for an LLM to
+// synthesize project-specific review rules.
+// Returns ErrProjectNotFound if the project is missing.
+func (rm *ReviewManager) RenderProjectInstructionsMarkdown(ctx context.Context, pm *ProjectManager, projectID int) (string, error) {
+	project, err := pm.GetByID(ctx, projectID)
+	if err != nil {
+		return "", err
+	}
+	if project == nil {
+		return "", ErrProjectNotFound
+	}
+
+	issues, truncated, err := rm.ListIgnoredIssuesByProject(ctx, projectID)
+	if err != nil {
+		return "", err
+	}
+
+	return BuildInstructionsMarkdown(project, issues, truncated)
+}
+
+// ArchiveProjectAcceptedRisks marks all non-archived FP/Ignored issues of a
+// project as archived (sets archivedAt = NOW()). Returns count of archived rows.
+func (rm *ReviewManager) ArchiveProjectAcceptedRisks(ctx context.Context, projectID int) (int, error) {
+	result, err := rm.Conn().ExecContext(ctx, `
+		UPDATE issues SET "archivedAt" = NOW()
+		WHERE "reviewId" IN (SELECT "reviewId" FROM reviews WHERE "projectId" = ?)
+		  AND "statusId" IN (?, ?)
+		  AND "archivedAt" IS NULL
+	`, projectID, db.StatusFalsePositive, db.StatusIgnored)
+	if err != nil {
+		return 0, fmt.Errorf("archive accepted risks: %w", err)
+	}
+	return result.RowsAffected(), nil
+}
+
 // IssueByID returns an issue by ID.
 func (rm *ReviewManager) IssueByID(ctx context.Context, issueID int) (*Issue, error) {
 	issue, err := rm.repo.IssueByID(ctx, issueID)

@@ -341,10 +341,11 @@ func (f *ReviewFilters) ToDomain(projectID int, fromReviewID *int) *reviewer.Rev
 
 // IssueFilters — фильтры для списка issues.
 type IssueFilters struct {
-	Severity   *string `json:"severity"`
-	IssueType  *string `json:"issueType"`
-	ReviewType *string `json:"reviewType"`
-	StatusIDs  []int   `json:"statusIds"`
+	Severity        *string `json:"severity"`
+	IssueType       *string `json:"issueType"`
+	ReviewType      *string `json:"reviewType"`
+	StatusIDs       []int   `json:"statusIds"`
+	ExcludeArchived bool    `json:"excludeArchived"`
 }
 
 // ToDomain converts RPC filters to a domain IssueSearch scoped to a review.
@@ -357,6 +358,7 @@ func (f *IssueFilters) ToDomain(reviewID int) *reviewer.IssueSearch {
 		s.IssueType = f.IssueType
 		s.ReviewType = f.ReviewType
 		s.StatusIDs = f.StatusIDs
+		s.ExcludeArchived = f.ExcludeArchived
 	}
 	return s
 }
@@ -371,6 +373,7 @@ func (f *IssueFilters) ToDomainByProject(projectID int) *reviewer.IssueSearch {
 		s.IssueType = f.IssueType
 		s.ReviewType = f.ReviewType
 		s.StatusIDs = f.StatusIDs
+		s.ExcludeArchived = f.ExcludeArchived
 	}
 	return s
 }

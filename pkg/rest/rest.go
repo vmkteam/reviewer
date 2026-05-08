@@ -167,6 +167,31 @@ func (h *Handler) ReviewFixMarkdown(c echo.Context) error {
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
 }
 
+// ProjectInstructionsMarkdown returns a markdown document listing non-archived
+// ignored issues of a project, intended to be consumed by an LLM that synthesizes
+// project-specific review rules.
+// URL contract: /v1/rpc/project-instructions-<id>.md — .md suffix is required.
+func (h *Handler) ProjectInstructionsMarkdown(c echo.Context) error {
+	param := c.Param("id")
+	if !strings.HasSuffix(param, ".md") {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid project id")
+	}
+	projectID, err := strconv.Atoi(strings.TrimSuffix(param, ".md"))
+	if err != nil || projectID <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid project id")
+	}
+
+	md, err := h.rm.RenderProjectInstructionsMarkdown(c.Request().Context(), h.pm, projectID)
+	if err != nil {
+		if errors.Is(err, reviewer.ErrProjectNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "project not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
+}
+
 // GetPrompt returns the assembled review prompt for the given project.
 func (h *Handler) GetPrompt(c echo.Context) error {
 	project, err := h.projectByKey(c)

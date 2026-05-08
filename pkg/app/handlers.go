@@ -72,6 +72,7 @@ func (a *App) registerHandlers() {
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
+	a.echo.GET("/v1/rpc/project-instructions-:id", h.ProjectInstructionsMarkdown, lg)
 
 	dh := debug.NewHandler(a.debugStorage, a.Log())
 	// Per-route 20MB limit overrides the global 2MB cap so opencode NDJSON streams fit.

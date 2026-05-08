@@ -85,6 +85,38 @@
 
     <!-- Accepted Risks tab -->
     <div v-if="activeTab === 'risks'">
+      <!-- Header actions -->
+      <div class="flex items-center justify-end gap-2 mb-3">
+        <button
+          type="button"
+          :disabled="!risksCount"
+          :title="!risksCount
+            ? 'No ignored issues to synthesize from'
+            : 'Copy LLM prompt that builds project instructions from ignored issues'"
+          @click="copyProjectInstructions"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-edge text-fg-secondary hover:text-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-fg-secondary disabled:hover:border-edge transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          {{ instructionsCopied ? 'Copied!' : 'Get Project Instructions' }}
+        </button>
+        <button
+          type="button"
+          :disabled="!risksCount || archiving"
+          :title="!risksCount
+            ? 'No accepted risks to archive'
+            : `Archive ${risksCount} accepted risk${risksCount !== 1 ? 's' : ''} (hides from tab; original status preserved)`"
+          @click="archiveRisks"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-edge text-fg-secondary hover:text-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-fg-secondary disabled:hover:border-edge transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+          </svg>
+          {{ archiving ? 'Archiving…' : 'Archive shown' }}
+        </button>
+      </div>
+
       <!-- Loading risks -->
       <div v-if="risksLoading && risks.length === 0" class="flex justify-center py-12">
         <div class="spinner" />
@@ -130,6 +162,7 @@ import IssuesTable from '../components/IssuesTable.vue'
 import { StatusFalsePositive, StatusIgnored } from '../constants/status'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
 import { useClipboard } from '../composables/useClipboard'
+import { buildProjectInstructionsPrompt } from '../composables/useFixPrompt'
 
 const { setProject: setProjectCrumb } = useBreadcrumbs()
 
@@ -166,7 +199,33 @@ const risksLoaded = ref(false)
 const expandedIssueId = ref<number | null>(null)
 const { copied: copiedIssueId, copy: copyText } = useClipboard<number>()
 
-const risksFilters = { statusIds: [StatusFalsePositive, StatusIgnored] }
+const risksFilters = { statusIds: [StatusFalsePositive, StatusIgnored], excludeArchived: true }
+const { copied: instructionsCopied, copy: copyInstructionsText } = useClipboard()
+const archiving = ref(false)
+
+function copyProjectInstructions() {
+  copyInstructionsText(buildProjectInstructionsPrompt(projectId))
+}
+
+async function archiveRisks() {
+  if (archiving.value || !risksCount.value) return
+  const n = risksCount.value
+  if (!window.confirm(`Archive ${n} accepted risk${n !== 1 ? 's' : ''}? This hides them from this tab. Original status is preserved.`)) return
+
+  archiving.value = true
+  try {
+    await api.review.archiveAcceptedRisks({ projectId })
+    risks.value = []
+    risksCount.value = 0
+    risksHasMore.value = false
+    // Drop loaded flag so re-entering the tab refetches and picks up newly accepted risks.
+    risksLoaded.value = false
+  } catch (e) {
+    risksError.value = e instanceof Error ? e.message : 'Failed to archive accepted risks'
+  } finally {
+    archiving.value = false
+  }
+}
 
 function copyIssueLink(issueId: number) {
   const issue = risks.value.find(i => i.issueId === issueId)

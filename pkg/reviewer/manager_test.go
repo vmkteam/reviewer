@@ -480,3 +480,77 @@ func TestDBReviewManager_RenderFixMarkdown(t *testing.T) {
 		assert.ErrorIs(t, err, ErrReviewNotFound)
 	})
 }
+
+func TestDBReviewManager_ArchiveProjectAcceptedRisks(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	ensureIssueStatuses(t, dbc)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	rv := createTestReview(t, rm, pr)
+	cleanupReview(t, dbc, rv)
+
+	ctx := t.Context()
+	ids := collectIssueIDs(rv)
+	require.GreaterOrEqual(t, len(ids), 3, "fixture must have at least 3 issues")
+
+	fpID, ignoredID, validID := ids[0], ids[1], ids[2]
+
+	_, err := rm.SetFeedback(ctx, fpID, db.StatusFalsePositive)
+	require.NoError(t, err)
+	_, err = rm.SetFeedback(ctx, ignoredID, db.StatusIgnored)
+	require.NoError(t, err)
+	_, err = rm.SetFeedback(ctx, validID, db.StatusValid)
+	require.NoError(t, err)
+
+	// Snapshot pre-archive content of FP issue to verify nothing else changes.
+	fpBefore, err := rm.IssueByID(ctx, fpID)
+	require.NoError(t, err)
+
+	count, err := rm.ArchiveProjectAcceptedRisks(ctx, pr.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count, "FP and Ignored should be archived; Valid untouched")
+
+	t.Run("FP and Ignored have ArchivedAt set", func(t *testing.T) {
+		fp, err := rm.IssueByID(ctx, fpID)
+		require.NoError(t, err)
+		require.NotNil(t, fp.ArchivedAt)
+		assert.Equal(t, db.StatusFalsePositive, fp.StatusID, "original status preserved")
+
+		ig, err := rm.IssueByID(ctx, ignoredID)
+		require.NoError(t, err)
+		require.NotNil(t, ig.ArchivedAt)
+		assert.Equal(t, db.StatusIgnored, ig.StatusID, "original status preserved")
+	})
+
+	t.Run("Valid issue untouched", func(t *testing.T) {
+		v, err := rm.IssueByID(ctx, validID)
+		require.NoError(t, err)
+		assert.Nil(t, v.ArchivedAt)
+		assert.Equal(t, db.StatusValid, v.StatusID)
+	})
+
+	t.Run("content fields untouched", func(t *testing.T) {
+		fp, err := rm.IssueByID(ctx, fpID)
+		require.NoError(t, err)
+		assert.Equal(t, fpBefore.Title, fp.Title)
+		assert.Equal(t, fpBefore.Severity, fp.Severity)
+		assert.Equal(t, fpBefore.Description, fp.Description)
+		assert.Equal(t, fpBefore.Content, fp.Content)
+	})
+
+	t.Run("second call is idempotent", func(t *testing.T) {
+		count2, err := rm.ArchiveProjectAcceptedRisks(ctx, pr.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, count2, "no rows match archivedAt IS NULL after first archive")
+	})
+
+	t.Run("ListIgnoredIssuesByProject excludes archived", func(t *testing.T) {
+		got, truncated, err := rm.ListIgnoredIssuesByProject(ctx, pr.ID)
+		require.NoError(t, err)
+		assert.False(t, truncated)
+		for _, iss := range got {
+			assert.NotEqual(t, ignoredID, iss.ID, "archived ignored issue must not appear")
+		}
+	})
+}

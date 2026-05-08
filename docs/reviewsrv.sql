@@ -108,6 +108,7 @@ CREATE TABLE "issues" (
 	"userId" integer,
 	"suggestedFix" text,
 	"statusId" integer NOT NULL,
+	"archivedAt" timestamptz,
 	CONSTRAINT "issues_pkey" PRIMARY KEY("issueId")
 );
 
@@ -148,6 +149,10 @@ CREATE INDEX "IX_issues_reviewFileId" ON "issues" (
 
 CREATE INDEX "ix_issues_userId" ON "issues" (
 	"userId"
+);
+
+CREATE INDEX "IX_issues_archivedAt" ON "issues" (
+	"archivedAt"
 );
 
 CREATE INDEX "ix_projects_statusId" ON "projects" (
