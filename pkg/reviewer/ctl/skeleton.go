@@ -16,6 +16,10 @@ import (
 // schema-drafting step where the model tends to invent its own field
 // names (branch/baseBranch/tasks/summary, files[].path/reviewer, etc).
 // The runner is then told to fill it in place.
+//
+// CI metadata fields fall back to placeholders (`%TITLE%`, `%COMMIT_HASH%`,
+// etc.) when reviewctl runs outside CI without env vars. The prompt instructs
+// the model to resolve those from git context — see promptReviewJSON.
 func WriteReviewSkeleton(dir string, cfg *Config) error {
 	files := make([]rest.ReviewDraftFile, len(reviewer.ReviewTypes))
 	for i, rt := range reviewer.ReviewTypes {
@@ -24,12 +28,12 @@ func WriteReviewSkeleton(dir string, cfg *Config) error {
 
 	draft := rest.ReviewDraft{
 		Review: rest.ReviewDraftMeta{
-			ExternalID:   cfg.ExternalID,
-			Title:        cfg.MRTitle,
-			CommitHash:   cfg.Commit,
-			SourceBranch: cfg.SourceBranch,
-			TargetBranch: cfg.TargetBranch,
-			Author:       cfg.Author,
+			ExternalID:   orPlaceholder(cfg.ExternalID, "%EXTERNAL_ID%"),
+			Title:        orPlaceholder(cfg.MRTitle, "%TITLE%"),
+			CommitHash:   orPlaceholder(cfg.Commit, "%COMMIT_HASH%"),
+			SourceBranch: orPlaceholder(cfg.SourceBranch, "%SOURCE_BRANCH%"),
+			TargetBranch: orPlaceholder(cfg.TargetBranch, "%TARGET_BRANCH%"),
+			Author:       orPlaceholder(cfg.Author, "%AUTHOR%"),
 			// Sentinel that matches the prompt's "leave as-is" example.
 			CreatedAt: time.Unix(0, 0).UTC(),
 		},
@@ -45,4 +49,11 @@ func WriteReviewSkeleton(dir string, cfg *Config) error {
 		return fmt.Errorf("write review skeleton: %w", err)
 	}
 	return nil
+}
+
+func orPlaceholder(value, placeholder string) string {
+	if value == "" {
+		return placeholder
+	}
+	return value
 }

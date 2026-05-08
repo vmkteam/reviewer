@@ -53,3 +53,22 @@ func TestWriteReviewSkeleton_OverwritesExisting(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, draft.Files, 5, "skeleton must replace the stale file")
 }
+
+func TestWriteReviewSkeleton_EmptyCfgFallsBackToPlaceholders(t *testing.T) {
+	// Local-run scenario: no CI env vars, so cfg fields are empty. Skeleton
+	// must emit `%TITLE%` etc. so the model can resolve them from git context
+	// per the prompt's instructions, instead of leaving "" which the model
+	// is told to leave alone.
+	dir := t.TempDir()
+	require.NoError(t, WriteReviewSkeleton(dir, &Config{}))
+
+	draft, err := ReadReviewJSON(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, "%EXTERNAL_ID%", draft.Review.ExternalID)
+	assert.Equal(t, "%TITLE%", draft.Review.Title)
+	assert.Equal(t, "%COMMIT_HASH%", draft.Review.CommitHash)
+	assert.Equal(t, "%SOURCE_BRANCH%", draft.Review.SourceBranch)
+	assert.Equal(t, "%TARGET_BRANCH%", draft.Review.TargetBranch)
+	assert.Equal(t, "%AUTHOR%", draft.Review.Author)
+}

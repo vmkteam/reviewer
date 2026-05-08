@@ -53,14 +53,23 @@ func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey st
 	return string(body), nil
 }
 
-// SubstituteVariables replaces CI placeholders in the prompt text.
+// SubstituteVariables replaces CI placeholders in the prompt text. Empty
+// values are skipped so the placeholder survives — the model is told to
+// resolve unresolved placeholders from git context (see promptReviewJSON).
 func SubstituteVariables(prompt string, cfg *Config) string {
-	r := strings.NewReplacer(
-		"%SOURCE_BRANCH%", cfg.SourceBranch,
-		"%TARGET_BRANCH%", cfg.TargetBranch,
-		"%MR_TITLE%", cfg.MRTitle,
-		"%TITLE%", cfg.MRTitle,
-		"%EXTERNAL_ID%", cfg.ExternalID,
-	)
-	return r.Replace(prompt)
+	pairs := []string{}
+	addIf := func(key, value string) {
+		if value != "" {
+			pairs = append(pairs, key, value)
+		}
+	}
+	addIf("%SOURCE_BRANCH%", cfg.SourceBranch)
+	addIf("%TARGET_BRANCH%", cfg.TargetBranch)
+	addIf("%MR_TITLE%", cfg.MRTitle)
+	addIf("%TITLE%", cfg.MRTitle)
+	addIf("%EXTERNAL_ID%", cfg.ExternalID)
+	if len(pairs) == 0 {
+		return prompt
+	}
+	return strings.NewReplacer(pairs...).Replace(prompt)
 }
