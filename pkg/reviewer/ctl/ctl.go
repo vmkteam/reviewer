@@ -17,11 +17,11 @@ type Controller struct {
 	prompt *PromptClient
 	upload *UploadClient
 	gitlab *GitLabClient
-	runner ClaudeRunner
+	runner ReviewRunner
 }
 
 // NewController creates a new Controller from Config.
-func NewController(cfg *Config, runner ClaudeRunner, log *slog.Logger) *Controller {
+func NewController(cfg *Config, runner ReviewRunner, log *slog.Logger) *Controller {
 	c := &Controller{
 		cfg:    cfg,
 		log:    log,
@@ -38,9 +38,21 @@ func NewController(cfg *Config, runner ClaudeRunner, log *slog.Logger) *Controll
 }
 
 // Review runs the full review flow: fetch prompt → Claude → parse → upload → comment → HTML.
-func (c *Controller) Review(ctx context.Context) error {
+func (c *Controller) Review(ctx context.Context) (retErr error) {
 	start := time.Now()
 	c.log.InfoContext(ctx, "starting review", "projectKey", c.cfg.Key, "model", c.cfg.Model)
+
+	// Publish artifacts to the debug ring buffer when something failed (or always
+	// with --debug-upload). The detached context survives ctx cancellation so a
+	// killed CI job still has a chance to ship its bundle.
+	defer func() {
+		if retErr == nil && !c.cfg.DebugUpload {
+			return
+		}
+		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		c.uploadDebugBundle(upCtx, retErr)
+	}()
 
 	// 1. Fetch prompt.
 	prompt, err := c.prompt.FetchPrompt(ctx, c.cfg.URL, c.cfg.Key)
@@ -58,11 +70,13 @@ func (c *Controller) Review(ctx context.Context) error {
 	// 3. Parse review.json.
 	draft, err := ReadReviewJSON(c.cfg.Dir)
 	if err != nil {
+		c.logReviewJSONFailure(ctx, draft)
 		return fmt.Errorf("read review: %w", err)
 	}
 
 	// 4. Merge cost data from Claude result.
 	draft.Review.ModelInfo = result.ToModelInfo(c.cfg.Model)
+	draft.Review.ModelInfo.Runner = c.runner.Name()
 	draft.Review.DurationMs = result.DurationMs
 
 	// 5. Fill MR metadata from CI env.
@@ -84,6 +98,59 @@ func (c *Controller) Review(ctx context.Context) error {
 
 	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second))
 	return nil
+}
+
+// uploadDebugBundle publishes on-disk artifacts so a failed CI run can be
+// inspected via /v1/debug/storage/. Best-effort — never returns an error.
+// The empty-bundle short-circuit lives in UploadClient.UploadDebugBundle.
+func (c *Controller) uploadDebugBundle(ctx context.Context, runErr error) {
+	files := CollectDebugArtifacts(c.cfg.Dir)
+
+	meta := DebugMeta{
+		MRIid:        c.cfg.MRIID,
+		ExternalID:   c.cfg.ExternalID,
+		Runner:       c.cfg.Runner,
+		Model:        c.cfg.Model,
+		SourceBranch: c.cfg.SourceBranch,
+		TargetBranch: c.cfg.TargetBranch,
+		CommitHash:   c.cfg.Commit,
+	}
+	if runErr != nil {
+		meta.ErrorMsg = runErr.Error()
+	}
+
+	url, err := c.upload.UploadDebugBundle(ctx, c.cfg.URL, c.cfg.Key, meta, files)
+	if err != nil {
+		c.log.WarnContext(ctx, "failed to upload debug bundle", "err", err)
+		return
+	}
+	if url == "" {
+		return
+	}
+
+	full := strings.TrimRight(c.cfg.PublicBaseURL(), "/") + url
+	c.log.InfoContext(ctx, "debug bundle uploaded", "url", full, "files", len(files))
+}
+
+func (c *Controller) logReviewJSONFailure(ctx context.Context, draft *rest.ReviewDraft) {
+	if draft == nil {
+		c.log.WarnContext(ctx, "review.json could not be parsed")
+		return
+	}
+	reviewTypes := make([]string, len(draft.Files))
+	for i, f := range draft.Files {
+		reviewTypes[i] = f.ReviewType
+	}
+	fileTypes := make([]string, len(draft.Issues))
+	for i, iss := range draft.Issues {
+		fileTypes[i] = iss.LocalID + "=" + iss.FileType
+	}
+	c.log.WarnContext(ctx, "review.json validation failed",
+		"files", len(draft.Files),
+		"issues", len(draft.Issues),
+		"reviewTypes", reviewTypes,
+		"fileTypes", fileTypes,
+	)
 }
 
 // Upload uploads local review.json + R*.md files to the server.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -24,7 +25,8 @@ func main() {
 	pf.StringVar(&cfg.Key, "key", os.Getenv("PROJECT_KEY"), "project key (UUID)")
 	pf.StringVar(&cfg.URL, "url", os.Getenv("REVIEWSRV_URL"), "reviewsrv server URL (used for API calls from CI)")
 	pf.StringVar(&cfg.PublicURL, "public-url", os.Getenv("REVIEWSRV_PUBLIC_URL"), "browser-facing base URL for links in MR comments (defaults to --url)")
-	pf.StringVar(&cfg.Model, "model", envDefault("REVIEW_MODEL", "opus"), "Claude model")
+	pf.StringVar(&cfg.Runner, "runner", envDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner CLI: claude | opencode")
+	pf.StringVar(&cfg.Model, "model", os.Getenv("REVIEW_MODEL"), "model name (optional; if empty, runner CLI picks its own default)")
 	pf.StringVar(&cfg.Dir, "dir", envDefault("REVIEW_DIR", "."), "working directory with review files")
 	pf.BoolVar(&cfg.Verbose, "verbose", os.Getenv("REVIEW_VERBOSE") == "true", "verbose output")
 	pf.StringVar(&cfg.GitLabURL, "gitlab-url", os.Getenv("CI_API_V4_URL"), "GitLab API URL")
@@ -40,6 +42,7 @@ func main() {
 	pf.StringVar(&cfg.DiffBaseSHA, "diff-base-sha", os.Getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA"), "diff base SHA")
 	pf.StringVar(&cfg.SessionID, "session", "", "Claude session ID for --resume (reuses prompt cache)")
 	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
+	pf.BoolVar(&cfg.DebugUpload, "debug-upload", os.Getenv("REVIEW_DEBUG_UPLOAD") == "true", "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -49,7 +52,10 @@ func main() {
 				return err
 			}
 			log := slog.Default()
-			runner := &ctl.ExecClaudeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}
+			runner, err := buildRunner(cfg, log)
+			if err != nil {
+				return err
+			}
 			c := ctl.NewController(cfg, runner, log)
 			return c.Review(cmd.Context())
 		},
@@ -100,4 +106,22 @@ func envDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
+	model := cfg.Model
+	switch cfg.Runner {
+	case "", ctl.RunnerClaude:
+		// Claude CLI's own default drifts between sonnet/opus across releases —
+		// we pin opus here to keep review cost and quality predictable.
+		// opencode stays unpinned: its default is set in the user's opencode config.
+		if model == "" {
+			model = "opus"
+		}
+		return &ctl.ExecClaudeRunner{Model: model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+	case ctl.RunnerOpenCode:
+		return &ctl.ExecOpenCodeRunner{Model: model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+	default:
+		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s)", cfg.Runner, ctl.RunnerClaude, ctl.RunnerOpenCode)
+	}
 }

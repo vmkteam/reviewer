@@ -11,11 +11,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"reviewsrv/pkg/db"
 )
 
 const claudeResultType = "result"
+
+// runnerTimeout caps how long a single runner subprocess may take.
+// Guards against a hung CLI (claude/opencode) stalling a CI job indefinitely
+// when the caller passed a context without a deadline.
+const runnerTimeout = 30 * time.Minute
 
 // ClaudeResult represents the JSON output from claude --output-format json.
 type ClaudeResult struct {
@@ -133,6 +139,7 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 // ToModelInfo converts ClaudeResult to db.ReviewModelInfo.
 // The fallback model name (CLI -m flag) is replaced by the full model id
 // from modelUsage when available — e.g. "opus" → "claude-opus-4-7".
+// The Runner field is left empty; callers set it from the runner that produced cr.
 func (cr *ClaudeResult) ToModelInfo(model string) db.ReviewModelInfo {
 	mi := db.ReviewModelInfo{
 		Model:        primaryModelName(cr.ModelUsage, model),
@@ -192,10 +199,22 @@ func primaryModelName(modelUsage map[string]ClaudeModelUse, fallback string) str
 	return best
 }
 
-// ClaudeRunner abstracts the Claude CLI subprocess for testability.
-type ClaudeRunner interface {
+// ReviewRunner abstracts the review LLM subprocess for testability.
+// Name returns a stable runner identifier (RunnerClaude | RunnerOpenCode) that
+// gets stored alongside model usage in db.ReviewModelInfo.
+//
+// Implementations normalize their CLI output into ClaudeResult — the name
+// stays for backwards compatibility with persisted records.
+type ReviewRunner interface {
 	Run(ctx context.Context, prompt string) (*ClaudeResult, error)
+	Name() string
 }
+
+// Compile-time assertions that both runners satisfy ReviewRunner.
+var (
+	_ ReviewRunner = (*ExecClaudeRunner)(nil)
+	_ ReviewRunner = (*ExecOpenCodeRunner)(nil)
+)
 
 // ExecClaudeRunner runs the real claude CLI subprocess.
 type ExecClaudeRunner struct {
@@ -206,13 +225,22 @@ type ExecClaudeRunner struct {
 	Log             *slog.Logger
 }
 
+// Name implements ReviewRunner.
+func (r *ExecClaudeRunner) Name() string { return RunnerClaude }
+
 // Run executes claude --print --output-format json and parses the result.
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
+	defer cancel()
+
 	args := []string{
 		"--print",
 		"--output-format", "json",
-		"--model", r.Model,
 		"--permission-mode", "bypassPermissions",
+	}
+
+	if r.Model != "" {
+		args = append(args, "--model", r.Model)
 	}
 
 	if r.ContinueSession {

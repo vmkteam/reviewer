@@ -131,6 +131,7 @@ func TestClaudeResultToModelInfo(t *testing.T) {
 
 	// Full model id from modelUsage overrides the CLI alias.
 	assert.Equal(t, "claude-opus-4-6", mi.Model)
+	assert.Empty(t, mi.Runner, "Runner left empty; caller sets it from ReviewRunner.Name()")
 	assert.Equal(t, 2680, mi.InputTokens)
 	assert.Equal(t, 6636, mi.OutputTokens)
 	assert.InDelta(t, 2.0875265, mi.CostUsd, 0.0001)
@@ -171,4 +172,9 @@ func TestClaudeResultToModelInfo_FallbackWhenNoModelUsage(t *testing.T) {
 	cr := &ClaudeResult{Type: claudeResultType, Subtype: "success"}
 
 	assert.Equal(t, "opus", cr.ToModelInfo("opus").Model)
+}
+
+func TestRunnerName(t *testing.T) {
+	assert.Equal(t, RunnerClaude, (&ExecClaudeRunner{}).Name())
+	assert.Equal(t, RunnerOpenCode, (&ExecOpenCodeRunner{}).Name())
 }

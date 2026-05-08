@@ -2,11 +2,18 @@ package ctl
 
 import "errors"
 
+// Runner identifiers used by Config.Runner, ReviewRunner.Name and db.ReviewModelInfo.Runner.
+const (
+	RunnerClaude   = "claude"
+	RunnerOpenCode = "opencode"
+)
+
 // Config holds all CLI flags and CI environment variables for reviewctl.
 type Config struct {
 	Key       string
 	URL       string
 	PublicURL string // browser-facing base URL for links in MR comments; falls back to URL
+	Runner    string // "claude" (default) or "opencode"
 	Model     string
 	Dir       string
 	Verbose   bool
@@ -29,6 +36,10 @@ type Config struct {
 	// Claude session for --resume (reuses prompt cache).
 	SessionID       string
 	ContinueSession bool // use --continue instead of --resume
+
+	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
+	// On failure, the upload happens regardless of this flag.
+	DebugUpload bool
 
 	// For comment subcommand.
 	ReviewID int

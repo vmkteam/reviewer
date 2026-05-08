@@ -46,18 +46,20 @@ type ReviewDraftIssue struct {
 }
 
 // Validate checks that all reviewType and fileType values are valid.
+// Errors include the offending index and value so the failure points at the
+// specific element, not just the field name.
 func (rd ReviewDraft) Validate() error {
-	for _, f := range rd.Files {
+	for i, f := range rd.Files {
 		if !reviewer.IsValidReviewType(f.ReviewType) {
-			return fmt.Errorf("invalid reviewType: %s", f.ReviewType)
+			return fmt.Errorf("invalid reviewType at files[%d]: %q", i, f.ReviewType)
 		}
 	}
-	for _, iss := range rd.Issues {
+	for i, iss := range rd.Issues {
 		if !reviewer.IsValidReviewType(iss.FileType) {
-			return fmt.Errorf("invalid fileType: %s", iss.FileType)
+			return fmt.Errorf("invalid fileType at issues[%d] (localId=%s): %q", i, iss.LocalID, iss.FileType)
 		}
 		if !reviewer.IsValidSeverity(iss.Severity) {
-			return fmt.Errorf("invalid severity: %s", iss.Severity)
+			return fmt.Errorf("invalid severity at issues[%d] (localId=%s): %q", i, iss.LocalID, iss.Severity)
 		}
 	}
 	return nil

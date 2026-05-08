@@ -9,6 +9,7 @@ type ReviewFileIssueStats struct {
 }
 type ReviewModelInfo struct {
 	Model        string  `json:"model"`
+	Runner       string  `json:"runner,omitempty"` // "claude" | "opencode" — which CLI produced the result
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUsd      float64 `json:"costUsd"`

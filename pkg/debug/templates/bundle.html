@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>reviewsrv debug · {{.Bundle.ID}}</title>
+<style>
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem; color: #222; }
+h1 { font-size: 1.2rem; }
+h2 { font-size: 1rem; margin-top: 1.5rem; }
+.meta { display: grid; grid-template-columns: 9rem 1fr; gap: 0.3rem 1rem; font-size: 0.9rem; }
+.meta dt { color: #666; }
+.meta dd { margin: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; margin-top: 0.5rem; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; }
+th { background: #f6f8fa; font-weight: 600; }
+.err { background: #fff5f5; padding: 0.6rem; border-left: 3px solid #b00020; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85em; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; }
+a { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.empty { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+<p><a href="{{storageURL}}">&larr; all bundles</a></p>
+<h1>Bundle <code>{{.Bundle.ID}}</code></h1>
+
+<dl class="meta">
+  <dt>Timestamp</dt>     <dd><code>{{.Bundle.Timestamp.Format "2006-01-02 15:04:05 MST"}}</code></dd>
+  <dt>Project key</dt>   <dd><code>{{.Bundle.ProjectKey}}</code></dd>
+  <dt>MR IID</dt>        <dd>{{or .Bundle.MRIid "—"}}</dd>
+  <dt>External ID</dt>   <dd>{{or .Bundle.ExternalID "—"}}</dd>
+  <dt>Runner</dt>        <dd>{{.Bundle.Runner}}</dd>
+  <dt>Model</dt>         <dd><code>{{.Bundle.Model}}</code></dd>
+  <dt>Source branch</dt> <dd><code>{{.Bundle.SourceBranch}}</code></dd>
+  <dt>Target branch</dt> <dd><code>{{.Bundle.TargetBranch}}</code></dd>
+  <dt>Commit</dt>        <dd><code>{{.Bundle.CommitHash}}</code></dd>
+</dl>
+
+{{if .Bundle.ErrorMsg}}
+<h2>Error</h2>
+<div class="err">{{.Bundle.ErrorMsg}}</div>
+{{end}}
+
+<h2>Artifacts</h2>
+{{if .Files}}
+<table>
+  <thead>
+    <tr><th>Name</th><th>Size</th></tr>
+  </thead>
+  <tbody>
+  {{range .Files}}
+    <tr>
+      <td><a href="{{storageURL}}{{$.Bundle.ID}}/{{.Name}}">{{.Name}}</a></td>
+      <td><code>{{.Size}}</code></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty">No artifacts captured.</p>
+{{end}}
+</body>
+</html>

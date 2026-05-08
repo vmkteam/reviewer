@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 
 	"reviewsrv/frontend"
+	"reviewsrv/pkg/debug"
 	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/slack"
 
@@ -71,6 +72,13 @@ func (a *App) registerHandlers() {
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
+
+	dh := debug.NewHandler(a.debugStorage, a.Log())
+	// Per-route 20MB limit overrides the global 2MB cap so opencode NDJSON streams fit.
+	a.echo.POST("/v1/upload/debug/:projectKey/", dh.Upload, lg, middleware.BodyLimit("20M"))
+	a.echo.GET(debug.StoragePathPrefix, dh.List, lg)
+	a.echo.GET(debug.StoragePathPrefix+":id/", dh.Bundle, lg)
+	a.echo.GET(debug.StoragePathPrefix+":id/:filename", dh.File, lg)
 }
 
 // registerDebugHandlers adds /debug/pprof handlers into a.echo instance.

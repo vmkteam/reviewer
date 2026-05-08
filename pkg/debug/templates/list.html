@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>reviewsrv debug · recent runs</title>
+<style>
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem; color: #222; }
+h1 { font-size: 1.2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; vertical-align: top; }
+th { background: #f6f8fa; font-weight: 600; }
+tr:hover td { background: #fafbfc; }
+.err { color: #b00020; }
+.muted { color: #888; font-size: 0.85em; }
+.empty { color: #888; font-style: italic; padding: 2rem 0; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; }
+a { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>reviewsrv debug — last {{len .Bundles}} runs</h1>
+{{if .Bundles}}
+<table>
+  <thead>
+    <tr>
+      <th>When</th>
+      <th>Project</th>
+      <th>MR</th>
+      <th>Branch</th>
+      <th>Runner</th>
+      <th>Model</th>
+      <th>Files</th>
+      <th>Error</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Bundles}}
+    <tr>
+      <td><a href="{{storageURL}}{{.ID}}/"><code>{{.Timestamp.Format "2006-01-02 15:04:05"}}</code></a></td>
+      <td><code>{{shortKey .ProjectKey}}</code></td>
+      <td>{{or .MRIid .ExternalID}}</td>
+      <td><code>{{.SourceBranch}}</code> → <code>{{.TargetBranch}}</code></td>
+      <td>{{.Runner}}</td>
+      <td><code>{{.Model}}</code></td>
+      <td>{{len .Files}}</td>
+      <td class="err">{{preview .ErrorMsg 80}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty">No bundles captured yet.</p>
+{{end}}
+</body>
+</html>
