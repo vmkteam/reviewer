@@ -19,6 +19,13 @@ func main() {
 		Use:          "reviewctl",
 		Short:        "AI code review orchestrator",
 		SilenceUsage: true,
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			// Skip the banner for `version` so `reviewctl version` stays scriptable.
+			if cmd.Name() == "version" {
+				return
+			}
+			slog.Default().InfoContext(cmd.Context(), "reviewctl", "version", version)
+		},
 	}
 
 	pf := rootCmd.PersistentFlags()
