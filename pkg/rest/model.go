@@ -9,26 +9,32 @@ import (
 )
 
 type ReviewDraft struct {
-	Review struct {
-		ExternalID    string             `json:"externalId"`
-		Title         string             `json:"title"`
-		Description   string             `json:"description"`
-		CommitHash    string             `json:"commitHash"`
-		SourceBranch  string             `json:"sourceBranch"`
-		TargetBranch  string             `json:"targetBranch"`
-		Author        string             `json:"author"`
-		CreatedAt     time.Time          `json:"createdAt"`
-		DurationMs    int                `json:"durationMs"`
-		EffortMinutes int                `json:"effortMinutes"`
-		AiSlopScore   float32            `json:"aiSlopScore"`
-		ModelInfo     db.ReviewModelInfo `json:"modelInfo"`
-	} `json:"review"`
-	Files []struct {
-		ReviewType string `json:"reviewType"`
-		Summary    string `json:"summary"`
-		IsAccepted bool   `json:"isAccepted"`
-	} `json:"files"`
+	Review ReviewDraftMeta    `json:"review"`
+	Files  []ReviewDraftFile  `json:"files"`
 	Issues []ReviewDraftIssue `json:"issues"`
+}
+
+// ReviewDraftMeta is the per-review metadata block.
+type ReviewDraftMeta struct {
+	ExternalID    string             `json:"externalId"`
+	Title         string             `json:"title"`
+	Description   string             `json:"description"`
+	CommitHash    string             `json:"commitHash"`
+	SourceBranch  string             `json:"sourceBranch"`
+	TargetBranch  string             `json:"targetBranch"`
+	Author        string             `json:"author"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	DurationMs    int                `json:"durationMs"`
+	EffortMinutes int                `json:"effortMinutes"`
+	AiSlopScore   float32            `json:"aiSlopScore"`
+	ModelInfo     db.ReviewModelInfo `json:"modelInfo"`
+}
+
+// ReviewDraftFile is one of the five review groups (architecture, code, …).
+type ReviewDraftFile struct {
+	ReviewType string `json:"reviewType"`
+	Summary    string `json:"summary"`
+	IsAccepted bool   `json:"isAccepted"`
 }
 
 // ReviewDraftIssue represents a single issue in the review draft.

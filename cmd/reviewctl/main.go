@@ -116,18 +116,12 @@ func envDefault(key, fallback string) string {
 }
 
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
-	model := cfg.Model
+	cfg.ResolveModel()
 	switch cfg.Runner {
 	case "", ctl.RunnerClaude:
-		// Claude CLI's own default drifts between sonnet/opus across releases —
-		// we pin opus here to keep review cost and quality predictable.
-		// opencode stays unpinned: its default is set in the user's opencode config.
-		if model == "" {
-			model = "opus"
-		}
-		return &ctl.ExecClaudeRunner{Model: model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &ctl.ExecClaudeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
 	case ctl.RunnerOpenCode:
-		return &ctl.ExecOpenCodeRunner{Model: model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &ctl.ExecOpenCodeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
 	default:
 		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s)", cfg.Runner, ctl.RunnerClaude, ctl.RunnerOpenCode)
 	}

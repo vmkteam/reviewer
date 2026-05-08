@@ -32,6 +32,28 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestConfigResolveModel(t *testing.T) {
+	tests := []struct {
+		name      string
+		runner    string
+		model     string
+		wantModel string
+	}{
+		{"claude empty model defaults to opus", RunnerClaude, "", "opus"},
+		{"empty runner defaults to claude+opus", "", "", "opus"},
+		{"claude with explicit model preserved", RunnerClaude, "sonnet", "sonnet"},
+		{"opencode empty model stays empty", RunnerOpenCode, "", ""},
+		{"opencode with explicit model preserved", RunnerOpenCode, "anthropic/claude-opus-4", "anthropic/claude-opus-4"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Config{Runner: tt.runner, Model: tt.model}
+			c.ResolveModel()
+			assert.Equal(t, tt.wantModel, c.Model)
+		})
+	}
+}
+
 func TestConfigHasGitLab(t *testing.T) {
 	tests := []struct {
 		name string

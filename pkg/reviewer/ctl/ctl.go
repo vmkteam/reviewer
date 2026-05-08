@@ -54,35 +54,36 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 		c.uploadDebugBundle(upCtx, retErr)
 	}()
 
-	// 1. Fetch prompt.
+	// Drop a canonical empty review.json on disk first so the runner fills it
+	// in place instead of inventing the schema. Done before fetching the prompt
+	// so that even a quick failure here doesn't waste an HTTP round-trip.
+	if err := WriteReviewSkeleton(c.cfg.Dir, c.cfg); err != nil {
+		return fmt.Errorf("write review.json skeleton: %w", err)
+	}
+
 	prompt, err := c.prompt.FetchPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
 		return fmt.Errorf("fetch prompt: %w", err)
 	}
 	prompt = SubstituteVariables(prompt, c.cfg)
 
-	// 2. Run Claude.
 	result, err := c.runner.Run(ctx, prompt)
 	if err != nil {
 		return fmt.Errorf("run claude: %w", err)
 	}
 
-	// 3. Parse review.json.
 	draft, err := ReadReviewJSON(c.cfg.Dir)
 	if err != nil {
 		c.logReviewJSONFailure(ctx, draft)
 		return fmt.Errorf("read review: %w", err)
 	}
 
-	// 4. Merge cost data from Claude result.
 	draft.Review.ModelInfo = result.ToModelInfo(c.cfg.Model)
 	draft.Review.ModelInfo.Runner = c.runner.Name()
 	draft.Review.DurationMs = result.DurationMs
 
-	// 5. Fill MR metadata from CI env.
 	c.fillMetadata(draft)
 
-	// 6. Find MD files + upload + comment + HTML.
 	mdFiles, err := FindMDFiles(c.cfg.Dir)
 	if err != nil {
 		return fmt.Errorf("find md files: %w", err)

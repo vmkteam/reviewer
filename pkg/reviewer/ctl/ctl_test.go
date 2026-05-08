@@ -16,12 +16,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testClaudeRunner returns a fixed ClaudeResult from testdata.
+// testClaudeRunner returns a fixed ClaudeResult from testdata. The optional
+// beforeRun hook lets a test simulate side effects (e.g. Claude overwriting
+// the skeleton with a broken review.json) before the result is returned.
 type testClaudeRunner struct {
 	fixturePath string
+	beforeRun   func() error
 }
 
 func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, error) {
+	if r.beforeRun != nil {
+		if err := r.beforeRun(); err != nil {
+			return nil, err
+		}
+	}
 	data, err := os.ReadFile(r.fixturePath)
 	if err != nil {
 		return nil, err
@@ -172,14 +180,19 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// review.json with empty reviewType — reproduces the CI failure.
+	// Simulate Claude overwriting the skeleton with an invalid review.json
+	// — reproduces the CI failure where the model picks empty reviewType.
 	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "review.json"),
-		[]byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "claude-output.json"), []byte(`{"type":"result"}`), 0o644))
 
 	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: RunnerClaude}
-	runner := &testClaudeRunner{fixturePath: "testdata/claude_result.json"}
+	corrupted := []byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`)
+	runner := &testClaudeRunner{
+		fixturePath: "testdata/claude_result.json",
+		beforeRun: func() error {
+			return os.WriteFile(filepath.Join(tmpDir, "review.json"), corrupted, 0o644)
+		},
+	}
 	c := NewController(cfg, runner, slog.Default())
 
 	err := c.Review(context.Background())

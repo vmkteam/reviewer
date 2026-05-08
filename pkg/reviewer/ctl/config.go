@@ -74,3 +74,16 @@ func (c *Config) PublicBaseURL() string {
 	}
 	return c.URL
 }
+
+// ResolveModel fills c.Model with the runner-specific default when empty,
+// so log lines, ModelInfo and the debug bundle all show what was actually
+// passed to the CLI instead of "" (the user-facing input). Mutates c.
+//
+// opencode stays unpinned: its default lives in the user's opencode config.
+// Claude CLI's own default drifts between sonnet/opus across releases —
+// we pin opus to keep review cost and quality predictable.
+func (c *Config) ResolveModel() {
+	if c.Model == "" && (c.Runner == "" || c.Runner == RunnerClaude) {
+		c.Model = "opus"
+	}
+}
