@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"net/mail"
 	"os"
 
 	"reviewsrv/pkg/reviewer/ctl"
@@ -33,10 +32,10 @@ func main() {
 	pf.StringVar(&cfg.Key, "key", os.Getenv("PROJECT_KEY"), "project key (UUID)")
 	pf.StringVar(&cfg.URL, "url", os.Getenv("REVIEWSRV_URL"), "reviewsrv server URL (used for API calls from CI)")
 	pf.StringVar(&cfg.PublicURL, "public-url", os.Getenv("REVIEWSRV_PUBLIC_URL"), "browser-facing base URL for links in MR comments (defaults to --url)")
-	pf.StringVar(&cfg.Runner, "runner", envDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner CLI: claude | opencode")
+	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner CLI: claude | opencode")
 	pf.StringVar(&cfg.Model, "model", os.Getenv("REVIEW_MODEL"), "model name (optional; if empty, runner CLI picks its own default)")
-	pf.StringVar(&cfg.Dir, "dir", envDefault("REVIEW_DIR", "."), "working directory with review files")
-	pf.BoolVar(&cfg.Verbose, "verbose", envBool("REVIEW_VERBOSE", false), "verbose output")
+	pf.StringVar(&cfg.Dir, "dir", ctl.EnvDefault("REVIEW_DIR", "."), "working directory with review files")
+	pf.BoolVar(&cfg.Verbose, "verbose", ctl.EnvBool("REVIEW_VERBOSE", false), "verbose output")
 	pf.StringVar(&cfg.GitLabURL, "gitlab-url", os.Getenv("CI_API_V4_URL"), "GitLab API URL")
 	pf.StringVar(&cfg.GitLabToken, "gitlab-token", os.Getenv("REVIEWER_GITLAB_TOKEN"), "GitLab API token")
 	pf.StringVar(&cfg.MRIID, "mr-iid", os.Getenv("CI_MERGE_REQUEST_IID"), "MR IID")
@@ -48,14 +47,14 @@ func main() {
 	// stable across pipeline retries, unlike GITLAB_USER_LOGIN which reflects
 	// whoever triggered the run. The email is stripped to avoid leaking it
 	// into Slack notifications and the public API.
-	pf.StringVar(&cfg.Author, "author", authorName(envDefault("CI_COMMIT_AUTHOR", os.Getenv("GITLAB_USER_LOGIN"))), "MR author")
+	pf.StringVar(&cfg.Author, "author", ctl.AuthorName(ctl.EnvDefault("CI_COMMIT_AUTHOR", os.Getenv("GITLAB_USER_LOGIN"))), "MR author")
 	pf.StringVar(&cfg.MRTitle, "mr-title", os.Getenv("CI_MERGE_REQUEST_TITLE"), "MR title")
 	pf.StringVar(&cfg.ExternalID, "external-id", os.Getenv("CI_MERGE_REQUEST_IID"), "external ID")
 	pf.StringVar(&cfg.DiffBaseSHA, "diff-base-sha", os.Getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA"), "diff base SHA")
 	pf.StringVar(&cfg.SessionID, "session", "", "Claude session ID for --resume (reuses prompt cache)")
 	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
-	pf.BoolVar(&cfg.DebugUpload, "debug-upload", envBool("REVIEW_DEBUG_UPLOAD", false), "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
-	pf.BoolVar(&cfg.AllowDangerousPermissions, "allow-dangerous-permissions", envBool("REVIEW_ALLOW_DANGEROUS_PERMISSIONS", true), "pass --dangerously-skip-permissions to opencode (default true; required for unattended CI)")
+	pf.BoolVar(&cfg.DebugUpload, "debug-upload", ctl.EnvBool("REVIEW_DEBUG_UPLOAD", false), "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
+	pf.BoolVar(&cfg.AllowDangerousPermissions, "allow-dangerous-permissions", ctl.EnvBool("REVIEW_ALLOW_DANGEROUS_PERMISSIONS", true), "pass --dangerously-skip-permissions to opencode (default true; required for unattended CI)")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -112,33 +111,6 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
-}
-
-func envDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func envBool(key string, fallback bool) bool {
-	switch os.Getenv(key) {
-	case "true":
-		return true
-	case "false":
-		return false
-	}
-	return fallback
-}
-
-// authorName extracts the display name from "Name <email>" (CI_COMMIT_AUTHOR
-// format). Returns the input unchanged for plain logins or unparsable values.
-func authorName(s string) string {
-	addr, err := mail.ParseAddress(s)
-	if err != nil || addr.Name == "" {
-		return s
-	}
-	return addr.Name
 }
 
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {

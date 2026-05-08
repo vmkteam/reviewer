@@ -3,6 +3,7 @@ package reviewer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -353,6 +354,15 @@ func (rm *ReviewManager) ListIgnoredIssuesByProject(ctx context.Context, project
 	}
 	truncated := len(dbIssues) > ProjectInstructionsIssueLimit
 	if truncated {
+		// Project accumulated more ignored issues than the LLM-context cap;
+		// surface as a health signal so it doesn't decay into silent gaps in
+		// synthesized rules (use the archive flow to fold older risks).
+		//
+		// ReviewManager has no injected logger by design (data-plane type;
+		// constructor takes only db.DB). slog.Default() is the documented
+		// fallback for rare data-plane diagnostics like this. If logger
+		// injection is added project-wide, swap here too.
+		slog.Default().WarnContext(ctx, "ignored issues truncated for project instructions", "projectId", projectID, "limit", ProjectInstructionsIssueLimit)
 		dbIssues = dbIssues[:ProjectInstructionsIssueLimit]
 	}
 	return NewIssues(dbIssues), truncated, nil

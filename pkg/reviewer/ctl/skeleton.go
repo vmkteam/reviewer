@@ -1,6 +1,7 @@
 package ctl
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,12 +29,12 @@ func WriteReviewSkeleton(dir string, cfg *Config) error {
 
 	draft := rest.ReviewDraft{
 		Review: rest.ReviewDraftMeta{
-			ExternalID:   orPlaceholder(cfg.ExternalID, "%EXTERNAL_ID%"),
-			Title:        orPlaceholder(cfg.MRTitle, "%TITLE%"),
-			CommitHash:   orPlaceholder(cfg.Commit, "%COMMIT_HASH%"),
-			SourceBranch: orPlaceholder(cfg.SourceBranch, "%SOURCE_BRANCH%"),
-			TargetBranch: orPlaceholder(cfg.TargetBranch, "%TARGET_BRANCH%"),
-			Author:       orPlaceholder(cfg.Author, "%AUTHOR%"),
+			ExternalID:   cmp.Or(cfg.ExternalID, PlaceholderExternalID),
+			Title:        cmp.Or(cfg.MRTitle, PlaceholderTitle),
+			CommitHash:   cmp.Or(cfg.Commit, PlaceholderCommitHash),
+			SourceBranch: cmp.Or(cfg.SourceBranch, PlaceholderSourceBranch),
+			TargetBranch: cmp.Or(cfg.TargetBranch, PlaceholderTargetBranch),
+			Author:       cmp.Or(cfg.Author, PlaceholderAuthor),
 			// Sentinel that matches the prompt's "leave as-is" example.
 			CreatedAt: time.Unix(0, 0).UTC(),
 		},
@@ -49,11 +50,4 @@ func WriteReviewSkeleton(dir string, cfg *Config) error {
 		return fmt.Errorf("write review skeleton: %w", err)
 	}
 	return nil
-}
-
-func orPlaceholder(value, placeholder string) string {
-	if value == "" {
-		return placeholder
-	}
-	return value
 }

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"reviewsrv/pkg/rest"
-	"reviewsrv/pkg/reviewer"
 )
 
 // Controller orchestrates the review flow.
@@ -43,11 +42,10 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	start := time.Now()
 	c.log.InfoContext(ctx, "starting review", "projectKey", c.cfg.Key, "model", c.cfg.Model)
 
-	// Tracks whether the runner skipped Step 2 (review.json left as skeleton).
-	// Set after the runner finishes; used by the defer block below to force
-	// a debug-bundle upload even on otherwise-successful runs so we can post-
-	// mortem the silent skip.
+	// Set when the runner skipped Step 2; forces a debug-bundle upload so
+	// the silent skip can be post-mortemed even on otherwise-clean runs.
 	var skipDetected bool
+	retried := false
 
 	// Publish artifacts to the debug ring buffer when something failed, when
 	// --debug-upload was passed, or when we caught a Step-2 skip (so the
@@ -94,22 +92,10 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 
 	if isReviewJSONUnfilled(draft) {
 		skipDetected = true
-		c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — attempting Step 2 retry with session continuation",
-			"files", len(draft.Files),
-			"issues", len(draft.Issues),
-			"sessionId", result.SessionID,
-		)
-		if d2 := c.retryStep2(ctx, result.SessionID); d2 != nil {
-			d2.Review.ModelInfo = draft.Review.ModelInfo
-			d2.Review.DurationMs = draft.Review.DurationMs
-			c.fillMetadata(d2)
-			if !isReviewJSONUnfilled(d2) {
-				draft = d2
-				skipDetected = false
-				c.log.InfoContext(ctx, "Step 2 retry filled review.json", "issues", len(draft.Issues))
-			} else {
-				c.log.WarnContext(ctx, "Step 2 retry did not fill review.json")
-			}
+		retried = true
+		if d2 := c.runStep2Recovery(ctx, draft, result); d2 != nil {
+			draft = d2
+			skipDetected = false
 		}
 	}
 
@@ -126,65 +112,8 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	c.postComments(ctx, draft, reviewID)
 	c.generateHTML(draft, mdFiles)
 
-	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second))
+	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second), "retried", retried)
 	return nil
-}
-
-// isReviewJSONUnfilled detects the "model skipped Step 2" failure mode:
-// runner produced MD files but never edited review.json, so the skeleton is
-// uploaded as-is. Heuristic: all files[].summary blank AND no issues — even
-// a clean MR should yield non-empty summaries.
-func isReviewJSONUnfilled(draft *rest.ReviewDraft) bool {
-	if draft == nil {
-		return false
-	}
-	for _, f := range draft.Files {
-		if strings.TrimSpace(f.Summary) != "" {
-			return false
-		}
-	}
-	return len(draft.Issues) == 0
-}
-
-// retryStep2 invokes the runner a second time with a focused "fill review.json"
-// prompt, resuming the previous session so the cached original prompt isn't
-// re-billed. Returns the re-read draft on success; nil if retry can't happen
-// or the runner failed (caller stays with the original skeleton draft).
-func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) *rest.ReviewDraft {
-	if lastSessionID == "" {
-		c.log.WarnContext(ctx, "Step 2 retry skipped: no sessionId from previous run")
-		return nil
-	}
-	if c.runner == nil {
-		return nil
-	}
-
-	setRunnerSession(c.runner, lastSessionID)
-
-	if _, err := c.runner.Run(ctx, reviewer.PromptStep2Retry); err != nil {
-		c.log.WarnContext(ctx, "Step 2 retry runner failed", "err", err)
-		return nil
-	}
-
-	draft, err := ReadReviewJSON(c.cfg.Dir)
-	if err != nil {
-		c.log.WarnContext(ctx, "Step 2 retry: review.json still unparseable", "err", err)
-		return nil
-	}
-	return draft
-}
-
-// setRunnerSession mutates a runner to resume sessionID on its next Run call.
-// Silent no-op for unknown runner types.
-func setRunnerSession(r ReviewRunner, sessionID string) {
-	switch x := r.(type) {
-	case *ExecClaudeRunner:
-		x.SessionID = sessionID
-		x.ContinueSession = false
-	case *ExecOpenCodeRunner:
-		x.SessionID = sessionID
-		x.ContinueSession = false
-	}
 }
 
 // uploadDebugBundle publishes on-disk artifacts so a failed CI run can be
@@ -251,10 +180,7 @@ func (c *Controller) Upload(ctx context.Context) error {
 
 	c.fillMetadata(draft)
 	if isReviewJSONUnfilled(draft) {
-		c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — Upload subcommand cannot retry, run `reviewctl review` to regenerate",
-			"files", len(draft.Files),
-			"issues", len(draft.Issues),
-		)
+		c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — Upload subcommand cannot retry, run `reviewctl review` to regenerate", "files", len(draft.Files), "issues", len(draft.Issues))
 	}
 
 	mdFiles, err := FindMDFiles(c.cfg.Dir)
