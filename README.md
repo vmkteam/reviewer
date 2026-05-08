@@ -7,7 +7,7 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 - **Multi-project support** with configurable prompts per project
 - **5 review types**: architecture, code, security, tests, operability
 - **Severity levels**: critical, high, medium, low with traffic light system (red/yellow/green)
-- **reviewctl CLI** — single binary for the full review cycle: prompt fetch, Claude Code, upload, GitLab MR comments, HTML report
+- **reviewctl CLI** — single binary for the full review cycle: prompt fetch, runner (Claude Code or opencode), upload, GitLab MR comments, HTML report
 - **GitLab MR inline comments** — critical and high issues posted directly in the diff with cleanup on re-runs
 - **Session caching** — `--session`/`--continue` flags to reuse Claude prompt cache (~90% token savings)
 - **Auto-migrations** — pgmigrator integrated as Go library, runs SQL patches on server startup
@@ -149,7 +149,7 @@ reviewctl comment   # Post MR comments for an existing review
 reviewctl version   # Print version
 ```
 
-Key flags: `--key`, `--url`, `--model`, `--session` (prompt cache reuse), `--continue` (resume last session). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
 
 ```bash
 make build-reviewctl   # Build reviewctl binary

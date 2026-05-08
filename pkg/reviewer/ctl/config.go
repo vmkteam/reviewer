@@ -2,11 +2,18 @@ package ctl
 
 import "errors"
 
+// Runner identifiers used by Config.Runner, ClaudeRunner.Name and db.ReviewModelInfo.Runner.
+const (
+	RunnerClaude   = "claude"
+	RunnerOpenCode = "opencode"
+)
+
 // Config holds all CLI flags and CI environment variables for reviewctl.
 type Config struct {
 	Key       string
 	URL       string
 	PublicURL string // browser-facing base URL for links in MR comments; falls back to URL
+	Runner    string // "claude" (default) or "opencode"
 	Model     string
 	Dir       string
 	Verbose   bool

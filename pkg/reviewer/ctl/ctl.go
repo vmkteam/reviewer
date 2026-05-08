@@ -63,6 +63,7 @@ func (c *Controller) Review(ctx context.Context) error {
 
 	// 4. Merge cost data from Claude result.
 	draft.Review.ModelInfo = result.ToModelInfo(c.cfg.Model)
+	draft.Review.ModelInfo.Runner = c.runner.Name()
 	draft.Review.DurationMs = result.DurationMs
 
 	// 5. Fill MR metadata from CI env.

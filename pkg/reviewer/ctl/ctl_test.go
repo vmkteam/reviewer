@@ -29,6 +29,8 @@ func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, erro
 	return ParseClaudeResult(data)
 }
 
+func (r *testClaudeRunner) Name() string { return RunnerClaude }
+
 // setupTestDir copies testdata files to a temp dir for upload tests.
 func setupTestDir(t *testing.T) string {
 	t.Helper()

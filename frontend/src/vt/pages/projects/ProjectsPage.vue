@@ -113,18 +113,36 @@
     <Teleport to="body">
       <div v-if="localRunVisible" class="fixed inset-0 z-50 flex items-center justify-center" @keydown.esc="localRunVisible = false" tabindex="-1" ref="localRunDialogRef">
         <div class="fixed inset-0 bg-overlay" @click="localRunVisible = false"></div>
-        <div class="relative bg-surface rounded-xl shadow-xl max-w-2xl w-full mx-4 p-4 sm:p-6 max-h-[85vh] sm:max-h-[90vh] flex flex-col">
+        <div class="relative bg-surface rounded-xl shadow-xl max-w-2xl w-full mx-4 p-4 sm:p-6 h-[85vh] sm:h-[90vh] flex flex-col">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold text-fg">Local Run — {{ localRunProject?.title }}</h3>
             <button @click="localRunVisible = false" class="text-fg-subtle hover:text-fg-secondary text-xl leading-none">&times;</button>
           </div>
 
-          <div class="flex flex-col gap-3 overflow-hidden">
-            <div class="text-xs text-fg-muted font-mono bg-surface-alt px-2 py-1 rounded self-start">bash</div>
-            <div class="overflow-auto rounded-lg border border-edge bg-surface-alt flex-1">
-              <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ localRunScript }}</code></pre>
+          <!-- Tabs -->
+          <div class="flex border-b border-edge mb-4">
+            <button
+              v-for="(script, idx) in localRunScripts"
+              :key="idx"
+              @click="localRunTab = idx"
+              class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+              :class="localRunTab === idx ? 'border-accent text-accent' : 'border-transparent text-fg-muted hover:text-fg-secondary'"
+            >{{ script.name }}</button>
+          </div>
+
+          <div class="flex-1 overflow-hidden relative">
+            <div
+              v-for="(script, idx) in localRunScripts"
+              :key="idx"
+              v-show="localRunTab === idx"
+              class="flex flex-col gap-3 h-full"
+            >
+              <div class="text-xs text-fg-muted font-mono bg-surface-alt px-2 py-1 rounded self-start">bash</div>
+              <div class="overflow-auto rounded-lg border border-edge bg-surface-alt flex-1">
+                <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ script.content }}</code></pre>
+              </div>
+              <VButton variant="secondary" size="sm" class="self-end" @click="copyLocalRun">{{ localRunCopied ? 'Copied!' : 'Copy' }}</VButton>
             </div>
-            <VButton variant="secondary" size="sm" class="self-end" @click="copyLocalRun">{{ localRunCopied ? 'Copied!' : 'Copy' }}</VButton>
           </div>
         </div>
       </div>
@@ -182,6 +200,7 @@ const ciCopied = ref<number | null>(null)
 const localRunVisible = ref(false)
 const localRunProject = ref<ProjectSummary | null>(null)
 const localRunCopied = ref(false)
+const localRunTab = ref(0)
 
 const dockerfileContent = `FROM vmkteam/reviewer:latest AS source
 
@@ -216,18 +235,32 @@ EOF
 
 WORKDIR /workspace`
 
-const localRunScript = computed(() => {
+const localRunScripts = computed(() => {
   const baseURL = window.location.origin
   const key = localRunProject.value?.projectKey ?? 'YOUR_PROJECT_KEY'
-  return `export PROJECT_KEY="${key}"
-export REVIEWSRV_URL="${baseURL}"
-
-# Full review: prompt → Claude → upload → HTML
+  const env = `export PROJECT_KEY="${key}"
+export REVIEWSRV_URL="${baseURL}"`
+  const tail = `# Full review: prompt → runner → upload → HTML
 reviewctl review
 
 # Or step-by-step:
 # reviewctl upload    # upload local review.json + R*.md
 # reviewctl comment   # post MR comments only`
+
+  return [
+    {
+      name: 'Claude',
+      content: `${env}\n\n${tail}`,
+    },
+    {
+      name: 'opencode',
+      content: `${env}
+export REVIEW_RUNNER="opencode"
+export REVIEW_MODEL=""  # leave empty to use the model from your opencode config
+
+${tail}`,
+    },
+  ]
 })
 
 async function openCI() {
@@ -242,6 +275,7 @@ async function openCI() {
 function openLocalRun(project: ProjectSummary) {
   localRunProject.value = project
   localRunCopied.value = false
+  localRunTab.value = 0
   localRunVisible.value = true
   nextTick(() => localRunDialogRef.value?.focus())
 }
@@ -253,7 +287,7 @@ function copyToClipboard(text: string, tab: number = 0) {
 }
 
 function copyLocalRun() {
-  navigator.clipboard.writeText(localRunScript.value)
+  navigator.clipboard.writeText(localRunScripts.value[localRunTab.value].content)
   localRunCopied.value = true
   setTimeout(() => { localRunCopied.value = false }, 2000)
 }

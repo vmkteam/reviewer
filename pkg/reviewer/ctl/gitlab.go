@@ -38,7 +38,7 @@ type GitLabClient struct {
 // NewGitLabClient creates a new GitLabClient from Config.
 func NewGitLabClient(cfg *Config, log *slog.Logger) *GitLabClient {
 	return &GitLabClient{
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 		log:        log,
 		token:      cfg.GitLabToken,
 		apiURL:     strings.TrimRight(cfg.GitLabURL, "/"),
