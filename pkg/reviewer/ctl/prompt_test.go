@@ -79,4 +79,11 @@ func TestSubstituteVariables(t *testing.T) {
 		got := SubstituteVariables(input, cfg)
 		assert.Equal(t, input, got)
 	})
+
+	t.Run("empty cfg fields leave placeholders intact for model resolution", func(t *testing.T) {
+		empty := &Config{}
+		input := "Review %SOURCE_BRANCH% → %TARGET_BRANCH%, MR: %TITLE%, ID: %EXTERNAL_ID%"
+		got := SubstituteVariables(input, empty)
+		assert.Equal(t, input, got, "empty cfg must not blank out placeholders")
+	})
 }

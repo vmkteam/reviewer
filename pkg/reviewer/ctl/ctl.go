@@ -83,6 +83,7 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	draft.Review.DurationMs = result.DurationMs
 
 	c.fillMetadata(draft)
+	c.warnIfReviewJSONUnfilled(ctx, draft)
 
 	mdFiles, err := FindMDFiles(c.cfg.Dir)
 	if err != nil {
@@ -99,6 +100,28 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 
 	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second))
 	return nil
+}
+
+// warnIfReviewJSONUnfilled detects the "model skipped Step 2" failure mode:
+// runner produced MD files but never edited review.json, so the skeleton is
+// uploaded as-is. Heuristic: all files[].summary blank and no issues — even a
+// clean MR should yield non-empty summaries.
+func (c *Controller) warnIfReviewJSONUnfilled(ctx context.Context, draft *rest.ReviewDraft) {
+	if draft == nil {
+		return
+	}
+	for _, f := range draft.Files {
+		if strings.TrimSpace(f.Summary) != "" {
+			return
+		}
+	}
+	if len(draft.Issues) != 0 {
+		return
+	}
+	c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — runner likely skipped Step 2",
+		"files", len(draft.Files),
+		"issues", len(draft.Issues),
+	)
 }
 
 // uploadDebugBundle publishes on-disk artifacts so a failed CI run can be
@@ -164,6 +187,7 @@ func (c *Controller) Upload(ctx context.Context) error {
 	}
 
 	c.fillMetadata(draft)
+	c.warnIfReviewJSONUnfilled(ctx, draft)
 
 	mdFiles, err := FindMDFiles(c.cfg.Dir)
 	if err != nil {
