@@ -149,7 +149,7 @@ reviewctl comment   # Post MR comments for an existing review
 reviewctl version   # Print version
 ```
 
-Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--dangerously-skip-permissions`, default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
 
 ```bash
 make build-reviewctl   # Build reviewctl binary

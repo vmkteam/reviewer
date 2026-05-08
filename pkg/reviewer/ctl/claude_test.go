@@ -178,3 +178,68 @@ func TestRunnerName(t *testing.T) {
 	assert.Equal(t, RunnerClaude, (&ExecClaudeRunner{}).Name())
 	assert.Equal(t, RunnerOpenCode, (&ExecOpenCodeRunner{}).Name())
 }
+
+func TestExecClaudeRunnerBuildArgs(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		r := &ExecClaudeRunner{}
+		args := r.buildArgs()
+		assert.Equal(t, []string{
+			"--print", "--output-format", "json",
+			"--permission-mode", "bypassPermissions",
+			"-p", "-",
+		}, args)
+	})
+
+	t.Run("with model", func(t *testing.T) {
+		r := &ExecClaudeRunner{Model: "opus"}
+		assert.Contains(t, r.buildArgs(), "--model")
+		assert.Contains(t, r.buildArgs(), "opus")
+	})
+
+	t.Run("continue beats session", func(t *testing.T) {
+		r := &ExecClaudeRunner{SessionID: "abc", ContinueSession: true}
+		args := r.buildArgs()
+		assert.Contains(t, args, "--continue")
+		assert.NotContains(t, args, "--resume")
+	})
+
+	t.Run("session without continue", func(t *testing.T) {
+		r := &ExecClaudeRunner{SessionID: "abc"}
+		args := r.buildArgs()
+		assert.Contains(t, args, "--resume")
+		assert.Contains(t, args, "abc")
+	})
+}
+
+func TestExecOpenCodeRunnerBuildArgs(t *testing.T) {
+	t.Run("default omits dangerous flag", func(t *testing.T) {
+		r := &ExecOpenCodeRunner{}
+		assert.NotContains(t, r.buildArgs(), "--dangerously-skip-permissions")
+	})
+
+	t.Run("dangerous permissions enabled", func(t *testing.T) {
+		r := &ExecOpenCodeRunner{AllowDangerousPermissions: true}
+		assert.Contains(t, r.buildArgs(), "--dangerously-skip-permissions")
+	})
+
+	t.Run("with model", func(t *testing.T) {
+		r := &ExecOpenCodeRunner{Model: "anthropic/claude-opus-4-7"}
+		args := r.buildArgs()
+		assert.Contains(t, args, "-m")
+		assert.Contains(t, args, "anthropic/claude-opus-4-7")
+	})
+
+	t.Run("continue beats session", func(t *testing.T) {
+		r := &ExecOpenCodeRunner{SessionID: "abc", ContinueSession: true}
+		args := r.buildArgs()
+		assert.Contains(t, args, "-c")
+		assert.NotContains(t, args, "-s")
+	})
+
+	t.Run("session without continue", func(t *testing.T) {
+		r := &ExecOpenCodeRunner{SessionID: "abc"}
+		args := r.buildArgs()
+		assert.Contains(t, args, "-s")
+		assert.Contains(t, args, "abc")
+	})
+}

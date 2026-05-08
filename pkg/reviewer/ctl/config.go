@@ -37,6 +37,12 @@ type Config struct {
 	SessionID       string
 	ContinueSession bool // use --continue instead of --resume
 
+	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
+	// runners that support it (currently opencode). Defaults to true to match
+	// previous behaviour — unattended CI runs need it to avoid permission
+	// prompts. Set false for local interactive review on untrusted code.
+	AllowDangerousPermissions bool
+
 	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
 	// On failure, the upload happens regardless of this flag.
 	DebugUpload bool

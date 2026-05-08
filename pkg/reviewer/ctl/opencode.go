@@ -30,21 +30,24 @@ type ExecOpenCodeRunner struct {
 	Dir             string
 	SessionID       string // if set, uses -s to continue a specific session
 	ContinueSession bool   // if true, uses -c to continue the last session
-	Log             *slog.Logger
+	// AllowDangerousPermissions toggles `--dangerously-skip-permissions`, which
+	// disables interactive permission prompts. Required for unattended CI runs
+	// but should stay off when the reviewer config trusts the working tree less.
+	AllowDangerousPermissions bool
+	Log                       *slog.Logger
 }
 
 // Name implements ReviewRunner.
 func (r *ExecOpenCodeRunner) Name() string { return RunnerOpenCode }
 
-// Run executes `opencode run --format json` and parses the streamed events.
-func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
-	defer cancel()
-
+func (r *ExecOpenCodeRunner) buildArgs() []string {
 	args := []string{
 		"run",
 		"--format", "json",
-		"--dangerously-skip-permissions",
+	}
+
+	if r.AllowDangerousPermissions {
+		args = append(args, "--dangerously-skip-permissions")
 	}
 
 	if r.Model != "" {
@@ -57,65 +60,41 @@ func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeRes
 		args = append(args, "-s", r.SessionID)
 	}
 
-	cmd := exec.CommandContext(ctx, "opencode", args...)
-	cmd.Dir = r.Dir
-	cmd.Stdin = strings.NewReader(prompt)
+	return args
+}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+// Run executes `opencode run --format json` and parses the streamed events.
+func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
+	args := r.buildArgs()
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt)
 
-	r.Log.InfoContext(ctx, "running opencode",
-		"model", r.Model,
-		"dir", r.Dir,
-		"promptLen", len(prompt),
-		"args", args,
-	)
+	r.saveOutput(ctx, out.stdout.Bytes())
 
-	err := cmd.Run()
-
-	r.Log.InfoContext(ctx, "opencode finished",
-		"exitErr", err,
-		"stdoutLen", stdout.Len(),
-		"stderrLen", stderr.Len(),
-	)
-
-	if r.Log.Enabled(ctx, slog.LevelDebug) {
-		if stderr.Len() > 0 {
-			r.Log.DebugContext(ctx, "opencode stderr", "stderr", truncate(stderr.String(), 2000))
-		}
-		if stdout.Len() > 0 {
-			r.Log.DebugContext(ctx, "opencode stdout", "stdout", truncate(stdout.String(), 2000))
-		}
-	}
-
-	r.saveOutput(ctx, stdout.Bytes())
-
-	if err != nil {
+	if out.err != nil {
 		r.Log.WarnContext(ctx, "opencode error",
-			"stderr", truncate(stderr.String(), 2000),
-			"stdout", truncate(stdout.String(), 2000),
+			"stderr", truncate(out.stderr.String(), 2000),
+			"stdout", truncate(out.stdout.String(), 2000),
 		)
 		// Try to parse whatever arrived before the error — matches Claude runner behaviour.
-		if stdout.Len() > 0 {
-			if cr, parseErr := ParseOpenCodeResult(stdout.Bytes(), r.Model); parseErr == nil {
-				return cr, fmt.Errorf("opencode exited with error: %w", err)
+		if out.stdout.Len() > 0 {
+			if cr, parseErr := ParseOpenCodeResult(out.stdout.Bytes(), r.Model); parseErr == nil {
+				return cr, fmt.Errorf("opencode exited with error: %w", out.err)
 			}
 		}
-		return nil, fmt.Errorf("opencode exited with error: %w (stderr: %s)", err, truncate(stderr.String(), 500))
+		return nil, fmt.Errorf("opencode exited with error: %w (stderr: %s)", out.err, truncate(out.stderr.String(), 500))
 	}
 
-	if stdout.Len() == 0 {
-		r.Log.WarnContext(ctx, "opencode produced empty stdout", "stderr", truncate(stderr.String(), 2000))
+	if out.stdout.Len() == 0 {
+		r.Log.WarnContext(ctx, "opencode produced empty stdout", "stderr", truncate(out.stderr.String(), 2000))
 		return nil, errors.New("opencode produced empty output")
 	}
 
-	cr, parseErr := ParseOpenCodeResult(stdout.Bytes(), r.Model)
+	cr, parseErr := ParseOpenCodeResult(out.stdout.Bytes(), r.Model)
 	if parseErr != nil {
 		r.Log.WarnContext(ctx, "failed to parse opencode output",
 			"err", parseErr,
-			"stdoutPreview", truncate(stdout.String(), 500),
-			"stderr", truncate(stderr.String(), 500),
+			"stdoutPreview", truncate(out.stdout.String(), 500),
+			"stderr", truncate(out.stderr.String(), 500),
 		)
 		return nil, parseErr
 	}

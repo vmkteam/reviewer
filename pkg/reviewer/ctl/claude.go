@@ -228,11 +228,7 @@ type ExecClaudeRunner struct {
 // Name implements ReviewRunner.
 func (r *ExecClaudeRunner) Name() string { return RunnerClaude }
 
-// Run executes claude --print --output-format json and parses the result.
-func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
-	defer cancel()
-
+func (r *ExecClaudeRunner) buildArgs() []string {
 	args := []string{
 		"--print",
 		"--output-format", "json",
@@ -250,62 +246,35 @@ func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResul
 	}
 
 	args = append(args, "-p", "-") // read prompt from stdin
+	return args
+}
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	cmd.Dir = r.Dir
-	cmd.Stdin = strings.NewReader(prompt)
+// Run executes claude --print --output-format json and parses the result.
+func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
+	args := r.buildArgs()
+	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	r.saveOutput(ctx, out.stdout.Bytes())
 
-	r.Log.InfoContext(ctx, "running claude",
-		"model", r.Model,
-		"dir", r.Dir,
-		"promptLen", len(prompt),
-		"args", args,
-	)
-
-	err := cmd.Run()
-
-	// Always log output sizes for diagnostics.
-	r.Log.InfoContext(ctx, "claude finished",
-		"exitErr", err,
-		"stdoutLen", stdout.Len(),
-		"stderrLen", stderr.Len(),
-	)
-
-	if r.Log.Enabled(ctx, slog.LevelDebug) {
-		if stderr.Len() > 0 {
-			r.Log.DebugContext(ctx, "claude stderr", "stderr", truncate(stderr.String(), 2000))
-		}
-		if stdout.Len() > 0 {
-			r.Log.DebugContext(ctx, "claude stdout", "stdout", truncate(stdout.String(), 2000))
-		}
-	}
-
-	// Save raw output for diagnostics.
-	r.saveOutput(stdout.Bytes())
-
-	if err != nil {
+	if out.err != nil {
 		r.Log.WarnContext(ctx, "claude error",
-			"stderr", truncate(stderr.String(), 2000),
-			"stdout", truncate(stdout.String(), 2000),
+			"stderr", truncate(out.stderr.String(), 2000),
+			"stdout", truncate(out.stdout.String(), 2000),
 		)
-		return r.handleClaudeError(err, stdout.Bytes(), stderr.String())
+		return r.handleClaudeError(out.err, out.stdout.Bytes(), out.stderr.String())
 	}
 
-	if stdout.Len() == 0 {
-		r.Log.WarnContext(ctx, "claude produced empty stdout", "stderr", truncate(stderr.String(), 2000))
+	if out.stdout.Len() == 0 {
+		r.Log.WarnContext(ctx, "claude produced empty stdout", "stderr", truncate(out.stderr.String(), 2000))
 		return nil, errors.New("claude produced empty output")
 	}
 
-	cr, parseErr := ParseClaudeResult(stdout.Bytes())
+	cr, parseErr := ParseClaudeResult(out.stdout.Bytes())
 	if parseErr != nil {
 		r.Log.WarnContext(ctx, "failed to parse claude output",
 			"err", parseErr,
-			"stdoutPreview", truncate(stdout.String(), 500),
-			"stderr", truncate(stderr.String(), 500),
+			"stdoutPreview", truncate(out.stdout.String(), 500),
+			"stderr", truncate(out.stderr.String(), 500),
 		)
 		return nil, parseErr
 	}
@@ -347,13 +316,13 @@ func (r *ExecClaudeRunner) logResult(ctx context.Context, cr *ClaudeResult) {
 	}
 }
 
-func (r *ExecClaudeRunner) saveOutput(data []byte) {
+func (r *ExecClaudeRunner) saveOutput(ctx context.Context, data []byte) {
 	if len(data) == 0 {
 		return
 	}
 	path := filepath.Join(r.Dir, "claude-output.json")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		r.Log.WarnContext(context.Background(), "failed to save claude output", "err", err)
+		r.Log.WarnContext(ctx, "failed to save claude output", "err", err)
 	}
 }
 
@@ -371,4 +340,43 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+type runOutput struct {
+	stdout bytes.Buffer
+	stderr bytes.Buffer
+	err    error
+}
+
+// runExec spawns the runner CLI under the shared runnerTimeout and captures
+// stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
+// focused on argv and result parsing.
+func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string) *runOutput {
+	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(prompt)
+
+	out := &runOutput{}
+	cmd.Stdout = &out.stdout
+	cmd.Stderr = &out.stderr
+
+	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
+
+	out.err = cmd.Run()
+
+	log.InfoContext(ctx, binary+" finished", "exitErr", out.err, "stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
+
+	if log.Enabled(ctx, slog.LevelDebug) {
+		if out.stderr.Len() > 0 {
+			log.DebugContext(ctx, binary+" stderr", "stderr", truncate(out.stderr.String(), 2000))
+		}
+		if out.stdout.Len() > 0 {
+			log.DebugContext(ctx, binary+" stdout", "stdout", truncate(out.stdout.String(), 2000))
+		}
+	}
+
+	return out
 }
