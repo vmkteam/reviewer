@@ -32,16 +32,22 @@ EFFICIENCY — minimise round-trips:
   cheaper than grepping; fall back to grep when they are absent.
 
 The task may be written for a CLI flow ("write R*.md files, then fill
-review.json"). Deliver the review incrementally, in SMALL tool calls (one big
-payload overflows the output limit and is rejected as truncated JSON):
+review.json"). Deliver the review through the review tools in AS FEW STEPS as
+possible: emit independent set_group and add_issues calls together in the SAME
+step (the harness runs them in parallel), splitting into more steps ONLY when a
+step's combined payload would overflow the output limit and be rejected as
+truncated JSON. Aim to finish the output phase in ~2-3 steps, not one call per
+step — each extra step re-bills the whole conversation.
 
 1. set_group — call once for EACH of the five groups (architecture, code,
-   security, tests, operability). Pass its one-line summary, isAccepted, and the
-   full markdown body. Head every finding with "### C1. Title" (a localId).
-2. add_issues — pass the issues you found (batch them small). Every
-   "### LocalID. Title" finding in a group's markdown MUST have a matching issue
-   (localId, severity, title, description, file, lines, issueType, fileType,
-   suggestedFix), 1:1 with the markdown headers.
+   security, tests, operability), batching several set_group calls into the same
+   step. Pass its one-line summary, isAccepted, and the full markdown body. Head
+   every finding with "### C1. Title" (a localId).
+2. add_issues — pass the issues you found; batch them, and you may send
+   add_issues in the same step as set_group. Every "### LocalID. Title" finding
+   in a group's markdown MUST have a matching issue (localId, severity, title,
+   description, file, lines, issueType, fileType, suggestedFix), 1:1 with the
+   markdown headers.
 3. submit_review — finalize with only the "review" object: description (overall
    verdict), effortMinutes, aiSlopScore (0.0-1.0). Pass "review" as a JSON object,
    not a string.
