@@ -126,12 +126,20 @@ func dispatchParallel(ctx context.Context, reg *Registry, calls []ToolCall) []To
 	for i, call := range calls {
 		wg.Go(func() {
 			tr := ToolResult{CallID: call.ID, Name: call.Name}
-			// Skip work if the run was cancelled (timeout / manual abort) — the
-			// goroutine writes its own index, so there is no race on results.
+			// A panicking tool handler must not crash the whole review: recover it
+			// into an error result. The deferred func also writes results[i] on
+			// every path (each goroutine owns its index, so there is no race).
+			defer func() {
+				if r := recover(); r != nil {
+					tr.Content = fmt.Sprintf("tool panicked: %v", r)
+					tr.IsError = true
+				}
+				results[i] = tr
+			}()
+			// Skip work if the run was cancelled (timeout / manual abort).
 			if err := ctx.Err(); err != nil {
 				tr.Content = "tool skipped: " + err.Error()
 				tr.IsError = true
-				results[i] = tr
 				return
 			}
 			out, err := reg.Dispatch(ctx, call.Name, call.Args)
@@ -141,7 +149,6 @@ func dispatchParallel(ctx context.Context, reg *Registry, calls []ToolCall) []To
 			} else {
 				tr.Content = out
 			}
-			results[i] = tr
 		})
 	}
 	wg.Wait()
