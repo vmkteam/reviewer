@@ -110,4 +110,10 @@ func (c *Config) ResolveDefaults() {
 			c.Effort = "xhigh"
 		}
 	}
+	// Codex reports no dollar cost, so pin a concrete model: the CLI then uses a
+	// predictable model and the cost is estimated from tokens against the price
+	// table (an empty model leaves cost at 0). Override with --model.
+	if c.Runner == runner.RunnerCodex && c.Model == "" {
+		c.Model = "gpt-5.1-codex"
+	}
 }

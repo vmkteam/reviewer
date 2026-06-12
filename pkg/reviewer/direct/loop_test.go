@@ -244,3 +244,25 @@ func TestRunMaxRoundsWithoutSubmit(t *testing.T) {
 	require.False(t, res.Submitted)
 	require.Equal(t, "max_rounds", res.StopReason)
 }
+
+func TestDispatchParallelRecoversPanic(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(ToolDef{Name: "boom"}, func(context.Context, json.RawMessage) (string, error) {
+		panic("kaboom")
+	})
+	reg.Register(ToolDef{Name: "ok"}, func(context.Context, json.RawMessage) (string, error) {
+		return "fine", nil
+	})
+
+	// A panicking tool must yield an error result, not crash the process, and
+	// must not stop the sibling tool in the same turn from completing.
+	results := dispatchParallel(context.Background(), reg, []ToolCall{
+		{ID: "1", Name: "boom"},
+		{ID: "2", Name: "ok"},
+	})
+	require.Len(t, results, 2)
+	require.True(t, results[0].IsError)
+	require.Contains(t, results[0].Content, "panicked")
+	require.False(t, results[1].IsError)
+	require.Equal(t, "fine", results[1].Content)
+}
