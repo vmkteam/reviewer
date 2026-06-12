@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/anthropics/anthropic-sdk-go v1.50.1
 	github.com/brianvoe/gofakeit/v7 v7.14.0
 	github.com/getsentry/sentry-go v0.41.0
 	github.com/go-pg/pg/v10 v10.15.0
@@ -15,6 +16,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/namsral/flag v1.7.4-pre
 	github.com/prometheus/client_golang v1.23.2
+	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vmkteam/appkit v0.1.2
@@ -30,7 +32,6 @@ require (
 
 require (
 	github.com/alecthomas/chroma/v2 v2.2.0 // indirect
-	github.com/anthropics/anthropic-sdk-go v1.50.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
@@ -59,7 +60,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/sashabaranov/go-openai v1.41.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect

@@ -102,7 +102,7 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 	r.logResult(ctx, res)
 	cr := directToClaudeResult(res)
 	cr.DurationMs = elapsedMs
-	cr.DurationAPIMs = elapsedMs
+	cr.DurationAPIMs = res.DurationAPIMs // provider time only, not local tool time
 
 	if err != nil {
 		return cr, err

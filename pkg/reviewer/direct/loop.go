@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 // errMaxRounds is returned when the loop exhausts MaxRounds without a submit.
@@ -18,12 +19,13 @@ const nudgeSubmit = "You have not called submit_review yet. " +
 
 // Result is the outcome of a direct run, mapped to ClaudeResult by the ctl adapter.
 type Result struct {
-	Usage      Usage
-	Rounds     int
-	StopReason string // "submitted" | "end_turn" | "max_rounds" | "error"
-	Submitted  bool
-	Model      string
-	CostUsd    float64
+	Usage         Usage
+	Rounds        int
+	StopReason    string // "submitted" | "end_turn" | "max_rounds" | "error"
+	Submitted     bool
+	Model         string
+	CostUsd       float64
+	DurationAPIMs int // cumulative time spent in provider Complete calls
 }
 
 // Run drives the agent loop: send system + history + tools to the provider, run
@@ -36,6 +38,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 
 	msgs := []Message{{Role: RoleUser, Text: userPrompt}}
 	var total Usage
+	var apiMs int // cumulative provider Complete time (vs total wall-clock)
 	nudged := false
 
 	// Record the kickoff input (system contract + user task with the preloaded
@@ -47,6 +50,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 	// finish builds the result and records it in the transcript.
 	finish := func(rounds int, stop string, submitted bool) *Result {
 		r := makeResult(total, rounds, stop, submitted, p)
+		r.DurationAPIMs = apiMs
 		opts.OnEvent.emit(Event{Kind: "result", Rounds: r.Rounds, Usage: &r.Usage, StopReason: r.StopReason, CostUsd: r.CostUsd, Submitted: r.Submitted, Model: r.Model})
 		return r
 	}
@@ -55,7 +59,9 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		if err := ctx.Err(); err != nil {
 			return finish(round, "cancelled", reg.Submitted()), err
 		}
+		t0 := time.Now()
 		resp, err := p.Complete(ctx, Request{System: system, Messages: msgs, Tools: reg.Defs(), Effort: opts.Effort})
+		apiMs += int(time.Since(t0).Milliseconds())
 		if err != nil {
 			return finish(round, "error", reg.Submitted()), fmt.Errorf("round %d: %w", round, err)
 		}
