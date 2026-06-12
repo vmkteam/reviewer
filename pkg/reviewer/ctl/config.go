@@ -1,12 +1,9 @@
 package ctl
 
-import "errors"
+import (
+	"errors"
 
-// Runner identifiers used by Config.Runner, ReviewRunner.Name and db.ReviewModelInfo.Runner.
-const (
-	RunnerClaude   = "claude"
-	RunnerOpenCode = "opencode"
-	RunnerCodex    = "codex"
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 // Config holds all CLI flags and CI environment variables for reviewctl.
@@ -97,7 +94,7 @@ func (c *Config) PublicBaseURL() string {
 // Claude CLI's own default drifts between sonnet/opus across releases —
 // we pin opus to keep review cost and quality predictable.
 func (c *Config) ResolveDefaults() {
-	if c.Model == "" && (c.Runner == "" || c.Runner == RunnerClaude) {
+	if c.Model == "" && (c.Runner == "" || c.Runner == runner.RunnerClaude) {
 		c.Model = "opus"
 	}
 	// Direct runner against Anthropic: pin a concrete model and reasoning effort
@@ -105,7 +102,7 @@ func (c *Config) ResolveDefaults() {
 	// API silently defaults to "high", whereas Claude Code uses "xhigh" for
 	// agentic coding — match it so the direct runner isn't a notch weaker out of
 	// the box. DeepSeek/openai-compat ignore effort and require an explicit --model.
-	if c.Runner == RunnerDirect && c.APIProvider == "anthropic" {
+	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" {
 		if c.Model == "" {
 			c.Model = "claude-opus-4-8"
 		}

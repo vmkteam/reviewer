@@ -6,6 +6,7 @@ import (
 
 	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer"
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 // isReviewJSONUnfilled detects the "model skipped Step 2" failure mode:
@@ -27,7 +28,7 @@ func isReviewJSONUnfilled(draft *rest.ReviewDraft) bool {
 // runStep2Recovery wraps the retry path: logs the skip, invokes retryStep2,
 // merges metrics from both passes, and returns the recovered draft (or nil
 // if retry didn't help, so caller keeps the original skeleton).
-func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDraft, first *ClaudeResult) *rest.ReviewDraft {
+func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDraft, first *runner.ClaudeResult) *rest.ReviewDraft {
 	c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — attempting Step 2 retry with session continuation", "files", len(draft.Files), "issues", len(draft.Issues), "sessionId", first.SessionID)
 
 	d2, retryRes := c.retryStep2(ctx, first.SessionID)
@@ -56,7 +57,7 @@ func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDra
 // re-billed. Returns the re-read draft and the runner result for metric
 // aggregation; nil draft signals "retry could not happen or runner failed"
 // and the caller stays with the original skeleton draft.
-func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) (*rest.ReviewDraft, *ClaudeResult) {
+func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) (*rest.ReviewDraft, *runner.ClaudeResult) {
 	if lastSessionID == "" {
 		c.log.WarnContext(ctx, "Step 2 retry skipped: no sessionId from previous run")
 		return nil, nil
