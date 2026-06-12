@@ -73,7 +73,8 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 // Run executes `opencode run --format json` and parses the streamed events.
 func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
-	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, nil)
+	// Surface significant events (tool calls, per-step usage) live as opencode streams.
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -110,6 +111,53 @@ func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeRes
 	r.logResult(ctx, cr)
 
 	return cr, nil
+}
+
+// logEvent surfaces a significant opencode stream event to the runner log: tool
+// calls as they run and per-step token usage. Invoked per stdout line while
+// opencode streams its NDJSON events.
+func (r *ExecOpenCodeRunner) logEvent(ctx context.Context, line []byte) {
+	line = bytes.TrimSpace(line)
+	if len(line) == 0 || line[0] != '{' {
+		return
+	}
+	var ev opencodeEvent
+	if json.Unmarshal(line, &ev) != nil {
+		return
+	}
+	switch ev.Type {
+	case "tool_use":
+		var p struct {
+			Tool  string `json:"tool"`
+			State struct {
+				Input struct {
+					Command     string `json:"command"`
+					FilePath    string `json:"filePath"`
+					Path        string `json:"path"`
+					Pattern     string `json:"pattern"`
+					Description string `json:"description"`
+				} `json:"input"`
+			} `json:"state"`
+		}
+		if json.Unmarshal(ev.Part, &p) != nil || p.Tool == "" {
+			return
+		}
+		var detail string
+		for _, v := range []string{p.State.Input.Command, p.State.Input.FilePath, p.State.Input.Path, p.State.Input.Pattern, p.State.Input.Description} {
+			if v != "" {
+				detail = v
+				break
+			}
+		}
+		r.Log.InfoContext(ctx, "opencode tool", "tool", p.Tool, "detail", truncate(strings.ReplaceAll(detail, "\n", " "), 160))
+	case "step_finish":
+		var p opencodeStepFinishPart
+		if json.Unmarshal(ev.Part, &p) == nil {
+			r.Log.DebugContext(ctx, "opencode step",
+				"inputTokens", p.Tokens.Input, "outputTokens", p.Tokens.Output,
+				"cacheRead", p.Tokens.Cache.Read, "cost", p.Cost)
+		}
+	}
 }
 
 // resolveSessionModel enriches cr.ModelUsage when streaming events did not expose
