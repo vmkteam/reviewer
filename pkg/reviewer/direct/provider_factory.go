@@ -1,0 +1,65 @@
+package direct
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// providerDeepSeek is the default provider id and the DeepSeek model-family
+// prefix (the published pricing table keys off the same token).
+const providerDeepSeek = "deepseek"
+
+// ProviderConfig selects and configures an LLM backend.
+type ProviderConfig struct {
+	Provider    string // "deepseek" (default) | "openai" | "anthropic"
+	Model       string
+	BaseURL     string
+	APIKey      string
+	Temperature float32
+	Pricing     Pricing // optional override; falls back to pricingFor(Model)
+}
+
+// NewProvider builds an LLMProvider from cfg. The native Anthropic provider is
+// added in M1; until then "anthropic" returns an error.
+func NewProvider(cfg ProviderConfig) (LLMProvider, error) {
+	pricing := cfg.Pricing
+	if pricing == (Pricing{}) {
+		pricing = pricingFor(cfg.Model)
+	}
+	switch strings.ToLower(cfg.Provider) {
+	case "", providerDeepSeek:
+		base := cfg.BaseURL
+		if base == "" {
+			base = "https://api.deepseek.com"
+		}
+		return NewOpenAIProvider(OpenAIConfig{APIKey: cfg.APIKey, BaseURL: base, Model: cfg.Model, Pricing: pricing, Temperature: cfg.Temperature})
+	case "openai", "openai-compat":
+		return NewOpenAIProvider(OpenAIConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Pricing: pricing, Temperature: cfg.Temperature})
+	case "anthropic":
+		return nil, errors.New("native anthropic provider not implemented yet (M1); use --api-provider openai-compat with an Anthropic-compatible base URL")
+	default:
+		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
+	}
+}
+
+// pricingFor returns published Claude per-MTok pricing for known model families,
+// or a zero table (cost reported as 0) for anything else, e.g. DeepSeek — set
+// ProviderConfig.Pricing to override.
+func pricingFor(model string) Pricing {
+	switch {
+	case strings.HasPrefix(model, "claude-opus"), strings.HasPrefix(model, "claude-fable"):
+		return Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}
+	case strings.HasPrefix(model, "claude-sonnet"):
+		return Pricing{InputPerMTok: 3, OutputPerMTok: 15, CacheReadPerMTok: 0.3, CacheWritePerMTok: 3.75}
+	case strings.HasPrefix(model, "claude-haiku"):
+		return Pricing{InputPerMTok: 1, OutputPerMTok: 5, CacheReadPerMTok: 0.1, CacheWritePerMTok: 1.25}
+	case strings.HasPrefix(model, providerDeepSeek):
+		// DeepSeek standard-tier published rates (USD/MTok). Cache hits are
+		// billed at the lower CacheRead rate; DeepSeek has no separate
+		// cache-write charge (a miss is just the input price).
+		return Pricing{InputPerMTok: 0.27, OutputPerMTok: 1.10, CacheReadPerMTok: 0.07, CacheWritePerMTok: 0.27}
+	default:
+		return Pricing{}
+	}
+}

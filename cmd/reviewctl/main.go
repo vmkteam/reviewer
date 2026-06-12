@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"reviewsrv/pkg/reviewer/ctl"
+	"reviewsrv/pkg/reviewer/direct"
 
 	"github.com/spf13/cobra"
 )
@@ -32,7 +33,7 @@ func main() {
 	pf.StringVar(&cfg.Key, "key", os.Getenv("PROJECT_KEY"), "project key (UUID)")
 	pf.StringVar(&cfg.URL, "url", os.Getenv("REVIEWSRV_URL"), "reviewsrv server URL (used for API calls from CI)")
 	pf.StringVar(&cfg.PublicURL, "public-url", os.Getenv("REVIEWSRV_PUBLIC_URL"), "browser-facing base URL for links in MR comments (defaults to --url)")
-	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner CLI: claude | opencode")
+	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner: claude | opencode | direct (direct = no CLI, calls the API directly)")
 	pf.StringVar(&cfg.Model, "model", os.Getenv("REVIEW_MODEL"), "model name (optional; if empty, runner CLI picks its own default)")
 	pf.StringVar(&cfg.Dir, "dir", ctl.EnvDefault("REVIEW_DIR", "."), "working directory with review files")
 	pf.BoolVar(&cfg.Verbose, "verbose", ctl.EnvBool("REVIEW_VERBOSE", false), "verbose output")
@@ -55,6 +56,9 @@ func main() {
 	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
 	pf.BoolVar(&cfg.DebugUpload, "debug-upload", ctl.EnvBool("REVIEW_DEBUG_UPLOAD", false), "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
 	pf.BoolVar(&cfg.AllowDangerousPermissions, "allow-dangerous-permissions", ctl.EnvBool("REVIEW_ALLOW_DANGEROUS_PERMISSIONS", true), "pass --dangerously-skip-permissions to opencode (default true; required for unattended CI)")
+	pf.StringVar(&cfg.APIProvider, "api-provider", ctl.EnvDefault("REVIEW_API_PROVIDER", "deepseek"), "direct runner provider: deepseek | openai-compat | anthropic (key from ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env)")
+	pf.StringVar(&cfg.APIBaseURL, "api-base-url", os.Getenv("REVIEW_API_BASE_URL"), "direct runner API base URL (defaults to provider's standard endpoint)")
+	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -127,7 +131,45 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
 			AllowDangerousPermissions: cfg.AllowDangerousPermissions,
 			Log:                       log,
 		}, nil
+	case ctl.RunnerDirect:
+		return buildDirectRunner(cfg, log)
 	default:
-		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s)", cfg.Runner, ctl.RunnerClaude, ctl.RunnerOpenCode)
+		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s, %s)", cfg.Runner, ctl.RunnerClaude, ctl.RunnerOpenCode, ctl.RunnerDirect)
 	}
+}
+
+func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
+	apiKey := directAPIKey(cfg.APIProvider)
+	if apiKey == "" {
+		return nil, fmt.Errorf("--runner direct: API key not found in environment (%s)", directKeyEnv(cfg.APIProvider))
+	}
+	prov, err := direct.NewProvider(direct.ProviderConfig{
+		Provider: cfg.APIProvider,
+		Model:    cfg.Model,
+		BaseURL:  cfg.APIBaseURL,
+		APIKey:   apiKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ctl.DirectRunner{
+		Provider: prov,
+		Dir:      cfg.Dir,
+		DiffBase: cfg.TargetBranch,
+		DiffHead: cfg.SourceBranch,
+		Effort:   cfg.Effort,
+		Log:      log,
+	}, nil
+}
+
+// directKeyEnv reports which env var holds the API key for the given provider.
+func directKeyEnv(provider string) string {
+	if provider == "anthropic" {
+		return "ANTHROPIC_API_KEY"
+	}
+	return "DEEPSEEK_API_KEY"
+}
+
+func directAPIKey(provider string) string {
+	return os.Getenv(directKeyEnv(provider))
 }

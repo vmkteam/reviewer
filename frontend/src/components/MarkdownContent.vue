@@ -57,13 +57,40 @@ function getMermaidTheme(): 'dark' | 'neutral' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'neutral'
 }
 
+function mermaidFallback(code: string): string {
+  return (
+    '<div class="mermaid-error">⚠ Диаграмма не отрендерилась (неверный синтаксис mermaid)</div>' +
+    `<pre class="hljs"><code>${escapeHtml(code)}</code></pre>`
+  )
+}
+
+let mermaidSeq = 0
+
+// renderMermaid renders each diagram individually and falls back to the raw
+// source on a syntax error, so one bad diagram (LLM-generated mermaid is often
+// invalid) shows a small notice instead of mermaid's full-page error graphic.
 async function renderMermaid() {
   if (!containerRef.value) return
   const nodes = containerRef.value.querySelectorAll('pre.mermaid:not([data-processed])')
   if (nodes.length === 0) return
   const { default: mermaid } = await import('mermaid')
-  mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme() })
-  await mermaid.run({ nodes: Array.from(nodes) as HTMLElement[] })
+  mermaid.initialize({ startOnLoad: false, theme: getMermaidTheme(), suppressErrorRendering: true })
+
+  for (const node of Array.from(nodes) as HTMLElement[]) {
+    const code = (node.textContent || '').trim()
+    node.setAttribute('data-processed', 'true')
+    try {
+      const ok = await mermaid.parse(code, { suppressErrors: true })
+      if (ok === false) {
+        node.innerHTML = mermaidFallback(code)
+        continue
+      }
+      const { svg } = await mermaid.render(`mermaid-${mermaidSeq++}`, code)
+      node.innerHTML = svg
+    } catch {
+      node.innerHTML = mermaidFallback(code)
+    }
+  }
 }
 
 const md: MarkdownIt = new MarkdownIt({
@@ -247,5 +274,10 @@ onMounted(() => nextTick(renderMermaid))
   border: none;
   padding: 16px 0;
   text-align: center;
+}
+.markdown-body .mermaid-error {
+  color: var(--color-warning, #b45309);
+  font-size: 0.85em;
+  margin-bottom: 6px;
 }
 </style>
