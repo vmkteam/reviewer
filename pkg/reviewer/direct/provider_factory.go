@@ -1,7 +1,6 @@
 package direct
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -37,7 +36,8 @@ func NewProvider(cfg ProviderConfig) (LLMProvider, error) {
 	case "openai", "openai-compat":
 		return NewOpenAIProvider(OpenAIConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Pricing: pricing, Temperature: cfg.Temperature})
 	case "anthropic":
-		return nil, errors.New("native anthropic provider not implemented yet (M1); use --api-provider openai-compat with an Anthropic-compatible base URL")
+		// effort flows through Request.Effort (from DirectRunner.Effort).
+		return NewAnthropicProvider(AnthropicConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Pricing: pricing})
 	default:
 		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
 	}

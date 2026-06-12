@@ -60,6 +60,13 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 		c.uploadDebugBundle(upCtx, retErr)
 	}()
 
+	// Wipe a previous run's outputs (R*.md, session logs, review.json) so the
+	// runner reviews a clean tree — otherwise its glob/grep/read tools surface
+	// stale artifacts as if they were part of the codebase. Best-effort.
+	if err := CleanReviewArtifacts(c.cfg.Dir); err != nil {
+		c.log.WarnContext(ctx, "clean review artifacts", "err", err)
+	}
+
 	// Drop a canonical empty review.json on disk first so the runner fills it
 	// in place instead of inventing the schema. Done before fetching the prompt
 	// so that even a quick failure here doesn't waste an HTTP round-trip.

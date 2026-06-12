@@ -32,24 +32,32 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
-func TestConfigResolveModel(t *testing.T) {
+func TestConfigResolveDefaults(t *testing.T) {
 	tests := []struct {
-		name      string
-		runner    string
-		model     string
-		wantModel string
+		name       string
+		runner     string
+		provider   string
+		model      string
+		effort     string
+		wantModel  string
+		wantEffort string
 	}{
-		{"claude empty model defaults to opus", RunnerClaude, "", "opus"},
-		{"empty runner defaults to claude+opus", "", "", "opus"},
-		{"claude with explicit model preserved", RunnerClaude, "sonnet", "sonnet"},
-		{"opencode empty model stays empty", RunnerOpenCode, "", ""},
-		{"opencode with explicit model preserved", RunnerOpenCode, "anthropic/claude-opus-4", "anthropic/claude-opus-4"},
+		{"claude empty model defaults to opus", RunnerClaude, "", "", "", "opus", ""},
+		{"empty runner defaults to claude+opus", "", "", "", "", "opus", ""},
+		{"claude with explicit model preserved", RunnerClaude, "", "sonnet", "", "sonnet", ""},
+		{"claude effort preserved, no default", RunnerClaude, "", "", "high", "opus", "high"},
+		{"opencode empty model stays empty", RunnerOpenCode, "", "", "", "", ""},
+		{"opencode explicit model preserved", RunnerOpenCode, "", "anthropic/claude-opus-4", "", "anthropic/claude-opus-4", ""},
+		{"direct+anthropic pins model and xhigh effort", RunnerDirect, "anthropic", "", "", "claude-opus-4-8", "xhigh"},
+		{"direct+anthropic explicit effort preserved", RunnerDirect, "anthropic", "", "max", "claude-opus-4-8", "max"},
+		{"direct+deepseek leaves model/effort untouched", RunnerDirect, "deepseek", "", "", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := Config{Runner: tt.runner, Model: tt.model}
-			c.ResolveModel()
+			c := Config{Runner: tt.runner, APIProvider: tt.provider, Model: tt.model, Effort: tt.effort}
+			c.ResolveDefaults()
 			assert.Equal(t, tt.wantModel, c.Model)
+			assert.Equal(t, tt.wantEffort, c.Effort)
 		})
 	}
 }

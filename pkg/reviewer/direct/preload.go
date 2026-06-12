@@ -61,7 +61,7 @@ func PreloadContext(ctx context.Context, root, base, head string) (string, []str
 // both are set, otherwise the working-tree diff vs base plus untracked files.
 func changedFiles(ctx context.Context, root, base, head string) ([]string, error) {
 	if base != "" && head != "" {
-		out, err := runGit(ctx, root, false, "--no-pager", "diff", "--name-only", base+"..."+head)
+		out, err := runGit(ctx, root, false, withExcludes("--no-pager", "diff", "--name-only", base+"..."+head)...)
 		if err != nil {
 			return nil, err
 		}
@@ -72,12 +72,12 @@ func changedFiles(ctx context.Context, root, base, head string) ([]string, error
 	if base != "" {
 		args = append(args, base)
 	}
-	out, err := runGit(ctx, root, false, args...)
+	out, err := runGit(ctx, root, false, withExcludes(args...)...)
 	if err != nil {
 		return nil, err
 	}
 	names := splitLines(out)
-	if ut, uerr := runGit(ctx, root, false, "ls-files", "--others", "--exclude-standard"); uerr == nil {
+	if ut, uerr := runGit(ctx, root, false, withExcludes("ls-files", "--others", "--exclude-standard")...); uerr == nil {
 		names = append(names, splitLines(ut)...)
 	}
 	return dedupeStrings(names), nil

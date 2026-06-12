@@ -28,6 +28,13 @@ type Message struct {
 	Text        string
 	ToolCalls   []ToolCall
 	ToolResults []ToolResult
+
+	// Raw is an opaque, provider-native snapshot of an assistant turn used to
+	// replay it verbatim on later requests. The Anthropic provider stores the
+	// SDK MessageParam here so signed thinking blocks survive the round-trip
+	// (rebuilding from Text+ToolCalls alone would drop them). Nil for messages
+	// the loop creates itself; providers that don't set it just reconstruct.
+	Raw any
 }
 
 // ToolCall is a tool invocation requested by the model.
@@ -71,6 +78,11 @@ type Response struct {
 	ToolCalls  []ToolCall
 	Usage      Usage
 	StopReason string
+
+	// Raw is the provider-native assistant turn (see Message.Raw). The loop
+	// copies it into the assistant Message it appends so the next request can
+	// replay it verbatim, preserving e.g. signed thinking blocks.
+	Raw any
 }
 
 // sumUsage accumulates token counters across rounds.

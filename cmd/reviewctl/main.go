@@ -118,10 +118,10 @@ func main() {
 }
 
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
-	cfg.ResolveModel()
+	cfg.ResolveDefaults()
 	switch cfg.Runner {
 	case "", ctl.RunnerClaude:
-		return &ctl.ExecClaudeRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &ctl.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
 	case ctl.RunnerOpenCode:
 		return &ctl.ExecOpenCodeRunner{
 			Model:                     cfg.Model,

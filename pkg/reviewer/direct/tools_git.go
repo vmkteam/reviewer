@@ -21,6 +21,14 @@ const (
 	emptyDiff = "empty diff"
 )
 
+// withExcludes appends a pathspec that keeps vendored and generated trees out of
+// the review diff — they would otherwise swamp it.
+func withExcludes(args ...string) []string {
+	return append(args, "--", ".",
+		":(exclude)vendor", ":(exclude)node_modules",
+		":(exclude)frontend/dist", ":(exclude)frontend/dist-vt")
+}
+
 // refRe allows only ref-ish characters, blocking argv injection via base/head.
 var refRe = regexp.MustCompile(`^[\w./@~^-]+$`)
 
@@ -83,7 +91,7 @@ func gitDiffTool(root, defBase, defHead string) (ToolDef, Handler) {
 // an addition, so uncommitted work is fully visible.
 func gitDiff(ctx context.Context, root, base, head string) (string, error) {
 	if base != "" && head != "" {
-		return runGit(ctx, root, false, "--no-pager", "diff", base+"..."+head)
+		return runGit(ctx, root, false, withExcludes("--no-pager", "diff", base+"..."+head)...)
 	}
 
 	var b strings.Builder
@@ -91,7 +99,7 @@ func gitDiff(ctx context.Context, root, base, head string) (string, error) {
 	if base != "" {
 		trackedArgs = append(trackedArgs, base)
 	}
-	tracked, err := runGit(ctx, root, false, trackedArgs...)
+	tracked, err := runGit(ctx, root, false, withExcludes(trackedArgs...)...)
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +107,7 @@ func gitDiff(ctx context.Context, root, base, head string) (string, error) {
 
 	// Untracked listing is best-effort: on failure the tracked diff is still
 	// useful, so discard the error and inline whatever (if anything) we got.
-	untracked, _ := runGit(ctx, root, false, "ls-files", "--others", "--exclude-standard")
+	untracked, _ := runGit(ctx, root, false, withExcludes("ls-files", "--others", "--exclude-standard")...)
 	n := 0
 	for _, f := range strings.Split(strings.TrimSpace(untracked), "\n") {
 		if f == "" {
