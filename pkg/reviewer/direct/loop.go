@@ -170,11 +170,15 @@ func compactMessages(msgs []Message, keepTail int) []Message {
 		return msgs
 	}
 	cut := len(msgs) - keepTail
-	for cut < len(msgs) && msgs[cut].Role == RoleTool {
+	// The kept head is the user task, so the tail must resume on an assistant
+	// turn: advance off any leading tool result (which would lead without its
+	// tool_use turn) AND any leading user message (which would collide with the
+	// head into two consecutive user messages — the Anthropic API rejects that).
+	for cut < len(msgs) && msgs[cut].Role != RoleAssistant {
 		cut++
 	}
-	// If the whole tail is tool messages, advancing past them would drop
-	// everything — skip compaction this round rather than lose the tail.
+	// If no assistant turn remains in the tail, advancing past everything would
+	// drop it all — skip compaction this round rather than lose the tail.
 	if cut >= len(msgs) {
 		return msgs
 	}

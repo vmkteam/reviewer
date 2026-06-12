@@ -216,3 +216,22 @@ func gitExec(t *testing.T, dir string, args ...string) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git %s: %s", strings.Join(args, " "), out)
 }
+
+func TestResolveInRootRejectsSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	require.NoError(t, os.WriteFile(secret, []byte("x"), 0o644))
+
+	// A symlink inside root that points outside it must be rejected, even though
+	// its lexical path stays within root.
+	require.NoError(t, os.Symlink(secret, filepath.Join(root, "evil.txt")))
+	_, err := resolveInRoot(root, "evil.txt")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "symlink")
+
+	// A normal in-root file still resolves fine.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "ok.txt"), []byte("y"), 0o644))
+	_, err = resolveInRoot(root, "ok.txt")
+	require.NoError(t, err)
+}

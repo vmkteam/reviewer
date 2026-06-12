@@ -157,10 +157,17 @@ func TestRunEmitsTranscript(t *testing.T) {
 }
 
 func TestCompactMessages(t *testing.T) {
+	// mk builds a realistic history: user task, then alternating assistant/tool
+	// turns (odd index = assistant, even = tool).
 	mk := func(n int) []Message {
 		m := make([]Message, n)
-		for i := range m {
-			m[i] = Message{Role: RoleUser, Text: fmt.Sprintf("m%d", i)}
+		m[0] = Message{Role: RoleUser, Text: "task"}
+		for i := 1; i < n; i++ {
+			if i%2 == 1 {
+				m[i] = Message{Role: RoleAssistant, Text: fmt.Sprintf("a%d", i)}
+			} else {
+				m[i] = Message{Role: RoleTool}
+			}
 		}
 		return m
 	}
@@ -168,15 +175,32 @@ func TestCompactMessages(t *testing.T) {
 	// Short conversation: returned unchanged.
 	require.Len(t, compactMessages(mk(3), 12), 3)
 
-	// Long: head kept with the marker folded in (no separate message that would
-	// create two consecutive user turns), tail preserved verbatim.
+	// Long: head kept with the marker folded in (no separate user message), tail
+	// resumes on an assistant turn so head+tail never collide into two users.
 	out := compactMessages(mk(40), 5)
-	require.Contains(t, out[0].Text, "m0")
+	require.Contains(t, out[0].Text, "task")
 	require.Contains(t, out[0].Text, "compacted")
-	require.Equal(t, "m39", out[len(out)-1].Text)
+	require.Equal(t, RoleUser, out[0].Role)
+	require.Equal(t, RoleAssistant, out[1].Role, "tail must resume on an assistant turn")
 	require.Len(t, out, 1+5)
 
-	// Tail entirely tool messages: guard skips compaction (no tail loss).
+	// C3: a tail boundary landing on a mid-history user message (e.g. a nudge)
+	// must advance to the next assistant turn, never leaving two consecutive
+	// user messages (which the Anthropic API rejects).
+	withNudge := []Message{
+		{Role: RoleUser, Text: "task"},
+		{Role: RoleAssistant, Text: "a1"},
+		{Role: RoleTool},
+		{Role: RoleUser, Text: "nudge"},
+		{Role: RoleAssistant, Text: "a2"},
+		{Role: RoleTool},
+	}
+	got := compactMessages(withNudge, 3) // cut lands on the nudge(user)
+	require.Equal(t, RoleUser, got[0].Role)
+	require.NotEqual(t, RoleUser, got[1].Role, "must not produce two consecutive user messages")
+
+	// Tail entirely tool messages: no assistant to resume on, so compaction is
+	// skipped rather than dropping the whole tail.
 	allTail := make([]Message, 20)
 	allTail[0] = Message{Role: RoleUser, Text: "task"}
 	for i := 1; i < 20; i++ {
