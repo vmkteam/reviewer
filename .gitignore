@@ -11,3 +11,7 @@ tsconfig.tsbuildinfo
 docs/patches/pgmigrator.toml
 frontend/dist/
 frontend/dist-vt/
+
+# local-only planning docs (kept on disk, never committed)
+docs/llm/DirectAPIRunner.md
+docs/llm/DirectAPIRunner.Spec.md
