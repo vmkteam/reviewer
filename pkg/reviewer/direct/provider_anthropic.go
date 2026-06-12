@@ -86,8 +86,19 @@ func (p *anthropicProvider) Complete(ctx context.Context, req Request) (Response
 		params.OutputConfig = anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(eff)}
 	}
 
-	resp, err := p.client.Messages.New(ctx, params)
-	if err != nil {
+	// Stream the response and accumulate it into a complete message. Streaming
+	// avoids the non-streaming request timeout on heavy rounds (high effort +
+	// adaptive thinking), where a single round can take a minute or more of
+	// output — a non-streamed POST would risk an HTTP read timeout.
+	stream := p.client.Messages.NewStreaming(ctx, params)
+	defer stream.Close()
+	var resp anthropic.Message
+	for stream.Next() {
+		if err := resp.Accumulate(stream.Current()); err != nil {
+			return Response{}, fmt.Errorf("anthropic: accumulate: %w", err)
+		}
+	}
+	if err := stream.Err(); err != nil {
 		return Response{}, fmt.Errorf("anthropic: %w", err)
 	}
 
