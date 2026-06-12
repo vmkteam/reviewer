@@ -37,6 +37,13 @@ type Config struct {
 	SessionID       string
 	ContinueSession bool // use --continue instead of --resume
 
+	// Direct-API runner (--runner direct): provider, endpoint and reasoning effort.
+	// The API key is read from the environment (ANTHROPIC_API_KEY / DEEPSEEK_API_KEY),
+	// never a flag.
+	APIProvider string // "deepseek" (default) | "openai-compat" | "anthropic"
+	APIBaseURL  string
+	Effort      string
+
 	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
 	// runners that support it (currently opencode). Defaults to true to match
 	// previous behaviour — unattended CI runs need it to avoid permission
@@ -91,5 +98,10 @@ func (c *Config) PublicBaseURL() string {
 func (c *Config) ResolveModel() {
 	if c.Model == "" && (c.Runner == "" || c.Runner == RunnerClaude) {
 		c.Model = "opus"
+	}
+	// Direct runner against Anthropic: pin a concrete model so cost/quality stay
+	// predictable. DeepSeek/openai-compat require an explicit --model.
+	if c.Model == "" && c.Runner == RunnerDirect && c.APIProvider == "anthropic" {
+		c.Model = "claude-opus-4-8"
 	}
 }

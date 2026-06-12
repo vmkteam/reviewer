@@ -260,7 +260,7 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
 func CollectDebugArtifacts(dir string) map[string][]byte {
-	candidates := []string{"claude-output.json", "opencode-output.jsonl", "review.json"}
+	candidates := []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"}
 	out := make(map[string][]byte, len(candidates)+len(reviewTypeByPrefix))
 
 	for _, name := range candidates {
