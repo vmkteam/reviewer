@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"reviewsrv/pkg/reviewer/ctl"
 	"reviewsrv/pkg/reviewer/direct"
@@ -144,7 +145,7 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	apiKey := directAPIKey(cfg.APIProvider)
 	if apiKey == "" {
-		return nil, fmt.Errorf("--runner direct: API key not found in environment (%s)", directKeyEnv(cfg.APIProvider))
+		return nil, fmt.Errorf("--runner direct: API key not found in environment (set %s)", strings.Join(directKeyEnvs(cfg.APIProvider), " or "))
 	}
 	prov, err := direct.NewProvider(direct.ProviderConfig{
 		Provider: cfg.APIProvider,
@@ -165,14 +166,27 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 	}, nil
 }
 
-// directKeyEnv reports which env var holds the API key for the given provider.
-func directKeyEnv(provider string) string {
-	if provider == "anthropic" {
-		return "ANTHROPIC_API_KEY"
+// directKeyEnvs reports the env vars that may hold the API key for the given
+// provider, in priority order. REVIEW_API_KEY is a provider-agnostic override so
+// an arbitrary OpenAI-compatible endpoint need not borrow the DEEPSEEK_API_KEY
+// name; the provider-specific name is the fallback. Provider matching is
+// case-insensitive, matching direct.NewProvider.
+func directKeyEnvs(provider string) []string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic":
+		return []string{"REVIEW_API_KEY", "ANTHROPIC_API_KEY"}
+	case "openai", "openai-compat":
+		return []string{"REVIEW_API_KEY", "OPENAI_API_KEY"}
+	default: // deepseek (the default) and any other openai-compatible backend
+		return []string{"REVIEW_API_KEY", "DEEPSEEK_API_KEY"}
 	}
-	return "DEEPSEEK_API_KEY"
 }
 
 func directAPIKey(provider string) string {
-	return os.Getenv(directKeyEnv(provider))
+	for _, name := range directKeyEnvs(provider) {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
 }
