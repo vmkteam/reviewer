@@ -54,11 +54,17 @@ func pricingFor(model string) Pricing {
 		return Pricing{InputPerMTok: 3, OutputPerMTok: 15, CacheReadPerMTok: 0.3, CacheWritePerMTok: 3.75}
 	case strings.HasPrefix(model, "claude-haiku"):
 		return Pricing{InputPerMTok: 1, OutputPerMTok: 5, CacheReadPerMTok: 0.1, CacheWritePerMTok: 1.25}
+	case strings.HasPrefix(model, "deepseek-v4-pro"):
+		// V4 Pro current (permanently-discounted) rates, USD/MTok. Cache hits are
+		// billed at CacheRead; DeepSeek has no separate cache-write charge (a miss
+		// is just the input price).
+		return Pricing{InputPerMTok: 0.435, OutputPerMTok: 0.87, CacheReadPerMTok: 0.003625, CacheWritePerMTok: 0.435}
+	case strings.HasPrefix(model, "deepseek-v4-flash"):
+		// V4 Flash rates (also the deepseek-chat/reasoner compatibility aliases).
+		return Pricing{InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadPerMTok: 0.0028, CacheWritePerMTok: 0.14}
 	case strings.HasPrefix(model, providerDeepSeek):
-		// DeepSeek standard-tier published rates (USD/MTok). Cache hits are
-		// billed at the lower CacheRead rate; DeepSeek has no separate
-		// cache-write charge (a miss is just the input price).
-		return Pricing{InputPerMTok: 0.27, OutputPerMTok: 1.10, CacheReadPerMTok: 0.07, CacheWritePerMTok: 0.27}
+		// Legacy deepseek-chat/reasoner alias to V4 Flash (deprecating 2026-07-24).
+		return Pricing{InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadPerMTok: 0.0028, CacheWritePerMTok: 0.14}
 	default:
 		return Pricing{}
 	}

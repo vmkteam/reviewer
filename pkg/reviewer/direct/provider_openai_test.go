@@ -46,3 +46,19 @@ func TestIsTransientErr(t *testing.T) {
 	require.True(t, isTransientErr(&openai.RequestError{HTTPStatusCode: 500}))
 	require.False(t, isTransientErr(errors.New("plain error")))
 }
+
+func TestToOpenAIMessagesSkipsBareAssistant(t *testing.T) {
+	// A bare assistant turn (no content, no tool calls) must be dropped — the
+	// DeepSeek/OpenAI API rejects it ("content or tool_calls must be set").
+	msgs := toOpenAIMessages(Request{Messages: []Message{
+		{Role: RoleUser, Text: "go"},
+		{Role: RoleAssistant},
+		{Role: RoleUser, Text: "next"},
+	}})
+	for _, m := range msgs {
+		if m.Role == "assistant" {
+			t.Fatalf("bare assistant must be skipped, got %+v", m)
+		}
+	}
+	require.Len(t, msgs, 2)
+}

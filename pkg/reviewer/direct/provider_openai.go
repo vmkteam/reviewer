@@ -155,6 +155,13 @@ func toOpenAIMessages(req Request) []openai.ChatCompletionMessage {
 					Function: openai.FunctionCall{Name: tc.Name, Arguments: string(tc.Args)},
 				})
 			}
+			// A bare assistant turn (no content and no tool calls) is rejected by
+			// the API ("content or tool_calls must be set"); some models (e.g.
+			// deepseek-v4-pro) emit one occasionally. Skip it — matching the
+			// anthropic provider, which only appends non-empty assistant turns.
+			if am.Content == "" && len(am.ToolCalls) == 0 {
+				continue
+			}
 			msgs = append(msgs, am)
 		case RoleTool:
 			for _, tr := range m.ToolResults {

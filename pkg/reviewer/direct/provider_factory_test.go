@@ -11,8 +11,12 @@ func TestPricingFor(t *testing.T) {
 	require.Equal(t, Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}, pricingFor("claude-fable-5"))
 	require.InEpsilon(t, 3.0, pricingFor("claude-sonnet-4-6").InputPerMTok, 1e-9)
 	require.InEpsilon(t, 1.0, pricingFor("claude-haiku-4-5").InputPerMTok, 1e-9)
-	require.InEpsilon(t, 0.27, pricingFor("deepseek-chat").InputPerMTok, 1e-9)
-	require.InEpsilon(t, 0.07, pricingFor("deepseek-reasoner").CacheReadPerMTok, 1e-9)
+	require.InEpsilon(t, 0.435, pricingFor("deepseek-v4-pro").InputPerMTok, 1e-9)
+	require.InEpsilon(t, 0.003625, pricingFor("deepseek-v4-pro").CacheReadPerMTok, 1e-9)
+	require.InEpsilon(t, 0.14, pricingFor("deepseek-v4-flash").InputPerMTok, 1e-9)
+	// Legacy deepseek-chat/reasoner aliases now price as V4 Flash.
+	require.InEpsilon(t, 0.14, pricingFor("deepseek-chat").InputPerMTok, 1e-9)
+	require.InEpsilon(t, 0.0028, pricingFor("deepseek-reasoner").CacheReadPerMTok, 1e-9)
 	// Unknown model -> zero table (cost reported as 0), no panic.
 	require.Equal(t, Pricing{}, pricingFor("gpt-4o"))
 	require.Equal(t, Pricing{}, pricingFor(""))
