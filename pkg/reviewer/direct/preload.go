@@ -20,7 +20,7 @@ const (
 // returns the list of files actually shown, so read-dedup can be seeded with
 // them. Best-effort: returns "", nil if git is unavailable or nothing changed.
 func PreloadContext(ctx context.Context, root, base, head string) (string, []string) {
-	diff, derr := gitDiff(ctx, root, base, head)
+	diff, derr := gitDiff(ctx, root, base, head, "")
 	files, ferr := changedFiles(ctx, root, base, head)
 	if (derr != nil || strings.TrimSpace(diff) == "" || diff == emptyDiff) && (ferr != nil || len(files) == 0) {
 		return "", nil
@@ -39,9 +39,12 @@ func PreloadContext(ctx context.Context, root, base, head string) (string, []str
 
 	b.WriteString("### Изменённые файлы (полное содержимое)\n")
 	var preloaded []string
-	for _, f := range files {
+	for i, f := range files {
 		if len(preloaded) >= preloadMaxFiles || b.Len() > preloadMaxBytes {
-			fmt.Fprintf(&b, "\n... [ещё %d файлов не показаны — используй read_files]\n", len(files)-len(preloaded))
+			rest := files[i:]
+			fmt.Fprintf(&b, "\n... [ещё %d изменённых файлов не инлайнятся из-за лимита — их ПОЛНОЕ "+
+				"содержимое читай через read_files, а изменения — через git_diff(path=...):\n%s\n]\n",
+				len(rest), strings.Join(rest, "\n"))
 			break
 		}
 		abs := filepath.Join(root, filepath.FromSlash(f))

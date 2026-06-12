@@ -235,3 +235,19 @@ func TestResolveInRootRejectsSymlinkEscape(t *testing.T) {
 	_, err = resolveInRoot(root, "ok.txt")
 	require.NoError(t, err)
 }
+
+func TestValidPath(t *testing.T) {
+	for _, p := range []string{"pkg/x.go", "main.go", "a/b/c.txt"} {
+		require.True(t, validPath(p), "want valid: %q", p)
+	}
+	for _, p := range []string{"", "  ", "/etc/passwd", "../x", "a/../../b", "-rf"} {
+		require.False(t, validPath(p), "want invalid: %q", p)
+	}
+}
+
+func TestPathspec(t *testing.T) {
+	require.Equal(t, []string{"--", "pkg/x.go"}, pathspec("pkg/x.go"))
+	whole := pathspec("")
+	require.Equal(t, "--", whole[0])
+	require.Contains(t, whole, ":(exclude)vendor")
+}
