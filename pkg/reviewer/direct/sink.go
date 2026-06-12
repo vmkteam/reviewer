@@ -7,6 +7,8 @@ import "encoding/json"
 // not be safe for concurrent use.
 //
 // Kinds:
+//   - "system"      — the system contract sent on every request (Text)
+//   - "user"        — the kickoff user task incl. preloaded diff/files (Text)
 //   - "assistant"   — model text for a round (Text)
 //   - "tool_call"   — a tool the model requested (Tool, Args)
 //   - "tool_result" — the tool's output, truncated (Tool, Content, IsError)

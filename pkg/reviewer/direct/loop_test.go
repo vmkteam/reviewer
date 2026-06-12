@@ -143,11 +143,17 @@ func TestRunEmitsTranscript(t *testing.T) {
 	for _, e := range events {
 		kinds[e.Kind]++
 	}
+	require.Equal(t, 1, kinds["system"], "kickoff system contract")
+	require.Equal(t, 1, kinds["user"], "kickoff user task")
 	require.Equal(t, 1, kinds["assistant"], "round-0 model text")
 	require.Equal(t, 2, kinds["tool_call"], "read_file + submit_review")
 	require.Equal(t, 2, kinds["tool_result"])
 	require.Equal(t, 2, kinds["round"])
 	require.Equal(t, 1, kinds["result"])
+
+	// The kickoff input is recorded before any model output.
+	require.Equal(t, "system", events[0].Kind)
+	require.Equal(t, "user", events[1].Kind)
 
 	last := events[len(events)-1]
 	require.Equal(t, "result", last.Kind)
