@@ -7,7 +7,7 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 - **Multi-project support** with configurable prompts per project
 - **5 review types**: architecture, code, security, tests, operability
 - **Severity levels**: critical, high, medium, low with traffic light system (red/yellow/green)
-- **reviewctl CLI** — single binary for the full review cycle: prompt fetch, runner (Claude Code or opencode), upload, GitLab MR comments, HTML report
+- **reviewctl CLI** — single binary for the full review cycle: prompt fetch, runner (claude / opencode / codex CLIs, or a direct LLM-API runner), upload, GitLab MR comments, HTML report
 - **GitLab MR inline comments** — critical and high issues posted directly in the diff with cleanup on re-runs
 - **Session caching** — `--session`/`--continue` flags to reuse Claude prompt cache (~90% token savings)
 - **Auto-migrations** — pgmigrator integrated as Go library, runs SQL patches on server startup
@@ -149,7 +149,14 @@ reviewctl comment   # Post MR comments for an existing review
 reviewctl version   # Print version
 ```
 
-Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--dangerously-skip-permissions`, default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `direct`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--dangerously-skip-permissions`, default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+
+**Runners:**
+
+- `claude` (default) — Claude Code CLI, full agentic exploration.
+- `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`.
+- `codex` — `codex exec` CLI (OpenAI Codex), `--model gpt-5.1-codex`.
+- `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`).
 
 ```bash
 make build-reviewctl   # Build reviewctl binary
