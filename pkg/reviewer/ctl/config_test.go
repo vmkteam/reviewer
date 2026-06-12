@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -42,15 +44,15 @@ func TestConfigResolveDefaults(t *testing.T) {
 		wantModel  string
 		wantEffort string
 	}{
-		{"claude empty model defaults to opus", RunnerClaude, "", "", "", "opus", ""},
+		{"claude empty model defaults to opus", runner.RunnerClaude, "", "", "", "opus", ""},
 		{"empty runner defaults to claude+opus", "", "", "", "", "opus", ""},
-		{"claude with explicit model preserved", RunnerClaude, "", "sonnet", "", "sonnet", ""},
-		{"claude effort preserved, no default", RunnerClaude, "", "", "high", "opus", "high"},
-		{"opencode empty model stays empty", RunnerOpenCode, "", "", "", "", ""},
-		{"opencode explicit model preserved", RunnerOpenCode, "", "anthropic/claude-opus-4", "", "anthropic/claude-opus-4", ""},
-		{"direct+anthropic pins model and xhigh effort", RunnerDirect, "anthropic", "", "", "claude-opus-4-8", "xhigh"},
-		{"direct+anthropic explicit effort preserved", RunnerDirect, "anthropic", "", "max", "claude-opus-4-8", "max"},
-		{"direct+deepseek leaves model/effort untouched", RunnerDirect, "deepseek", "", "", "", ""},
+		{"claude with explicit model preserved", runner.RunnerClaude, "", "sonnet", "", "sonnet", ""},
+		{"claude effort preserved, no default", runner.RunnerClaude, "", "", "high", "opus", "high"},
+		{"opencode empty model stays empty", runner.RunnerOpenCode, "", "", "", "", ""},
+		{"opencode explicit model preserved", runner.RunnerOpenCode, "", "anthropic/claude-opus-4", "", "anthropic/claude-opus-4", ""},
+		{"direct+anthropic pins model and xhigh effort", runner.RunnerDirect, "anthropic", "", "", "claude-opus-4-8", "xhigh"},
+		{"direct+anthropic explicit effort preserved", runner.RunnerDirect, "anthropic", "", "max", "claude-opus-4-8", "max"},
+		{"direct+deepseek leaves model/effort untouched", runner.RunnerDirect, "deepseek", "", "", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

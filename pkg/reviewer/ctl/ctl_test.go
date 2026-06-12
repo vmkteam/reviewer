@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 // testClaudeRunner returns a fixed ClaudeResult from testdata. The optional
@@ -25,7 +27,7 @@ type testClaudeRunner struct {
 	sessionID   string // captured from SetSession
 }
 
-func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, error) {
+func (r *testClaudeRunner) Run(_ context.Context, _ string) (*runner.ClaudeResult, error) {
 	if r.beforeRun != nil {
 		if err := r.beforeRun(); err != nil {
 			return nil, err
@@ -35,10 +37,10 @@ func (r *testClaudeRunner) Run(_ context.Context, _ string) (*ClaudeResult, erro
 	if err != nil {
 		return nil, err
 	}
-	return ParseClaudeResult(data)
+	return runner.ParseClaudeResult(data)
 }
 
-func (r *testClaudeRunner) Name() string                { return RunnerClaude }
+func (r *testClaudeRunner) Name() string                { return runner.RunnerClaude }
 func (r *testClaudeRunner) SetSession(sessionID string) { r.sessionID = sessionID }
 
 // setupTestDir copies testdata files to a temp dir for upload tests.
@@ -187,7 +189,7 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "claude-output.json"), []byte(`{"type":"result"}`), 0o644))
 
-	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: RunnerClaude}
+	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: runner.RunnerClaude}
 	corrupted := []byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`)
 	runner := &testClaudeRunner{
 		fixturePath: "testdata/claude_result.json",

@@ -7,6 +7,7 @@ import (
 
 	"reviewsrv/pkg/reviewer/ctl"
 	"reviewsrv/pkg/reviewer/direct"
+	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ func main() {
 	pf.StringVar(&cfg.Key, "key", os.Getenv("PROJECT_KEY"), "project key (UUID)")
 	pf.StringVar(&cfg.URL, "url", os.Getenv("REVIEWSRV_URL"), "reviewsrv server URL (used for API calls from CI)")
 	pf.StringVar(&cfg.PublicURL, "public-url", os.Getenv("REVIEWSRV_PUBLIC_URL"), "browser-facing base URL for links in MR comments (defaults to --url)")
-	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", ctl.RunnerClaude), "runner: claude | opencode | codex | direct (direct = no CLI, calls the API directly)")
+	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", runner.RunnerClaude), "runner: claude | opencode | codex | direct (direct = no CLI, calls the API directly)")
 	pf.StringVar(&cfg.Model, "model", os.Getenv("REVIEW_MODEL"), "model name (optional; if empty, runner CLI picks its own default)")
 	pf.StringVar(&cfg.Dir, "dir", ctl.EnvDefault("REVIEW_DIR", "."), "working directory with review files")
 	pf.BoolVar(&cfg.Verbose, "verbose", ctl.EnvBool("REVIEW_VERBOSE", false), "verbose output")
@@ -68,11 +69,11 @@ func main() {
 				return err
 			}
 			log := slog.Default()
-			runner, err := buildRunner(cfg, log)
+			rr, err := buildRunner(cfg, log)
 			if err != nil {
 				return err
 			}
-			c := ctl.NewController(cfg, runner, log)
+			c := ctl.NewController(cfg, rr, log)
 			return c.Review(cmd.Context())
 		},
 	}
@@ -117,13 +118,13 @@ func main() {
 	}
 }
 
-func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
+func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	cfg.ResolveDefaults()
 	switch cfg.Runner {
-	case "", ctl.RunnerClaude:
-		return &ctl.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
-	case ctl.RunnerOpenCode:
-		return &ctl.ExecOpenCodeRunner{
+	case "", runner.RunnerClaude:
+		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+	case runner.RunnerOpenCode:
+		return &runner.ExecOpenCodeRunner{
 			Model:                     cfg.Model,
 			Dir:                       cfg.Dir,
 			SessionID:                 cfg.SessionID,
@@ -131,16 +132,16 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
 			AllowDangerousPermissions: cfg.AllowDangerousPermissions,
 			Log:                       log,
 		}, nil
-	case ctl.RunnerCodex:
-		return &ctl.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
-	case ctl.RunnerDirect:
+	case runner.RunnerCodex:
+		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+	case runner.RunnerDirect:
 		return buildDirectRunner(cfg, log)
 	default:
-		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s, %s, %s)", cfg.Runner, ctl.RunnerClaude, ctl.RunnerOpenCode, ctl.RunnerCodex, ctl.RunnerDirect)
+		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s, %s, %s)", cfg.Runner, runner.RunnerClaude, runner.RunnerOpenCode, runner.RunnerCodex, runner.RunnerDirect)
 	}
 }
 
-func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, error) {
+func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	apiKey := directAPIKey(cfg.APIProvider)
 	if apiKey == "" {
 		return nil, fmt.Errorf("--runner direct: API key not found in environment (%s)", directKeyEnv(cfg.APIProvider))
@@ -154,7 +155,7 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (ctl.ReviewRunner, err
 	if err != nil {
 		return nil, err
 	}
-	return &ctl.DirectRunner{
+	return &runner.DirectRunner{
 		Provider: prov,
 		Dir:      cfg.Dir,
 		DiffBase: cfg.TargetBranch,

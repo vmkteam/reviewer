@@ -1,4 +1,4 @@
-package ctl
+package runner
 
 import (
 	"bytes"
@@ -199,6 +199,13 @@ func primaryModelName(modelUsage map[string]ClaudeModelUse, fallback string) str
 	}
 	return best
 }
+
+// Runner identifiers used by Config.Runner, ReviewRunner.Name and db.ReviewModelInfo.Runner.
+const (
+	RunnerClaude   = "claude"
+	RunnerOpenCode = "opencode"
+	RunnerCodex    = "codex"
+)
 
 // ReviewRunner abstracts the review LLM subprocess for testability.
 // Name returns a stable runner identifier (RunnerClaude | RunnerOpenCode) that

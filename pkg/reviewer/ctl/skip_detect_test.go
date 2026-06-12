@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,7 +106,7 @@ type retryStep2RunnerStub struct {
 
 func (r *retryStep2RunnerStub) Name() string         { return "stub" }
 func (r *retryStep2RunnerStub) SetSession(id string) { r.sessionSet = id }
-func (r *retryStep2RunnerStub) Run(_ context.Context, _ string) (*ClaudeResult, error) {
+func (r *retryStep2RunnerStub) Run(_ context.Context, _ string) (*runner.ClaudeResult, error) {
 	r.runCalled = true
 	if r.beforeRun != nil {
 		if err := r.beforeRun(); err != nil {
@@ -115,7 +116,7 @@ func (r *retryStep2RunnerStub) Run(_ context.Context, _ string) (*ClaudeResult, 
 	if r.runErr != nil {
 		return nil, r.runErr
 	}
-	return &ClaudeResult{}, nil
+	return &runner.ClaudeResult{}, nil
 }
 
 func TestRetryStep2(t *testing.T) {

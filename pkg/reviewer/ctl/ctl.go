@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 // Controller orchestrates the review flow.
@@ -17,17 +18,17 @@ type Controller struct {
 	prompt *PromptClient
 	upload *UploadClient
 	gitlab *GitLabClient
-	runner ReviewRunner
+	runner runner.ReviewRunner
 }
 
 // NewController creates a new Controller from Config.
-func NewController(cfg *Config, runner ReviewRunner, log *slog.Logger) *Controller {
+func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger) *Controller {
 	c := &Controller{
 		cfg:    cfg,
 		log:    log,
 		prompt: NewPromptClient(log),
 		upload: NewUploadClient(log),
-		runner: runner,
+		runner: rr,
 	}
 
 	if cfg.HasGitLab() {
