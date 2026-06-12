@@ -184,7 +184,7 @@ func TestExecClaudeRunnerBuildArgs(t *testing.T) {
 		r := &ExecClaudeRunner{}
 		args := r.buildArgs()
 		assert.Equal(t, []string{
-			"--print", "--output-format", "json",
+			"--print", "--output-format", "stream-json", "--verbose",
 			"--permission-mode", "bypassPermissions",
 			"-p", "-",
 		}, args)
@@ -254,4 +254,31 @@ func TestExecOpenCodeRunnerBuildArgs(t *testing.T) {
 		assert.Contains(t, args, "-s")
 		assert.Contains(t, args, "abc")
 	})
+}
+
+func TestParseClaudeResultStreamJSON(t *testing.T) {
+	// claude --output-format stream-json shape: NDJSON, one event per line, the
+	// last being type=="result" with the same fields as --output-format json.
+	stream := `{"type":"system","session_id":"s1"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"main.go"}}]}}
+{"type":"rate_limit_event"}
+{"type":"result","subtype":"success","total_cost_usd":0.5,"num_turns":3,"session_id":"s1","usage":{"input_tokens":10,"output_tokens":5},"modelUsage":{"claude-opus-4-8":{"costUSD":0.5}}}
+`
+	cr, err := ParseClaudeResult([]byte(stream))
+	require.NoError(t, err)
+	require.Equal(t, 3, cr.NumTurns)
+	require.InDelta(t, 0.5, cr.TotalCostUSD, 1e-9)
+	require.Equal(t, "s1", cr.SessionID)
+	require.Equal(t, 10, cr.Usage.InputTokens)
+}
+
+func TestParseClaudeResultRealStreamSample(t *testing.T) {
+	data, err := os.ReadFile("/tmp/claude-stream.jsonl")
+	if err != nil {
+		t.Skip("no real stream sample")
+	}
+	cr, err := ParseClaudeResult(data)
+	require.NoError(t, err)
+	require.Equal(t, claudeResultType, cr.Type)
+	require.GreaterOrEqual(t, cr.NumTurns, 1)
 }

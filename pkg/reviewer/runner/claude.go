@@ -116,7 +116,27 @@ func ParseClaudeResult(data []byte) (*ClaudeResult, error) {
 		return parseResultObject(lastResult)
 	}
 
-	// Single JSON object.
+	// Otherwise a single JSON object (--output-format json) or a stream of
+	// newline-delimited objects (--output-format stream-json). Decode successive
+	// values and keep the last "result"; the result line carries the same fields
+	// in both formats. Falls back to parsing the whole blob if no result is found.
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var lastResult json.RawMessage
+	for {
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			break // EOF or a truncated trailing object — use what we have
+		}
+		var peek struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(raw, &peek) == nil && peek.Type == claudeResultType {
+			lastResult = raw
+		}
+	}
+	if lastResult != nil {
+		return parseResultObject(lastResult)
+	}
 	return parseResultObject(data)
 }
 
@@ -258,7 +278,11 @@ func (r *ExecClaudeRunner) SetSession(sessionID string) {
 func (r *ExecClaudeRunner) buildArgs() []string {
 	args := []string{
 		"--print",
-		"--output-format", "json",
+		// stream-json emits one NDJSON event per line (assistant text, tool_use,
+		// the final result) so tool calls can be logged live; --verbose is required
+		// with stream-json in --print mode. The result line carries the same fields
+		// as --output-format json, so ParseClaudeResult is unchanged downstream.
+		"--output-format", "stream-json", "--verbose",
 		"--permission-mode", "bypassPermissions",
 	}
 
@@ -283,10 +307,11 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 	return args
 }
 
-// Run executes claude --print --output-format json and parses the result.
+// Run executes claude --print --output-format stream-json and parses the result.
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
-	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, nil)
+	// Surface tool calls live as claude streams its NDJSON events.
+	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -316,6 +341,63 @@ func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResul
 	r.logResult(ctx, cr)
 
 	return cr, nil
+}
+
+// logEvent surfaces a significant claude stream-json event to the runner log:
+// the tool calls in an assistant turn, as they arrive. Invoked per stdout line.
+func (r *ExecClaudeRunner) logEvent(ctx context.Context, line []byte) {
+	line = bytes.TrimSpace(line)
+	if len(line) == 0 || line[0] != '{' {
+		return
+	}
+	var head struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(line, &head) != nil || head.Type != "assistant" {
+		return
+	}
+	var ev struct {
+		Message struct {
+			Content []struct {
+				Type  string          `json:"type"`
+				Name  string          `json:"name"`
+				Input json.RawMessage `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &ev) != nil {
+		return
+	}
+	for _, c := range ev.Message.Content {
+		if c.Type == "tool_use" && c.Name != "" {
+			r.Log.InfoContext(ctx, "claude tool", "tool", c.Name, "detail", truncate(claudeToolDetail(c.Input), 160))
+		}
+	}
+}
+
+// claudeToolDetail extracts a short detail from a tool_use input: the command,
+// file path, pattern, url or description — whichever is present first.
+func claudeToolDetail(input json.RawMessage) string {
+	if len(input) == 0 {
+		return ""
+	}
+	var in struct {
+		Command     string `json:"command"`
+		FilePath    string `json:"file_path"`
+		Path        string `json:"path"`
+		Pattern     string `json:"pattern"`
+		URL         string `json:"url"`
+		Description string `json:"description"`
+	}
+	if json.Unmarshal(input, &in) != nil {
+		return ""
+	}
+	for _, v := range []string{in.Command, in.FilePath, in.Path, in.Pattern, in.URL, in.Description} {
+		if v != "" {
+			return strings.ReplaceAll(v, "\n", " ")
+		}
+	}
+	return ""
 }
 
 func (r *ExecClaudeRunner) logResult(ctx context.Context, cr *ClaudeResult) {
