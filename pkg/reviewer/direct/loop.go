@@ -38,6 +38,12 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 	var total Usage
 	nudged := false
 
+	// Record the kickoff input (system contract + user task with the preloaded
+	// diff/files) so the transcript is a full input/output log, not just the
+	// model's outputs and tool I/O.
+	opts.OnEvent.emit(Event{Kind: "system", Text: system})
+	opts.OnEvent.emit(Event{Kind: "user", Text: userPrompt})
+
 	// finish builds the result and records it in the transcript.
 	finish := func(rounds int, stop string, submitted bool) *Result {
 		r := makeResult(total, rounds, stop, submitted, p)
