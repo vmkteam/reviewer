@@ -89,8 +89,23 @@ func resolveInRoot(root, p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if abs != rootAbs && !strings.HasPrefix(abs, rootAbs+string(filepath.Separator)) {
+	sep := string(filepath.Separator)
+	if abs != rootAbs && !strings.HasPrefix(abs, rootAbs+sep) {
 		return "", fmt.Errorf("path escapes repository root: %q", p)
+	}
+	// The lexical check above is fooled by a symlink inside the tree that points
+	// outside it (e.g. evil.txt -> /etc/passwd): the path stays in-root but the
+	// read follows the link out. Resolve symlinks and re-verify. EvalSymlinks
+	// fails for a not-yet-existing path — that's fine here, such a path can't be
+	// read anyway, so let the caller's file op surface the real error.
+	if resolved, rerr := filepath.EvalSymlinks(abs); rerr == nil {
+		rootResolved, rrerr := filepath.EvalSymlinks(rootAbs)
+		if rrerr != nil {
+			rootResolved = rootAbs
+		}
+		if resolved != rootResolved && !strings.HasPrefix(resolved, rootResolved+sep) {
+			return "", fmt.Errorf("path escapes repository root via symlink: %q", p)
+		}
 	}
 	return abs, nil
 }
