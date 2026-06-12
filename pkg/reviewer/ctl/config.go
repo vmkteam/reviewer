@@ -6,6 +6,7 @@ import "errors"
 const (
 	RunnerClaude   = "claude"
 	RunnerOpenCode = "opencode"
+	RunnerCodex    = "codex"
 )
 
 // Config holds all CLI flags and CI environment variables for reviewctl.

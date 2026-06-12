@@ -121,17 +121,45 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 // JSON line. The loop emits events from a single goroutine, so no locking is
 // needed around the encoder.
 func (r *DirectRunner) attachSessionLog(ctx context.Context, opts *direct.Options) func() {
+	var enc *json.Encoder
+	closeFn := func() {}
 	path := filepath.Join(r.Dir, directSessionLog)
-	f, err := os.Create(path)
-	if err != nil {
+	if f, err := os.Create(path); err != nil {
 		if r.Log != nil {
 			r.Log.WarnContext(ctx, "direct: cannot open session log", "path", path, "err", err)
 		}
-		return nil
+	} else {
+		enc = json.NewEncoder(f)
+		closeFn = func() { _ = f.Close() }
 	}
-	enc := json.NewEncoder(f)
-	opts.OnEvent = func(ev direct.Event) { _ = enc.Encode(ev) }
-	return func() { _ = f.Close() }
+	// Write the full transcript to the file (when open) AND surface significant
+	// events to the runner log, so a CI run shows live progress.
+	opts.OnEvent = func(ev direct.Event) {
+		if enc != nil {
+			_ = enc.Encode(ev)
+		}
+		r.logEvent(ctx, ev)
+	}
+	return closeFn
+}
+
+// logEvent surfaces a significant direct-loop event to the runner log (tool calls
+// live, per-round token usage at debug). The full transcript still goes to
+// direct-output.jsonl.
+func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
+	if r.Log == nil {
+		return
+	}
+	switch ev.Kind {
+	case "tool_call":
+		r.Log.InfoContext(ctx, "direct tool", "round", ev.Round, "tool", ev.Tool, "args", truncate(string(ev.Args), 200))
+	case "round":
+		if ev.Usage != nil {
+			r.Log.DebugContext(ctx, "direct round", "round", ev.Round,
+				"inputTokens", ev.Usage.InputTokens, "outputTokens", ev.Usage.OutputTokens,
+				"cacheRead", ev.Usage.CacheReadTokens, "cacheWrite", ev.Usage.CacheWriteTokens)
+		}
+	}
 }
 
 func (r *DirectRunner) logResult(ctx context.Context, res *direct.Result) {
