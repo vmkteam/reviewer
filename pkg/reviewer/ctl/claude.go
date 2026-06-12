@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -278,7 +279,7 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 // Run executes claude --print --output-format json and parses the result.
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
-	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt)
+	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, nil)
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -374,10 +375,41 @@ type runOutput struct {
 	err    error
 }
 
+// lineWriter is an io.Writer that splits the bytes written to it on '\n' and
+// calls onLine for each complete line. Wired as a tee on a runner's stdout so a
+// JSONL agent stream can be reacted to line-by-line as it arrives; the trailing
+// line without a newline is delivered by flush().
+type lineWriter struct {
+	buf    []byte
+	onLine func([]byte)
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			break
+		}
+		w.onLine(w.buf[:i])
+		w.buf = w.buf[i+1:]
+	}
+	return len(p), nil
+}
+
+func (w *lineWriter) flush() {
+	if len(w.buf) > 0 {
+		w.onLine(w.buf)
+		w.buf = nil
+	}
+}
+
 // runExec spawns the runner CLI under the shared runnerTimeout and captures
 // stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
-// focused on argv and result parsing.
-func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string) *runOutput {
+// focused on argv and result parsing. When onLine is non-nil it receives each
+// stdout line as it streams, so a runner can surface significant events live
+// (e.g. tool calls from a JSONL agent stream) instead of only after completion.
+func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string, onLine func([]byte)) *runOutput {
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
 
@@ -386,12 +418,21 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	cmd.Stdin = strings.NewReader(prompt)
 
 	out := &runOutput{}
-	cmd.Stdout = &out.stdout
+	var lw *lineWriter
+	if onLine != nil {
+		lw = &lineWriter{onLine: onLine}
+		cmd.Stdout = io.MultiWriter(&out.stdout, lw)
+	} else {
+		cmd.Stdout = &out.stdout
+	}
 	cmd.Stderr = &out.stderr
 
 	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
 
 	out.err = cmd.Run()
+	if lw != nil {
+		lw.flush() // emit a trailing line without a newline
+	}
 
 	log.InfoContext(ctx, binary+" finished", "exitErr", out.err, "stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
 

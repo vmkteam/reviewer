@@ -73,7 +73,7 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 // Run executes `opencode run --format json` and parses the streamed events.
 func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
-	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt)
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, nil)
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
