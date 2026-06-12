@@ -88,20 +88,28 @@ func (c *Config) PublicBaseURL() string {
 	return c.URL
 }
 
-// ResolveModel fills c.Model with the runner-specific default when empty,
-// so log lines, ModelInfo and the debug bundle all show what was actually
-// passed to the CLI instead of "" (the user-facing input). Mutates c.
+// ResolveDefaults fills runner-specific defaults (model, reasoning effort) when
+// the corresponding flag is empty, so log lines, ModelInfo and the debug bundle
+// all show what was actually sent instead of "" (the user-facing input). Mutates c.
 //
 // opencode stays unpinned: its default lives in the user's opencode config.
 // Claude CLI's own default drifts between sonnet/opus across releases —
 // we pin opus to keep review cost and quality predictable.
-func (c *Config) ResolveModel() {
+func (c *Config) ResolveDefaults() {
 	if c.Model == "" && (c.Runner == "" || c.Runner == RunnerClaude) {
 		c.Model = "opus"
 	}
-	// Direct runner against Anthropic: pin a concrete model so cost/quality stay
-	// predictable. DeepSeek/openai-compat require an explicit --model.
-	if c.Model == "" && c.Runner == RunnerDirect && c.APIProvider == "anthropic" {
-		c.Model = "claude-opus-4-8"
+	// Direct runner against Anthropic: pin a concrete model and reasoning effort
+	// so cost/quality stay predictable. Without an explicit effort the Anthropic
+	// API silently defaults to "high", whereas Claude Code uses "xhigh" for
+	// agentic coding — match it so the direct runner isn't a notch weaker out of
+	// the box. DeepSeek/openai-compat ignore effort and require an explicit --model.
+	if c.Runner == RunnerDirect && c.APIProvider == "anthropic" {
+		if c.Model == "" {
+			c.Model = "claude-opus-4-8"
+		}
+		if c.Effort == "" {
+			c.Effort = "xhigh"
+		}
 	}
 }

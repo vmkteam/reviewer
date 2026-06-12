@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -257,13 +258,18 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 	return &buf, mw.FormDataContentType(), nil
 }
 
+// reviewArtifactFiles are the fixed-name outputs a runner writes into the review
+// directory (the R*.md bodies are matched separately by FindMDFiles). Shared by
+// CollectDebugArtifacts (read for the bundle) and CleanReviewArtifacts (wiped
+// before a run) so the set stays in one place.
+var reviewArtifactFiles = []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"}
+
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
 func CollectDebugArtifacts(dir string) map[string][]byte {
-	candidates := []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"}
-	out := make(map[string][]byte, len(candidates)+len(reviewTypeByPrefix))
+	out := make(map[string][]byte, len(reviewArtifactFiles)+len(reviewTypeByPrefix))
 
-	for _, name := range candidates {
+	for _, name := range reviewArtifactFiles {
 		if data, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
 			out[name] = data
 		}
@@ -280,6 +286,31 @@ func CollectDebugArtifacts(dir string) map[string][]byte {
 	}
 
 	return out
+}
+
+// CleanReviewArtifacts removes the outputs a previous run left in dir (review.json,
+// the R*.md bodies and the runner session logs) so the next run starts on a clean
+// tree. Without this the runner's glob/grep/read tools surface a prior run's output
+// as if it were part of the codebase under review. Best-effort: absent files are
+// fine; any real removal errors are joined and returned for logging.
+func CleanReviewArtifacts(dir string) error {
+	paths := make([]string, 0, len(reviewArtifactFiles))
+	for _, name := range reviewArtifactFiles {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	if mdFiles, err := FindMDFiles(dir); err == nil {
+		for _, p := range mdFiles {
+			paths = append(paths, p)
+		}
+	}
+
+	var errs []error
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // FindMDFiles scans the directory for R*.md files and returns a map of reviewType → filepath.

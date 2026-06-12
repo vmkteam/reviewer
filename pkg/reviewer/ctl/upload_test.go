@@ -264,3 +264,31 @@ func TestFindMDFiles(t *testing.T) {
 
 	assert.Len(t, files, len(expected))
 }
+
+func TestCleanReviewArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	// Review outputs that must be wiped before the next run.
+	artifacts := []string{
+		"review.json", "direct-output.jsonl", "claude-output.json",
+		"opencode-output.jsonl", "R1.foo.ru.md", "R5.bar.md",
+	}
+	// Source/doc files that must survive (no R1..R5 prefix, or not an artifact).
+	keep := []string{"main.go", "README.md", "R6.notareview.md", "notes.md"}
+	for _, n := range append(append([]string{}, artifacts...), keep...) {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644))
+	}
+
+	require.NoError(t, CleanReviewArtifacts(dir))
+
+	for _, n := range artifacts {
+		_, err := os.Stat(filepath.Join(dir, n))
+		assert.True(t, os.IsNotExist(err), "expected %s removed", n)
+	}
+	for _, n := range keep {
+		_, err := os.Stat(filepath.Join(dir, n))
+		require.NoError(t, err, "expected %s kept", n)
+	}
+
+	// Idempotent: clean again on an already-clean dir is a no-op, no error.
+	require.NoError(t, CleanReviewArtifacts(dir))
+}

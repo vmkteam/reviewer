@@ -209,6 +209,18 @@ func TestExecClaudeRunnerBuildArgs(t *testing.T) {
 		assert.Contains(t, args, "--resume")
 		assert.Contains(t, args, "abc")
 	})
+
+	t.Run("effort passed when set", func(t *testing.T) {
+		r := &ExecClaudeRunner{Effort: "xhigh"}
+		args := r.buildArgs()
+		assert.Contains(t, args, "--effort")
+		assert.Contains(t, args, "xhigh")
+	})
+
+	t.Run("effort omitted when empty", func(t *testing.T) {
+		r := &ExecClaudeRunner{Model: "opus"}
+		assert.NotContains(t, r.buildArgs(), "--effort")
+	})
 }
 
 func TestExecOpenCodeRunnerBuildArgs(t *testing.T) {

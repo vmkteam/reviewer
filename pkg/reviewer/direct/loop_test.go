@@ -168,12 +168,13 @@ func TestCompactMessages(t *testing.T) {
 	// Short conversation: returned unchanged.
 	require.Len(t, compactMessages(mk(3), 12), 3)
 
-	// Long: head kept, marker inserted, tail preserved verbatim.
+	// Long: head kept with the marker folded in (no separate message that would
+	// create two consecutive user turns), tail preserved verbatim.
 	out := compactMessages(mk(40), 5)
-	require.Equal(t, "m0", out[0].Text)
-	require.Contains(t, out[1].Text, "compacted")
+	require.Contains(t, out[0].Text, "m0")
+	require.Contains(t, out[0].Text, "compacted")
 	require.Equal(t, "m39", out[len(out)-1].Text)
-	require.Len(t, out, 1+1+5)
+	require.Len(t, out, 1+5)
 
 	// Tail entirely tool messages: guard skips compaction (no tail loss).
 	allTail := make([]Message, 20)

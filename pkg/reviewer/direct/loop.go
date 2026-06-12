@@ -55,7 +55,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		}
 		total = sumUsage(total, resp.Usage)
 		emitRound(opts.OnEvent, round, resp)
-		msgs = append(msgs, Message{Role: RoleAssistant, Text: resp.Text, ToolCalls: resp.ToolCalls})
+		msgs = append(msgs, Message{Role: RoleAssistant, Text: resp.Text, ToolCalls: resp.ToolCalls, Raw: resp.Raw})
 
 		if len(resp.ToolCalls) == 0 {
 			// Model produced only text. If it hasn't submitted, nudge once; on a
@@ -182,9 +182,15 @@ func compactMessages(msgs []Message, keepTail int) []Message {
 	if dropped <= 0 {
 		return msgs
 	}
-	out := make([]Message, 0, keepHead+1+(len(msgs)-cut))
-	out = append(out, msgs[:keepHead]...)
-	out = append(out, Message{Role: RoleUser, Text: fmt.Sprintf("[compacted: %d earlier messages omitted to fit context]", dropped)})
+	// Fold the compaction marker into the head (kept) message rather than
+	// inserting a separate one — a standalone marker after the head user turn
+	// would put two consecutive user messages in the history, which the Anthropic
+	// API rejects (roles must alternate).
+	head := msgs[0] // keepHead == 1
+	head.Text = strings.TrimSpace(head.Text +
+		fmt.Sprintf("\n\n[compacted: %d earlier messages omitted to fit context]", dropped))
+	out := make([]Message, 0, 1+(len(msgs)-cut))
+	out = append(out, head)
 	out = append(out, msgs[cut:]...)
 	return out
 }

@@ -230,6 +230,7 @@ var (
 // ExecClaudeRunner runs the real claude CLI subprocess.
 type ExecClaudeRunner struct {
 	Model           string
+	Effort          string // reasoning effort (low|medium|high|xhigh|max); empty = CLI default
 	Dir             string
 	SessionID       string // if set, uses --resume to reuse prompt cache
 	ContinueSession bool   // if true, uses --continue to resume last session
@@ -255,6 +256,13 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 
 	if r.Model != "" {
 		args = append(args, "--model", r.Model)
+	}
+
+	// Pass reasoning effort only when explicitly set; otherwise the CLI applies
+	// its own default (xhigh on Opus 4.7/4.8). Older claude CLIs that predate
+	// --effort would reject the flag, so opting in keeps them working.
+	if r.Effort != "" {
+		args = append(args, "--effort", r.Effort)
 	}
 
 	if r.ContinueSession {

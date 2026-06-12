@@ -19,8 +19,10 @@ func TestPricingFor(t *testing.T) {
 }
 
 func TestNewProviderUnknownAndAnthropic(t *testing.T) {
-	_, err := NewProvider(ProviderConfig{Provider: "anthropic", Model: "claude-opus-4-8", APIKey: "k"})
-	require.ErrorContains(t, err, "not implemented")
+	// anthropic now builds a native provider.
+	p, err := NewProvider(ProviderConfig{Provider: "anthropic", Model: "claude-opus-4-8", APIKey: "k"})
+	require.NoError(t, err)
+	require.Equal(t, "claude-opus-4-8", p.Model())
 
 	_, err = NewProvider(ProviderConfig{Provider: "bogus", Model: "m", APIKey: "k"})
 	require.ErrorContains(t, err, "unknown provider")
