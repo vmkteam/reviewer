@@ -47,7 +47,7 @@ func NewUploadClient(log *slog.Logger) *UploadClient {
 
 // UploadReview uploads review.json and returns the reviewId.
 func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey string, draft *rest.ReviewDraft) (int, error) {
-	url := fmt.Sprintf("%s/v1/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
 
 	body, err := json.Marshal(draft)
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey s
 
 // UploadFile uploads a single review file (markdown content).
 func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey string, reviewID int, reviewType string, content []byte) error {
-	url := fmt.Sprintf("%s/v1/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
+	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(content))
 	if err != nil {

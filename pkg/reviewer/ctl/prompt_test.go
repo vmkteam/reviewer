@@ -2,10 +2,10 @@ package ctl
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,10 +16,11 @@ func TestFetchPrompt(t *testing.T) {
 	const wantPrompt = "Review this code for %SOURCE_BRANCH% targeting %TARGET_BRANCH%"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.True(t, strings.HasPrefix(r.URL.Path, "/v1/prompt/"), "path = %q, want prefix /v1/prompt/", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/reviewctl/rpc/", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(wantPrompt))
+		_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": wantPrompt, "id": 1})
 	}))
 	defer srv.Close()
 
@@ -27,6 +28,28 @@ func TestFetchPrompt(t *testing.T) {
 	got, err := c.FetchPrompt(context.Background(), srv.URL, "test-key")
 	require.NoError(t, err)
 	assert.Equal(t, wantPrompt, got)
+}
+
+func TestFetchConfig(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/reviewctl/rpc/", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"result":  map[string]any{"runnerProfileId": 7, "title": "Default", "runner": "claude", "model": "opus", "effort": "xhigh"},
+			"id":      1,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewPromptClient(slog.Default())
+	rc, err := c.FetchConfig(context.Background(), srv.URL, "test-key")
+	require.NoError(t, err)
+	assert.Equal(t, 7, rc.RunnerProfileID)
+	assert.Equal(t, "claude", rc.Runner)
+	assert.Equal(t, "opus", rc.Model)
 }
 
 func TestFetchPrompt_ServerError(t *testing.T) {

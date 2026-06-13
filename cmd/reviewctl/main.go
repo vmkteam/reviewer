@@ -70,6 +70,9 @@ func main() {
 				return err
 			}
 			log := slog.Default()
+			if err := applyReviewConfig(cmd, cfg, log); err != nil {
+				return err
+			}
 			rr, err := buildRunner(cfg, log)
 			if err != nil {
 				return err
@@ -119,8 +122,66 @@ func main() {
 	}
 }
 
+// applyReviewConfig fetches the project's runner profile from the server and
+// applies it to cfg. Explicit flags win over the profile; the profile fills the
+// rest, so CI needs only the image, project key, server URL and credentials.
+func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) error {
+	rc, err := ctl.NewPromptClient(log).FetchConfig(cmd.Context(), cfg.URL, cfg.Key)
+	if err != nil {
+		return fmt.Errorf("fetch review config: %w", err)
+	}
+
+	fl := cmd.Flags()
+	cfg.RunnerProfileID = rc.RunnerProfileID
+	cfg.RunnerProfileTitle = rc.Title
+	cfg.Token = rc.Token
+	if !fl.Changed("runner") && rc.Runner != "" {
+		cfg.Runner = rc.Runner
+	}
+	if !fl.Changed("model") && rc.Model != "" {
+		cfg.Model = rc.Model
+	}
+	if !fl.Changed("effort") && rc.Effort != "" {
+		cfg.Effort = rc.Effort
+	}
+	if !fl.Changed("api-provider") && rc.APIProvider != "" {
+		cfg.APIProvider = rc.APIProvider
+	}
+	if !fl.Changed("api-base-url") && rc.APIBaseURL != "" {
+		cfg.APIBaseURL = rc.APIBaseURL
+	}
+	if !fl.Changed("allow-dangerous-permissions") {
+		cfg.AllowDangerousPermissions = rc.Params.AllowDangerousPermissions
+	}
+
+	log.InfoContext(cmd.Context(), "applied runner profile",
+		"profileId", rc.RunnerProfileID, "title", rc.Title,
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", cfg.APIProvider)
+	return nil
+}
+
+// applyTokenFallback exports the runner profile's token to the credential env
+// var a CLI runner reads, but only when that env var is empty — env always wins.
+// The direct runner consumes the token directly (see buildDirectRunner).
+func applyTokenFallback(cfg *ctl.Config) {
+	if cfg.Token == "" {
+		return
+	}
+	switch cfg.Runner {
+	case "", runner.RunnerClaude:
+		if os.Getenv("ANTHROPIC_API_KEY") == "" {
+			_ = os.Setenv("ANTHROPIC_API_KEY", cfg.Token)
+		}
+	case runner.RunnerCodex:
+		if os.Getenv("OPENAI_API_KEY") == "" {
+			_ = os.Setenv("OPENAI_API_KEY", cfg.Token)
+		}
+	}
+}
+
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	cfg.ResolveDefaults()
+	applyTokenFallback(cfg)
 	switch cfg.Runner {
 	case "", runner.RunnerClaude:
 		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
@@ -145,7 +206,10 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	apiKey := directAPIKey(cfg.APIProvider)
 	if apiKey == "" {
-		return nil, fmt.Errorf("--runner direct: API key not found in environment (set %s)", strings.Join(directKeyEnvs(cfg.APIProvider), " or "))
+		apiKey = cfg.Token // runner profile fallback (env still took priority above)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("--runner direct: API key not found in environment (set %s) or runner profile token", strings.Join(directKeyEnvs(cfg.APIProvider), " or "))
 	}
 	prov, err := direct.NewProvider(direct.ProviderConfig{
 		Provider: cfg.APIProvider,

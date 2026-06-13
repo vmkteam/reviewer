@@ -3,6 +3,7 @@ package ctl
 import (
 	"errors"
 
+	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer/runner"
 )
 
@@ -42,6 +43,13 @@ type Config struct {
 	APIBaseURL  string
 	Effort      string
 
+	// Resolved runner profile (fetched from the server over /v1/reviewctl/rpc/).
+	// Token is the optional API-key fallback used only when the matching env var
+	// is absent; RunnerProfileID/Title are recorded in the review snapshot.
+	Token              string
+	RunnerProfileID    int
+	RunnerProfileTitle string
+
 	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
 	// runners that support it (currently opencode). Defaults to true to match
 	// previous behaviour — unattended CI runs need it to avoid permission
@@ -54,6 +62,21 @@ type Config struct {
 
 	// For comment subcommand.
 	ReviewID int
+}
+
+// RunnerProfileSnapshot builds the resolved-profile snapshot recorded on the
+// review. The token is deliberately excluded — secrets never land in a review.
+func (c *Config) RunnerProfileSnapshot() db.ReviewRunnerProfile {
+	return db.ReviewRunnerProfile{
+		RunnerProfileID: c.RunnerProfileID,
+		Title:           c.RunnerProfileTitle,
+		Runner:          c.Runner,
+		Model:           c.Model,
+		Effort:          c.Effort,
+		APIProvider:     c.APIProvider,
+		APIBaseURL:      c.APIBaseURL,
+		Params:          db.RunnerProfileParams{AllowDangerousPermissions: c.AllowDangerousPermissions},
+	}
 }
 
 // Validate checks that required fields are set for the given subcommand.

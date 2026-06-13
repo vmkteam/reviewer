@@ -95,6 +95,7 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	draft.Review.ModelInfo = result.ToModelInfo(c.cfg.Model)
 	draft.Review.ModelInfo.Runner = c.runner.Name()
 	draft.Review.DurationMs = result.DurationMs
+	draft.Review.RunnerProfile = c.cfg.RunnerProfileSnapshot()
 
 	c.fillMetadata(draft)
 

@@ -65,8 +65,8 @@ func TestController_Upload(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		// POST /v1/upload/{projectKey}/ — review
-		if len(parts) == 3 && r.Method == http.MethodPost {
+		// POST /v1/reviewctl/upload/{projectKey}/ — review
+		if len(parts) == 4 && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
 			var draft map[string]any
 			json.Unmarshal(body, &draft)
@@ -75,9 +75,9 @@ func TestController_Upload(t *testing.T) {
 			w.Write([]byte("42"))
 			return
 		}
-		// POST /v1/upload/{projectKey}/{reviewId}/{type}/ — file
-		if len(parts) == 5 && r.Method == http.MethodPost {
-			uploadedFiles = append(uploadedFiles, parts[4])
+		// POST /v1/reviewctl/upload/{projectKey}/{reviewId}/{type}/ — file
+		if len(parts) == 6 && r.Method == http.MethodPost {
+			uploadedFiles = append(uploadedFiles, parts[5])
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -112,22 +112,22 @@ func TestController_Review(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		// GET /v1/prompt/{key}/
-		if strings.HasPrefix(path, "/v1/prompt/") && r.Method == http.MethodGet {
+		// POST /v1/reviewctl/rpc/ — Prompt
+		if path == "/v1/reviewctl/rpc/" && r.Method == http.MethodPost {
 			promptCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Review %SOURCE_BRANCH% to %TARGET_BRANCH%"))
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "Review %SOURCE_BRANCH% to %TARGET_BRANCH%", "id": 1})
 			return
 		}
-		// POST /v1/upload/{key}/
+		// POST /v1/reviewctl/upload/{key}/
 		parts := strings.Split(strings.Trim(path, "/"), "/")
-		if len(parts) == 3 && r.Method == http.MethodPost {
+		if len(parts) == 4 && r.Method == http.MethodPost {
 			uploadedReview = true
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("42"))
 			return
 		}
-		if len(parts) == 5 && r.Method == http.MethodPost {
+		if len(parts) == 6 && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -162,9 +162,9 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if strings.HasPrefix(path, "/v1/prompt/") && r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("prompt"))
+		if path == "/v1/reviewctl/rpc/" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "prompt", "id": 1})
 			return
 		}
 		if strings.HasPrefix(path, "/v1/upload/debug/") && r.Method == http.MethodPost {
