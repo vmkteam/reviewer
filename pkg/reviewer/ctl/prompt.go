@@ -30,6 +30,9 @@ const (
 	PlaceholderMRTitle = "%MR_TITLE%"
 )
 
+// jsonRPCVersion is the JSON-RPC protocol version sent to /v1/reviewctl/rpc/.
+const jsonRPCVersion = "2.0"
+
 // PromptClient fetches review prompts from the reviewsrv server.
 type PromptClient struct {
 	httpClient *http.Client
@@ -89,7 +92,7 @@ func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey st
 func (c *PromptClient) rpcCall(ctx context.Context, serverURL, method, projectKey string, out any) error {
 	url := strings.TrimRight(serverURL, "/") + "/v1/reviewctl/rpc/"
 	reqBody, err := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
+		"jsonrpc": jsonRPCVersion,
 		"method":  method,
 		"params":  map[string]string{"projectKey": projectKey},
 		"id":      1,
