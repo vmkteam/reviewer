@@ -68,14 +68,15 @@ func (a *App) registerHandlers() {
 
 	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL)
 
-	a.echo.GET("/v1/prompt/:projectKey/", h.GetPrompt, lg)
-	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
-	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
-
-	// Internal reviewctl API: config/prompt over JSON-RPC + upload (CI-only path).
+	// Internal reviewctl API: config + prompt over JSON-RPC, plus review upload.
+	// CI-only path; reviewctl pulls its runner profile and prompt from here.
 	a.echo.POST("/v1/reviewctl/rpc/", h.ReviewctlRPC, lg)
 	a.echo.POST("/v1/reviewctl/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/reviewctl/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
+
+	// Deprecated upload aliases kept for older CI images during the cutover.
+	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
+	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
 	a.echo.GET("/v1/rpc/project-instructions-:id", h.ProjectInstructionsMarkdown, lg)
 

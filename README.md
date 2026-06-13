@@ -8,6 +8,7 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 - **5 review types**: architecture, code, security, tests, operability
 - **Severity levels**: critical, high, medium, low with traffic light system (red/yellow/green)
 - **reviewctl CLI** — single binary for the full review cycle: prompt fetch, runner (claude / opencode / codex CLIs, or a direct LLM-API runner), upload, GitLab MR comments, HTML report
+- **Runner profiles** — per-project runner configuration (runner type, model, effort, provider, optional fallback token) managed in the admin panel; one global default, any project may pin its own. `reviewctl` pulls the resolved profile from the server so CI stays thin (correct image + credentials only)
 - **GitLab MR inline comments** — critical and high issues posted directly in the diff with cleanup on re-runs
 - **Session caching** — `--session`/`--continue` flags to reuse Claude prompt cache (~90% token savings)
 - **Auto-migrations** — pgmigrator integrated as Go library, runs SQL patches on server startup
@@ -21,10 +22,10 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 ```
 GitLab CI (merge request)
   -> reviewctl review
-       -> fetch prompt from reviewer (/v1/prompt/$PROJECT_KEY/)
-       -> claude --print --output-format json -p "$PROMPT"
+       -> fetch runner profile + prompt (/v1/reviewctl/rpc/ → ReviewConfig, Prompt)
+       -> run the resolved runner (claude / opencode / codex / direct)
        -> parse review.json + R*.md files
-       -> upload to reviewer (/v1/upload/$PROJECT_KEY/)
+       -> upload to reviewer (/v1/reviewctl/upload/$PROJECT_KEY/)
        -> post GitLab MR comments (summary + inline issues)
        -> generate HTML report
   -> reviewer server stores results in PostgreSQL
@@ -112,9 +113,10 @@ Environment = ""
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/v1/prompt/:projectKey/` | Get review prompt for a project |
-| POST | `/v1/upload/:projectKey/` | Create a new review |
-| POST | `/v1/upload/:projectKey/:reviewId/:reviewType/` | Upload a review file |
+| POST | `/v1/reviewctl/rpc/` | Internal reviewctl JSON-RPC: `ReviewConfig` (resolved runner profile) and `Prompt` |
+| POST | `/v1/reviewctl/upload/:projectKey/` | Create a new review |
+| POST | `/v1/reviewctl/upload/:projectKey/:reviewId/:reviewType/` | Upload a review file |
+| POST | `/v1/upload/:projectKey/[...]` | Deprecated upload aliases (kept for older CI images) |
 
 ### JSON-RPC
 
@@ -151,7 +153,7 @@ reviewctl version   # Print version
 
 Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `direct`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--dangerously-skip-permissions`, default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
 
-**Runners:**
+**Runners:** the runner and its model/effort/provider come from the project's **runner profile** (configured in the admin panel and fetched at run time); CI does not pass them. The `--runner`/`--model`/`--effort`/`--api-*` flags still override the profile for local runs.
 
 - `claude` (default) — Claude Code CLI, full agentic exploration.
 - `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`.
@@ -180,11 +182,12 @@ The admin panel (`/vt/`) provides ready-to-use CI configuration:
 2. Build the Docker image from the provided Dockerfile.
 3. Add CI/CD variables to your GitLab project:
    - `PROJECT_KEY` — project key from reviewer
-   - `ANTHROPIC_API_KEY` — Claude API key
+   - `REVIEWSRV_URL` — reviewer server URL
+   - credentials for the project's runner profile — e.g. `ANTHROPIC_API_KEY` for the `claude` runner, `DEEPSEEK_API_KEY`/`OPENAI_API_KEY`/`REVIEW_API_KEY` for the `direct` runner (or set a fallback token on the profile)
    - `REVIEWER_GITLAB_TOKEN` — GitLab token for MR comments (optional)
 4. Paste the generated YAML into your repository's `.gitlab-ci.yml`.
 
-The CI job runs `reviewctl review` on merge requests. It fetches the prompt, runs Claude Code review, uploads results, and posts inline comments to the MR.
+The CI job runs `reviewctl review` on merge requests. It fetches the resolved runner profile + prompt from the server, runs the configured runner, uploads results, and posts inline comments to the MR. Runner type, model and effort are managed centrally as **runner profiles** in the admin panel — CI does not pass them.
 
 For local runs, click the **Run** button on a specific project row to get a ready-to-use bash script.
 
@@ -207,8 +210,8 @@ When deploying behind a reverse proxy, URLs should be split by access level:
 
 | Path | Description |
 |------|-------------|
-| `/v1/upload/` | Review upload endpoint |
-| `/v1/prompt/` | Prompt fetch endpoint |
+| `/v1/reviewctl/` | reviewctl internal API (config, prompt, upload) |
+| `/v1/upload/` | Deprecated upload aliases (older CI images) |
 
 Example nginx configuration:
 
@@ -220,8 +223,8 @@ location /v1/rpc/   { proxy_pass http://reviewer:8075; }
 location /v1/vt/    { proxy_pass http://reviewer:8075; }
 
 # Internal URLs — accessible only from CI runners
-location /v1/upload/ { deny all; }
-location /v1/prompt/ { deny all; }
+location /v1/reviewctl/ { deny all; }
+location /v1/upload/    { deny all; }
 ```
 
 ## Development

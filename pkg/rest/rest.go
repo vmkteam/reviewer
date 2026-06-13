@@ -191,18 +191,3 @@ func (h *Handler) ProjectInstructionsMarkdown(c echo.Context) error {
 
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
 }
-
-// GetPrompt returns the assembled review prompt for the given project.
-func (h *Handler) GetPrompt(c echo.Context) error {
-	project, err := h.projectByKey(c)
-	if err != nil {
-		return err
-	}
-
-	prompt, err := h.pm.Prompt(c.Request().Context(), project.ProjectKey)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return c.String(http.StatusOK, prompt)
-}
