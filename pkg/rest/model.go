@@ -16,18 +16,19 @@ type ReviewDraft struct {
 
 // ReviewDraftMeta is the per-review metadata block.
 type ReviewDraftMeta struct {
-	ExternalID    string             `json:"externalId"`
-	Title         string             `json:"title"`
-	Description   string             `json:"description"`
-	CommitHash    string             `json:"commitHash"`
-	SourceBranch  string             `json:"sourceBranch"`
-	TargetBranch  string             `json:"targetBranch"`
-	Author        string             `json:"author"`
-	CreatedAt     time.Time          `json:"createdAt"`
-	DurationMs    int                `json:"durationMs"`
-	EffortMinutes int                `json:"effortMinutes"`
-	AiSlopScore   float32            `json:"aiSlopScore"`
-	ModelInfo     db.ReviewModelInfo `json:"modelInfo"`
+	ExternalID    string                 `json:"externalId"`
+	Title         string                 `json:"title"`
+	Description   string                 `json:"description"`
+	CommitHash    string                 `json:"commitHash"`
+	SourceBranch  string                 `json:"sourceBranch"`
+	TargetBranch  string                 `json:"targetBranch"`
+	Author        string                 `json:"author"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	DurationMs    int                    `json:"durationMs"`
+	EffortMinutes int                    `json:"effortMinutes"`
+	AiSlopScore   float32                `json:"aiSlopScore"`
+	ModelInfo     db.ReviewModelInfo     `json:"modelInfo"`
+	RunnerProfile db.ReviewRunnerProfile `json:"runnerProfile"`
 }
 
 // ReviewDraftFile is one of the five review groups (architecture, code, …).
@@ -87,6 +88,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 			EffortMinutes: ptrInt(rd.Review.EffortMinutes),
 			AiSlopScore:   ptrFloat32(rd.Review.AiSlopScore),
 			ModelInfo:     rd.Review.ModelInfo,
+			RunnerProfile: rd.Review.RunnerProfile,
 		},
 	}
 

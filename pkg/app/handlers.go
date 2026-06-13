@@ -71,6 +71,11 @@ func (a *App) registerHandlers() {
 	a.echo.GET("/v1/prompt/:projectKey/", h.GetPrompt, lg)
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
+
+	// Internal reviewctl API: config/prompt over JSON-RPC + upload (CI-only path).
+	a.echo.POST("/v1/reviewctl/rpc/", h.ReviewctlRPC, lg)
+	a.echo.POST("/v1/reviewctl/upload/:projectKey/", h.CreateReview, lg)
+	a.echo.POST("/v1/reviewctl/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
 	a.echo.GET("/v1/rpc/project-instructions-:id", h.ProjectInstructionsMarkdown, lg)
 

@@ -35,6 +35,24 @@ func (pm *ProjectManager) GetByKey(ctx context.Context, projectKey string) (*Pro
 	return NewProject(p), err
 }
 
+// RunnerProfile resolves the runner profile reviewctl should use for a project:
+// the project's pinned profile, or the global default when none is set. Returns
+// nil if the project key is unknown and no default profile exists.
+func (pm *ProjectManager) RunnerProfile(ctx context.Context, projectKey string) (*db.RunnerProfile, error) {
+	p, err := pm.repo.OneProject(ctx, &db.ProjectSearch{ProjectKey: &projectKey})
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
+	}
+	if p.RunnerProfileID != nil {
+		return pm.repo.RunnerProfileByID(ctx, *p.RunnerProfileID)
+	}
+	isDefault := true
+	return pm.repo.OneRunnerProfile(ctx, &db.RunnerProfileSearch{IsDefault: &isDefault})
+}
+
 // List returns all enabled projects.
 func (pm *ProjectManager) List(ctx context.Context) (Projects, error) {
 	projects, err := pm.repo.ProjectsByFilters(ctx, nil, db.PagerNoLimit, pm.repo.DefaultProjectSort(), db.WithColumns(db.TableColumns, db.Columns.Project.TaskTracker))
