@@ -16,6 +16,8 @@
                 <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
                 <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="ProjectKeyILike" SearchName="ProjectKeyILike" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Instructions" AttrName="Instructions" SearchName="Instructions" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="RunnerProfileID" AttrName="RunnerProfileID" SearchName="RunnerProfileID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
             </Attributes>
             <Template>
                 <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
@@ -32,6 +34,9 @@
                 <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
                 <Attribute Name="ProjectKeyILike" VTAttrName="ProjectKeyILike" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Instructions" VTAttrName="Instructions" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="RunnerProfileID" VTAttrName="RunnerProfileID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="RunnerProfile" VTAttrName="RunnerProfileID" List="true" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
             </Template>
         </Entity>
         <Entity Name="Prompt" Mode="Full">
@@ -47,6 +52,7 @@
                 <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
                 <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Operability" AttrName="Operability" SearchName="OperabilityILike" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
             </Attributes>
             <Template>
                 <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
@@ -58,6 +64,7 @@
                 <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
                 <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="Operability" VTAttrName="Operability" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
             </Template>
         </Entity>
         <Entity Name="SlackChannel" Mode="Full">
@@ -88,6 +95,7 @@
                 <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="false" Search="false" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
                 <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="URL" AttrName="URL" SearchName="URL" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
             </Attributes>
             <Template>
                 <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
@@ -96,6 +104,40 @@
                 <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
                 <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="URL" VTAttrName="URL" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+            </Template>
+        </Entity>
+        <Entity Name="RunnerProfile" Mode="Full">
+            <TerminalPath>runner-profiles</TerminalPath>
+            <Attributes>
+                <Attribute Name="ID" AttrName="ID" SearchName="ID" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Title" AttrName="Title" SearchName="TitleILike" Summary="true" Search="true" Max="255" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Runner" AttrName="Runner" SearchName="RunnerILike" Summary="true" Search="true" Max="32" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="Model" AttrName="Model" SearchName="Model" Summary="true" Search="true" Max="128" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Effort" AttrName="Effort" SearchName="Effort" Summary="true" Search="true" Max="16" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="APIProvider" AttrName="APIProvider" SearchName="APIProvider" Summary="true" Search="true" Max="32" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="APIBaseURL" AttrName="APIBaseURL" SearchName="APIBaseURL" Summary="true" Search="true" Max="255" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Token" AttrName="Token" SearchName="Token" Summary="true" Search="true" Max="255" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="Params" AttrName="Params" SearchName="Params" Summary="false" Search="false" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="IsDefault" AttrName="IsDefault" SearchName="IsDefault" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="CreatedAt" AttrName="CreatedAt" SearchName="CreatedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
+                <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="StatusIDs" SearchName="StatusIDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+            </Attributes>
+            <Template>
+                <Attribute Name="Title" VTAttrName="Title" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Runner" VTAttrName="Runner" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Model" VTAttrName="Model" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Effort" VTAttrName="Effort" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="APIProvider" VTAttrName="APIProvider" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="APIBaseURL" VTAttrName="APIBaseURL" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="Token" VTAttrName="Token" List="false" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IsDefault" VTAttrName="IsDefault" List="true" Form="HTML_CHECKBOX" Search="HTML_CHECKBOX"></Attribute>
+                <Attribute Name="CreatedAt" VTAttrName="CreatedAt" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
+                <Attribute Name="StatusIDs" VTAttrName="StatusIDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
             </Template>
         </Entity>
     </VTEntities>

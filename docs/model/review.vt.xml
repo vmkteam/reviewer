@@ -22,6 +22,11 @@
                 <Attribute Name="StatusID" AttrName="StatusID" SearchName="StatusID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate="status"></Attribute>
                 <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="ReviewFileReviewType" SearchName="ReviewFileReviewType" Summary="false" Search="true" Max="64" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="LocalID" AttrName="LocalID" SearchName="LocalID" Summary="true" Search="true" Max="16" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="SuggestedFix" AttrName="SuggestedFix" SearchName="SuggestedFix" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ArchivedAt" AttrName="ArchivedAt" SearchName="ArchivedAt" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ReviewProjectID" SearchName="ReviewProjectID" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="ArchivedAtIsNull" SearchName="ArchivedAtIsNull" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
             </Attributes>
             <Template>
                 <Attribute Name="ReviewFileID" VTAttrName="ReviewFileID" List="false" FKOpts="id" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
@@ -43,6 +48,11 @@
                 <Attribute Name="StatusID" VTAttrName="StatusID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
                 <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
                 <Attribute Name="ReviewFileReviewType" VTAttrName="ReviewFileReviewType" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="LocalID" VTAttrName="LocalID" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="SuggestedFix" VTAttrName="SuggestedFix" List="true" Form="HTML_TEXT" Search="HTML_TEXT"></Attribute>
+                <Attribute Name="ArchivedAt" VTAttrName="ArchivedAt" List="true" Form="HTML_DATETIME" Search="HTML_DATETIME"></Attribute>
+                <Attribute Name="ReviewProjectID" VTAttrName="ReviewProjectID" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="ArchivedAtIsNull" VTAttrName="ArchivedAtIsNull" List="false" Form="HTML_NONE" Search="HTML_DATETIME"></Attribute>
             </Template>
         </Entity>
         <Entity Name="ReviewFile" Mode="Full">
@@ -95,6 +105,9 @@
                 <Attribute Name="PromptID" AttrName="PromptID" SearchName="PromptID" Summary="true" Search="true" Max="0" Min="0" Required="true" Validate=""></Attribute>
                 <Attribute Name="IDs" SearchName="IDs" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
                 <Attribute Name="IDLt" SearchName="IDLt" Summary="false" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="RunnerProfile" AttrName="RunnerProfile" SearchName="RunnerProfile" Summary="false" Search="false" Max="0" Min="0" Required="true" Validate=""></Attribute>
+                <Attribute Name="EffortMinutes" AttrName="EffortMinutes" SearchName="EffortMinutes" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
+                <Attribute Name="AiSlopScore" AttrName="AiSlopScore" SearchName="AiSlopScore" Summary="true" Search="true" Max="0" Min="0" Required="false" Validate=""></Attribute>
             </Attributes>
             <Template>
                 <Attribute Name="ProjectID" VTAttrName="ProjectID" List="false" FKOpts="title" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
@@ -114,6 +127,8 @@
                 <Attribute Name="Prompt" VTAttrName="PromptID" List="false" FKOpts="title" Form="" Search="HTML_NONE"></Attribute>
                 <Attribute Name="IDs" VTAttrName="IDs" List="false" Form="HTML_NONE" Search="HTML_SELECT"></Attribute>
                 <Attribute Name="IDLt" VTAttrName="IDLt" List="false" Form="HTML_NONE" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="EffortMinutes" VTAttrName="EffortMinutes" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
+                <Attribute Name="AiSlopScore" VTAttrName="AiSlopScore" List="true" Form="HTML_INPUT" Search="HTML_INPUT"></Attribute>
             </Template>
         </Entity>
     </VTEntities>

@@ -60,3 +60,16 @@ type StatusUpdate struct {
 func generateUUID() string {
 	return uuid.New().String()
 }
+
+// maskSecret returns a masked representation of a stored secret for display in
+// the admin UI: empty for no secret, otherwise dots plus the last 4 characters.
+func maskSecret(s *string) string {
+	if s == nil || *s == "" {
+		return ""
+	}
+	v := *s
+	if len(v) <= 4 {
+		return "••••"
+	}
+	return "••••" + v[len(v)-4:]
+}

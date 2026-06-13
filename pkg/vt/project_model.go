@@ -6,21 +6,23 @@ import (
 )
 
 type Project struct {
-	ID             int     `json:"id"`
-	Title          string  `json:"title" validate:"required,max=255"`
-	VcsURL         string  `json:"vcsURL" validate:"required,http_url,max=255"`
-	Language       string  `json:"language" validate:"required,max=32"`
-	ProjectKey     string  `json:"projectKey"`
-	PromptID       int     `json:"promptId" validate:"required"`
-	TaskTrackerID  *int    `json:"taskTrackerId"`
-	SlackChannelID *int    `json:"slackChannelId"`
-	StatusID       int     `json:"statusId" validate:"required,status"`
-	Instructions   *string `json:"instructions"`
+	ID              int     `json:"id"`
+	Title           string  `json:"title" validate:"required,max=255"`
+	VcsURL          string  `json:"vcsURL" validate:"required,http_url,max=255"`
+	Language        string  `json:"language" validate:"required,max=32"`
+	ProjectKey      string  `json:"projectKey"`
+	PromptID        int     `json:"promptId" validate:"required"`
+	TaskTrackerID   *int    `json:"taskTrackerId"`
+	SlackChannelID  *int    `json:"slackChannelId"`
+	RunnerProfileID *int    `json:"runnerProfileId"`
+	StatusID        int     `json:"statusId" validate:"required,status"`
+	Instructions    *string `json:"instructions"`
 
-	Prompt       *PromptSummary       `json:"prompt"`
-	TaskTracker  *TaskTrackerSummary  `json:"taskTracker"`
-	SlackChannel *SlackChannelSummary `json:"slackChannel"`
-	Status       *Status              `json:"status"`
+	Prompt        *PromptSummary        `json:"prompt"`
+	TaskTracker   *TaskTrackerSummary   `json:"taskTracker"`
+	SlackChannel  *SlackChannelSummary  `json:"slackChannel"`
+	RunnerProfile *RunnerProfileSummary `json:"runnerProfile"`
+	Status        *Status               `json:"status"`
 }
 
 func (p *Project) ToDB() *db.Project {
@@ -29,32 +31,34 @@ func (p *Project) ToDB() *db.Project {
 	}
 
 	project := &db.Project{
-		ID:             p.ID,
-		Title:          p.Title,
-		VcsURL:         p.VcsURL,
-		Language:       p.Language,
-		ProjectKey:     p.ProjectKey,
-		PromptID:       p.PromptID,
-		TaskTrackerID:  p.TaskTrackerID,
-		SlackChannelID: p.SlackChannelID,
-		StatusID:       p.StatusID,
-		Instructions:   p.Instructions,
+		ID:              p.ID,
+		Title:           p.Title,
+		VcsURL:          p.VcsURL,
+		Language:        p.Language,
+		ProjectKey:      p.ProjectKey,
+		PromptID:        p.PromptID,
+		TaskTrackerID:   p.TaskTrackerID,
+		SlackChannelID:  p.SlackChannelID,
+		RunnerProfileID: p.RunnerProfileID,
+		StatusID:        p.StatusID,
+		Instructions:    p.Instructions,
 	}
 
 	return project
 }
 
 type ProjectSearch struct {
-	ID             *int    `json:"id"`
-	Title          *string `json:"title"`
-	VcsURL         *string `json:"vcsURL"`
-	Language       *string `json:"language"`
-	ProjectKey     *string `json:"projectKey"`
-	PromptID       *int    `json:"promptId"`
-	TaskTrackerID  *int    `json:"taskTrackerId"`
-	SlackChannelID *int    `json:"slackChannelId"`
-	StatusID       *int    `json:"statusId"`
-	IDs            []int   `json:"ids"`
+	ID              *int    `json:"id"`
+	Title           *string `json:"title"`
+	VcsURL          *string `json:"vcsURL"`
+	Language        *string `json:"language"`
+	ProjectKey      *string `json:"projectKey"`
+	PromptID        *int    `json:"promptId"`
+	TaskTrackerID   *int    `json:"taskTrackerId"`
+	SlackChannelID  *int    `json:"slackChannelId"`
+	RunnerProfileID *int    `json:"runnerProfileId"`
+	StatusID        *int    `json:"statusId"`
+	IDs             []int   `json:"ids"`
 }
 
 func (ps *ProjectSearch) ToDB() *db.ProjectSearch {
@@ -63,33 +67,36 @@ func (ps *ProjectSearch) ToDB() *db.ProjectSearch {
 	}
 
 	return &db.ProjectSearch{
-		ID:             ps.ID,
-		TitleILike:     ps.Title,
-		VcsURLILike:    ps.VcsURL,
-		LanguageILike:  ps.Language,
-		ProjectKey:     ps.ProjectKey,
-		PromptID:       ps.PromptID,
-		TaskTrackerID:  ps.TaskTrackerID,
-		SlackChannelID: ps.SlackChannelID,
-		StatusID:       ps.StatusID,
-		IDs:            ps.IDs,
+		ID:              ps.ID,
+		TitleILike:      ps.Title,
+		VcsURLILike:     ps.VcsURL,
+		LanguageILike:   ps.Language,
+		ProjectKey:      ps.ProjectKey,
+		PromptID:        ps.PromptID,
+		TaskTrackerID:   ps.TaskTrackerID,
+		SlackChannelID:  ps.SlackChannelID,
+		RunnerProfileID: ps.RunnerProfileID,
+		StatusID:        ps.StatusID,
+		IDs:             ps.IDs,
 	}
 }
 
 type ProjectSummary struct {
-	ID             int    `json:"id"`
-	Title          string `json:"title"`
-	VcsURL         string `json:"vcsURL"`
-	Language       string `json:"language"`
-	ProjectKey     string `json:"projectKey"`
-	PromptID       int    `json:"promptId"`
-	TaskTrackerID  *int   `json:"taskTrackerId"`
-	SlackChannelID *int   `json:"slackChannelId"`
+	ID              int    `json:"id"`
+	Title           string `json:"title"`
+	VcsURL          string `json:"vcsURL"`
+	Language        string `json:"language"`
+	ProjectKey      string `json:"projectKey"`
+	PromptID        int    `json:"promptId"`
+	TaskTrackerID   *int   `json:"taskTrackerId"`
+	SlackChannelID  *int   `json:"slackChannelId"`
+	RunnerProfileID *int   `json:"runnerProfileId"`
 
-	Prompt       *PromptSummary       `json:"prompt"`
-	TaskTracker  *TaskTrackerSummary  `json:"taskTracker"`
-	SlackChannel *SlackChannelSummary `json:"slackChannel"`
-	Status       *Status              `json:"status"`
+	Prompt        *PromptSummary        `json:"prompt"`
+	TaskTracker   *TaskTrackerSummary   `json:"taskTracker"`
+	SlackChannel  *SlackChannelSummary  `json:"slackChannel"`
+	RunnerProfile *RunnerProfileSummary `json:"runnerProfile"`
+	Status        *Status               `json:"status"`
 }
 
 type Prompt struct {

@@ -10,21 +10,23 @@ func NewProject(in *db.Project) *Project {
 	}
 
 	project := &Project{
-		ID:             in.ID,
-		Title:          in.Title,
-		VcsURL:         in.VcsURL,
-		Language:       in.Language,
-		ProjectKey:     in.ProjectKey,
-		PromptID:       in.PromptID,
-		TaskTrackerID:  in.TaskTrackerID,
-		SlackChannelID: in.SlackChannelID,
-		StatusID:       in.StatusID,
-		Instructions:   in.Instructions,
+		ID:              in.ID,
+		Title:           in.Title,
+		VcsURL:          in.VcsURL,
+		Language:        in.Language,
+		ProjectKey:      in.ProjectKey,
+		PromptID:        in.PromptID,
+		TaskTrackerID:   in.TaskTrackerID,
+		SlackChannelID:  in.SlackChannelID,
+		RunnerProfileID: in.RunnerProfileID,
+		StatusID:        in.StatusID,
+		Instructions:    in.Instructions,
 
-		Prompt:       NewPromptSummary(in.Prompt),
-		TaskTracker:  NewTaskTrackerSummary(in.TaskTracker),
-		SlackChannel: NewSlackChannelSummary(in.SlackChannel),
-		Status:       NewStatus(in.StatusID),
+		Prompt:        NewPromptSummary(in.Prompt),
+		TaskTracker:   NewTaskTrackerSummary(in.TaskTracker),
+		SlackChannel:  NewSlackChannelSummary(in.SlackChannel),
+		RunnerProfile: NewRunnerProfileSummary(in.RunnerProfile),
+		Status:        NewStatus(in.StatusID),
 	}
 
 	return project
@@ -36,19 +38,21 @@ func NewProjectSummary(in *db.Project) *ProjectSummary {
 	}
 
 	return &ProjectSummary{
-		ID:             in.ID,
-		Title:          in.Title,
-		VcsURL:         in.VcsURL,
-		Language:       in.Language,
-		ProjectKey:     in.ProjectKey,
-		PromptID:       in.PromptID,
-		TaskTrackerID:  in.TaskTrackerID,
-		SlackChannelID: in.SlackChannelID,
+		ID:              in.ID,
+		Title:           in.Title,
+		VcsURL:          in.VcsURL,
+		Language:        in.Language,
+		ProjectKey:      in.ProjectKey,
+		PromptID:        in.PromptID,
+		TaskTrackerID:   in.TaskTrackerID,
+		SlackChannelID:  in.SlackChannelID,
+		RunnerProfileID: in.RunnerProfileID,
 
-		Prompt:       NewPromptSummary(in.Prompt),
-		TaskTracker:  NewTaskTrackerSummary(in.TaskTracker),
-		SlackChannel: NewSlackChannelSummary(in.SlackChannel),
-		Status:       NewStatus(in.StatusID),
+		Prompt:        NewPromptSummary(in.Prompt),
+		TaskTracker:   NewTaskTrackerSummary(in.TaskTracker),
+		SlackChannel:  NewSlackChannelSummary(in.SlackChannel),
+		RunnerProfile: NewRunnerProfileSummary(in.RunnerProfile),
+		Status:        NewStatus(in.StatusID),
 	}
 }
 

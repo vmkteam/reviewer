@@ -238,6 +238,15 @@ func (s ProjectService) isValid(ctx context.Context, project Project, isUpdate b
 		}
 	}
 
+	if project.RunnerProfileID != nil {
+		item, err := s.projectRepo.RunnerProfileByID(ctx, *project.RunnerProfileID)
+		if err != nil {
+			v.SetInternalError(err)
+		} else if item == nil {
+			v.Append("runnerProfileId", FieldErrorIncorrect)
+		}
+	}
+
 	// custom validation starts here
 	return v
 }
