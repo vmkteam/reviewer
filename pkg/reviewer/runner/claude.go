@@ -150,7 +150,7 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 		return nil, fmt.Errorf("unexpected claude output type: %q", cr.Type)
 	}
 
-	if cr.Subtype == "error_max_turns" || cr.Subtype == "error" {
+	if cr.Subtype == "error_max_turns" || cr.Subtype == directSubtypeError {
 		return &cr, fmt.Errorf("claude returned error: %s", cr.Result)
 	}
 
