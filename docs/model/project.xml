@@ -14,6 +14,7 @@
                 <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="Instructions" DBName="instructions" DBType="text" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="RunnerProfileID" DBName="runnerProfileId" DBType="int4" GoType="*int" PK="false" FK="RunnerProfile" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
             </Attributes>
             <Searches>
                 <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
@@ -77,6 +78,28 @@
                 <Search Name="TitleILike" AttrName="Title" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="AuthTokenILike" AttrName="AuthToken" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="FetchPromptILike" AttrName="FetchPrompt" SearchType="SEARCHTYPE_ILIKE"></Search>
+            </Searches>
+        </Entity>
+        <Entity Name="RunnerProfile" Namespace="project" Table="runnerProfiles">
+            <Attributes>
+                <Attribute Name="ID" DBName="runnerProfileId" DBType="int4" GoType="int" PK="true" Nullable="Yes" Addable="true" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="Title" DBName="title" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Runner" DBName="runner" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="32"></Attribute>
+                <Attribute Name="Model" DBName="model" DBType="varchar" GoType="string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="128"></Attribute>
+                <Attribute Name="Effort" DBName="effort" DBType="varchar" GoType="string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="16"></Attribute>
+                <Attribute Name="APIProvider" DBName="apiProvider" DBType="varchar" GoType="string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="32"></Attribute>
+                <Attribute Name="APIBaseURL" DBName="apiBaseURL" DBType="varchar" GoType="string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Token" DBName="token" DBType="varchar" GoType="string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="255"></Attribute>
+                <Attribute Name="Params" DBName="params" DBType="jsonb" GoType="RunnerProfileParams" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="IsDefault" DBName="isDefault" DBType="bool" GoType="bool" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+            </Attributes>
+            <Searches>
+                <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
+                <Search Name="TitleILike" AttrName="Title" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="RunnerILike" AttrName="Runner" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="StatusIDs" AttrName="StatusID" SearchType="SEARCHTYPE_ARRAY"></Search>
             </Searches>
         </Entity>
     </Entities>

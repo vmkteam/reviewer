@@ -482,6 +482,7 @@ type ProjectSearch struct {
 	CreatedAt       *time.Time
 	StatusID        *int
 	Instructions    *string
+	RunnerProfileID *int
 	IDs             []int
 	TitleILike      *string
 	VcsURLILike     *string
@@ -525,6 +526,9 @@ func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.Instructions != nil {
 		ps.where(query, Tables.Project.Alias, Columns.Project.Instructions, ps.Instructions)
+	}
+	if ps.RunnerProfileID != nil {
+		ps.where(query, Tables.Project.Alias, Columns.Project.RunnerProfileID, ps.RunnerProfileID)
 	}
 	if len(ps.IDs) > 0 {
 		Filter{Columns.Project.ID, ps.IDs, SearchTypeArray, false}.Apply(query)
@@ -777,5 +781,89 @@ func (tts *TaskTrackerSearch) Q() applier {
 			return query, nil
 		}
 		return tts.Apply(query), nil
+	}
+}
+
+type RunnerProfileSearch struct {
+	search
+
+	ID          *int
+	Title       *string
+	Runner      *string
+	Model       *string
+	Effort      *string
+	APIProvider *string
+	APIBaseURL  *string
+	Token       *string
+	IsDefault   *bool
+	CreatedAt   *time.Time
+	StatusID    *int
+	IDs         []int
+	TitleILike  *string
+	RunnerILike *string
+	StatusIDs   []int
+}
+
+func (rps *RunnerProfileSearch) Apply(query *orm.Query) *orm.Query {
+	if rps == nil {
+		return query
+	}
+	if rps.ID != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.ID, rps.ID)
+	}
+	if rps.Title != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Title, rps.Title)
+	}
+	if rps.Runner != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Runner, rps.Runner)
+	}
+	if rps.Model != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Model, rps.Model)
+	}
+	if rps.Effort != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Effort, rps.Effort)
+	}
+	if rps.APIProvider != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.APIProvider, rps.APIProvider)
+	}
+	if rps.APIBaseURL != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.APIBaseURL, rps.APIBaseURL)
+	}
+	if rps.Token != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Token, rps.Token)
+	}
+	if rps.IsDefault != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.IsDefault, rps.IsDefault)
+	}
+	if rps.CreatedAt != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.CreatedAt, rps.CreatedAt)
+	}
+	if rps.StatusID != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.StatusID, rps.StatusID)
+	}
+	if len(rps.IDs) > 0 {
+		Filter{Columns.RunnerProfile.ID, rps.IDs, SearchTypeArray, false}.Apply(query)
+	}
+	if rps.TitleILike != nil {
+		Filter{Columns.RunnerProfile.Title, *rps.TitleILike, SearchTypeILike, false}.Apply(query)
+	}
+	if rps.RunnerILike != nil {
+		Filter{Columns.RunnerProfile.Runner, *rps.RunnerILike, SearchTypeILike, false}.Apply(query)
+	}
+	if len(rps.StatusIDs) > 0 {
+		Filter{Columns.RunnerProfile.StatusID, rps.StatusIDs, SearchTypeArray, false}.Apply(query)
+	}
+
+	rps.apply(query)
+
+	return query
+}
+
+func (rps *RunnerProfileSearch) Q() applier {
+	return func(query *orm.Query) (*orm.Query, error) {
+		if rps == nil {
+			return query, nil
+		}
+		return rps.Apply(query), nil
 	}
 }

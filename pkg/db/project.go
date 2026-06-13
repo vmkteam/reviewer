@@ -20,22 +20,25 @@ func NewProjectRepo(db orm.DB) ProjectRepo {
 	return ProjectRepo{
 		db: db,
 		filters: map[string][]Filter{
-			Tables.Project.Name:      {StatusFilter},
-			Tables.Prompt.Name:       {StatusFilter},
-			Tables.SlackChannel.Name: {StatusFilter},
-			Tables.TaskTracker.Name:  {StatusFilter},
+			Tables.Project.Name:       {StatusFilter},
+			Tables.Prompt.Name:        {StatusFilter},
+			Tables.SlackChannel.Name:  {StatusFilter},
+			Tables.TaskTracker.Name:   {StatusFilter},
+			Tables.RunnerProfile.Name: {StatusFilter},
 		},
 		sort: map[string][]SortField{
-			Tables.Project.Name:      {{Column: Columns.Project.Title, Direction: SortAsc}},
-			Tables.Prompt.Name:       {{Column: Columns.Prompt.CreatedAt, Direction: SortDesc}},
-			Tables.SlackChannel.Name: {{Column: Columns.SlackChannel.Title, Direction: SortAsc}},
-			Tables.TaskTracker.Name:  {{Column: Columns.TaskTracker.CreatedAt, Direction: SortDesc}},
+			Tables.Project.Name:       {{Column: Columns.Project.CreatedAt, Direction: SortDesc}},
+			Tables.Prompt.Name:        {{Column: Columns.Prompt.CreatedAt, Direction: SortDesc}},
+			Tables.SlackChannel.Name:  {{Column: Columns.SlackChannel.Title, Direction: SortAsc}},
+			Tables.TaskTracker.Name:   {{Column: Columns.TaskTracker.CreatedAt, Direction: SortDesc}},
+			Tables.RunnerProfile.Name: {{Column: Columns.RunnerProfile.CreatedAt, Direction: SortDesc}},
 		},
 		join: map[string][]string{
-			Tables.Project.Name:      {TableColumns, Columns.Project.Prompt, Columns.Project.TaskTracker, Columns.Project.SlackChannel},
-			Tables.Prompt.Name:       {TableColumns},
-			Tables.SlackChannel.Name: {TableColumns},
-			Tables.TaskTracker.Name:  {TableColumns},
+			Tables.Project.Name:       {TableColumns, Columns.Project.Prompt, Columns.Project.TaskTracker, Columns.Project.SlackChannel, Columns.Project.RunnerProfile},
+			Tables.Prompt.Name:        {TableColumns},
+			Tables.SlackChannel.Name:  {TableColumns},
+			Tables.TaskTracker.Name:   {TableColumns},
+			Tables.RunnerProfile.Name: {TableColumns},
 		},
 	}
 }
@@ -358,4 +361,80 @@ func (pr ProjectRepo) DeleteTaskTracker(ctx context.Context, id int) (deleted bo
 	taskTracker := &TaskTracker{ID: id, StatusID: StatusDeleted}
 
 	return pr.UpdateTaskTracker(ctx, taskTracker, WithColumns(Columns.TaskTracker.StatusID))
+}
+
+/*** RunnerProfile ***/
+
+// FullRunnerProfile returns full joins with all columns
+func (pr ProjectRepo) FullRunnerProfile() OpFunc {
+	return WithColumns(pr.join[Tables.RunnerProfile.Name]...)
+}
+
+// DefaultRunnerProfileSort returns default sort.
+func (pr ProjectRepo) DefaultRunnerProfileSort() OpFunc {
+	return WithSort(pr.sort[Tables.RunnerProfile.Name]...)
+}
+
+// RunnerProfileByID is a function that returns RunnerProfile by ID(s) or nil.
+func (pr ProjectRepo) RunnerProfileByID(ctx context.Context, id int, ops ...OpFunc) (*RunnerProfile, error) {
+	return pr.OneRunnerProfile(ctx, &RunnerProfileSearch{ID: &id}, ops...)
+}
+
+// OneRunnerProfile is a function that returns one RunnerProfile by filters. It could return pg.ErrMultiRows.
+func (pr ProjectRepo) OneRunnerProfile(ctx context.Context, search *RunnerProfileSearch, ops ...OpFunc) (*RunnerProfile, error) {
+	obj := &RunnerProfile{}
+	err := buildQuery(ctx, pr.db, obj, search, pr.filters[Tables.RunnerProfile.Name], PagerTwo, ops...).Select()
+
+	if errors.Is(err, pg.ErrMultiRows) {
+		return nil, err
+	} else if errors.Is(err, pg.ErrNoRows) {
+		return nil, nil
+	}
+
+	return obj, err
+}
+
+// RunnerProfilesByFilters returns RunnerProfile list.
+func (pr ProjectRepo) RunnerProfilesByFilters(ctx context.Context, search *RunnerProfileSearch, pager Pager, ops ...OpFunc) (runnerProfiles []RunnerProfile, err error) {
+	err = buildQuery(ctx, pr.db, &runnerProfiles, search, pr.filters[Tables.RunnerProfile.Name], pager, ops...).Select()
+	return
+}
+
+// CountRunnerProfiles returns count
+func (pr ProjectRepo) CountRunnerProfiles(ctx context.Context, search *RunnerProfileSearch, ops ...OpFunc) (int, error) {
+	return buildQuery(ctx, pr.db, &RunnerProfile{}, search, pr.filters[Tables.RunnerProfile.Name], PagerOne, ops...).Count()
+}
+
+// AddRunnerProfile adds RunnerProfile to DB.
+func (pr ProjectRepo) AddRunnerProfile(ctx context.Context, runnerProfile *RunnerProfile, ops ...OpFunc) (*RunnerProfile, error) {
+	q := pr.db.ModelContext(ctx, runnerProfile)
+	if len(ops) == 0 {
+		q = q.ExcludeColumn(Columns.RunnerProfile.CreatedAt)
+	}
+	applyOps(q, ops...)
+	_, err := q.Insert()
+
+	return runnerProfile, err
+}
+
+// UpdateRunnerProfile updates RunnerProfile in DB.
+func (pr ProjectRepo) UpdateRunnerProfile(ctx context.Context, runnerProfile *RunnerProfile, ops ...OpFunc) (bool, error) {
+	q := pr.db.ModelContext(ctx, runnerProfile).WherePK()
+	if len(ops) == 0 {
+		q = q.ExcludeColumn(Columns.RunnerProfile.ID, Columns.RunnerProfile.CreatedAt)
+	}
+	applyOps(q, ops...)
+	res, err := q.Update()
+	if err != nil {
+		return false, err
+	}
+
+	return res.RowsAffected() > 0, err
+}
+
+// DeleteRunnerProfile set statusId to deleted in DB.
+func (pr ProjectRepo) DeleteRunnerProfile(ctx context.Context, id int) (deleted bool, err error) {
+	runnerProfile := &RunnerProfile{ID: id, StatusID: StatusDeleted}
+
+	return pr.UpdateRunnerProfile(ctx, runnerProfile, WithColumns(Columns.RunnerProfile.StatusID))
 }

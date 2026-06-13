@@ -185,3 +185,37 @@ func (tt TaskTracker) Validate() (errors map[string]string, valid bool) {
 
 	return errors, len(errors) == 0
 }
+
+func (rp RunnerProfile) Validate() (errors map[string]string, valid bool) {
+	errors = map[string]string{}
+
+	if utf8.RuneCountInString(rp.Title) > 255 {
+		errors[Columns.RunnerProfile.Title] = ErrMaxLength
+	}
+
+	if utf8.RuneCountInString(rp.Runner) > 32 {
+		errors[Columns.RunnerProfile.Runner] = ErrMaxLength
+	}
+
+	if rp.Model != nil && utf8.RuneCountInString(*rp.Model) > 128 {
+		errors[Columns.RunnerProfile.Model] = ErrMaxLength
+	}
+
+	if rp.Effort != nil && utf8.RuneCountInString(*rp.Effort) > 16 {
+		errors[Columns.RunnerProfile.Effort] = ErrMaxLength
+	}
+
+	if rp.APIProvider != nil && utf8.RuneCountInString(*rp.APIProvider) > 32 {
+		errors[Columns.RunnerProfile.APIProvider] = ErrMaxLength
+	}
+
+	if rp.APIBaseURL != nil && utf8.RuneCountInString(*rp.APIBaseURL) > 255 {
+		errors[Columns.RunnerProfile.APIBaseURL] = ErrMaxLength
+	}
+
+	if rp.Token != nil && utf8.RuneCountInString(*rp.Token) > 255 {
+		errors[Columns.RunnerProfile.Token] = ErrMaxLength
+	}
+
+	return errors, len(errors) == 0
+}

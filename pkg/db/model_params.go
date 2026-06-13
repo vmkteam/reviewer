@@ -48,6 +48,29 @@ type ModelUseStats struct {
 	CostUsd                  float64 `json:"costUsd"`
 }
 
+// RunnerProfileParams holds runner-specific, extensible knobs for a runner
+// profile (runnerProfiles.params jsonb). New runner options live here so they
+// need no schema migration.
+type RunnerProfileParams struct {
+	// AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.
+	AllowDangerousPermissions bool `json:"allowDangerousPermissions,omitempty"`
+}
+
+// ReviewRunnerProfile is the snapshot of the resolved runner profile used to
+// produce a review (reviews.runnerProfile jsonb). It records exactly how the
+// review was run, independent of later edits or deletion of the source profile.
+// The profile token is deliberately NOT included — secrets never land here.
+type ReviewRunnerProfile struct {
+	RunnerProfileID int                 `json:"runnerProfileId,omitempty"`
+	Title           string              `json:"title,omitempty"`
+	Runner          string              `json:"runner"`
+	Model           string              `json:"model,omitempty"`
+	Effort          string              `json:"effort,omitempty"`
+	APIProvider     string              `json:"apiProvider,omitempty"`
+	APIBaseURL      string              `json:"apiBaseURL,omitempty"`
+	Params          RunnerProfileParams `json:"params,omitempty"`
+}
+
 // Add accumulates numeric counters and Models map entries from o into m.
 // Used by the Step 2 retry path to merge first-pass + retry billable spend
 // into one record so dashboards reflect total cost. Identity-shaped fields

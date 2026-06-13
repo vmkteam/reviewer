@@ -7,3 +7,6 @@ INSERT INTO "statuses" ( "statusId", "title", "alias" ) VALUES ( 6, 'Ignored', '
 
 -- password is 12345
 INSERT INTO "users" ( "login", "password", "statusId" ) VALUES ( 'admin', '$2y$14$4IpqlaJ2Rvfgs.wb8f6lPODVLb/Ygl6zw1ZCUKz5CuT6WB6CV44AG', 1 );
+
+-- default runner profile (claude/opus/xhigh) used by projects without their own
+INSERT INTO "runnerProfiles" ( "title", "runner", "model", "effort", "isDefault", "statusId" ) VALUES ( 'Default', 'claude', 'opus', 'xhigh', true, 1 );
