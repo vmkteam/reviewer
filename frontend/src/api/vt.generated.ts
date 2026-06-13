@@ -36,11 +36,13 @@ export interface IProject {
   promptId: number,
   taskTrackerId?: number,
   slackChannelId?: number,
+  runnerProfileId?: number,
   statusId: number,
   instructions?: string,
   prompt?: IPromptSummary,
   taskTracker?: ITaskTrackerSummary,
   slackChannel?: ISlackChannelSummary,
+  runnerProfile?: IRunnerProfileSummary,
   status?: IStatus
 }
 
@@ -74,6 +76,7 @@ export interface IProjectSearch {
   promptId?: number,
   taskTrackerId?: number,
   slackChannelId?: number,
+  runnerProfileId?: number,
   statusId?: number,
   ids: Array<number>
 }
@@ -87,9 +90,11 @@ export interface IProjectSummary {
   promptId: number,
   taskTrackerId?: number,
   slackChannelId?: number,
+  runnerProfileId?: number,
   prompt?: IPromptSummary,
   taskTracker?: ITaskTrackerSummary,
   slackChannel?: ISlackChannelSummary,
+  runnerProfile?: IRunnerProfileSummary,
   status?: IStatus
 }
 
@@ -166,6 +171,74 @@ export interface IPromptUpdateParams {
 
 export interface IPromptValidateParams {
   prompt: IPrompt
+}
+
+export interface IRunnerProfile {
+  id: number,
+  title: string,
+  runner: string,
+  model?: string,
+  effort?: string,
+  apiProvider?: string,
+  apiBaseURL?: string,
+  token?: string, // write-only: nil on read, set-or-keep on write
+  tokenMasked: string, // read-only masked display
+  hasToken: boolean, // read-only
+  params: IRunnerProfileParams,
+  isDefault: boolean,
+  statusId: number,
+  status?: IStatus
+}
+
+export interface IRunnerProfileParams {
+  allowDangerousPermissions: boolean
+}
+
+export interface IRunnerProfileSearch {
+  id?: number,
+  title?: string,
+  runner?: string,
+  statusId?: number,
+  ids: Array<number>
+}
+
+export interface IRunnerProfileSummary {
+  id: number,
+  title: string,
+  runner: string,
+  model?: string,
+  effort?: string,
+  isDefault: boolean,
+  status?: IStatus
+}
+
+export interface IRunnerprofileAddParams {
+  runnerProfile: IRunnerProfile
+}
+
+export interface IRunnerprofileCountParams {
+  search?: IRunnerProfileSearch
+}
+
+export interface IRunnerprofileDeleteParams {
+  id: number
+}
+
+export interface IRunnerprofileGetByIDParams {
+  id: number
+}
+
+export interface IRunnerprofileGetParams {
+  search?: IRunnerProfileSearch,
+  viewOps?: IViewOps
+}
+
+export interface IRunnerprofileUpdateParams {
+  runnerProfile: IRunnerProfile
+}
+
+export interface IRunnerprofileValidateParams {
+  runnerProfile: IRunnerProfile
 }
 
 export interface ISlackChannel {
@@ -406,11 +479,13 @@ export class Project implements IProject {
   promptId: number = 0;
   taskTrackerId?: number = 0;
   slackChannelId?: number = 0;
+  runnerProfileId?: number = 0;
   statusId: number = 0;
   instructions?: string = null;
   prompt?: IPromptSummary = null;
   taskTracker?: ITaskTrackerSummary = null;
   slackChannel?: ISlackChannelSummary = null;
+  runnerProfile?: IRunnerProfileSummary = null;
   status?: IStatus = null;
 }
 
@@ -456,6 +531,7 @@ export class ProjectSearch implements IProjectSearch {
   promptId?: number = 0;
   taskTrackerId?: number = 0;
   slackChannelId?: number = 0;
+  runnerProfileId?: number = 0;
   statusId?: number = 0;
   ids: Array<number> = [0];
 }
@@ -471,9 +547,11 @@ export class ProjectSummary implements IProjectSummary {
   promptId: number = 0;
   taskTrackerId?: number = 0;
   slackChannelId?: number = 0;
+  runnerProfileId?: number = 0;
   prompt?: IPromptSummary = null;
   taskTracker?: ITaskTrackerSummary = null;
   slackChannel?: ISlackChannelSummary = null;
+  runnerProfile?: IRunnerProfileSummary = null;
   status?: IStatus = null;
 }
 
@@ -574,6 +652,96 @@ export class PromptValidateParams implements IPromptValidateParams {
   static entityName = "promptvalidateparams";
 
   prompt: IPrompt = null;
+}
+
+export class RunnerProfile implements IRunnerProfile {
+  static entityName = "runnerprofile";
+
+  id: number = 0;
+  title: string = null;
+  runner: string = null;
+  model?: string = null;
+  effort?: string = null;
+  apiProvider?: string = null;
+  apiBaseURL?: string = null;
+  token?: string = null;
+  tokenMasked: string = null;
+  hasToken: boolean = false;
+  params: IRunnerProfileParams = null;
+  isDefault: boolean = false;
+  statusId: number = 0;
+  status?: IStatus = null;
+}
+
+export class RunnerProfileParams implements IRunnerProfileParams {
+  static entityName = "runnerprofileparams";
+
+  allowDangerousPermissions: boolean = false;
+}
+
+export class RunnerProfileSearch implements IRunnerProfileSearch {
+  static entityName = "runnerprofilesearch";
+
+  id?: number = 0;
+  title?: string = "";
+  runner?: string = "";
+  statusId?: number = 0;
+  ids: Array<number> = [0];
+}
+
+export class RunnerProfileSummary implements IRunnerProfileSummary {
+  static entityName = "runnerprofile";
+
+  id: number = 0;
+  title: string = null;
+  runner: string = null;
+  model?: string = null;
+  effort?: string = null;
+  isDefault: boolean = false;
+  status?: IStatus = null;
+}
+
+export class RunnerprofileAddParams implements IRunnerprofileAddParams {
+  static entityName = "runnerprofileaddparams";
+
+  runnerProfile: IRunnerProfile = null;
+}
+
+export class RunnerprofileCountParams implements IRunnerprofileCountParams {
+  static entityName = "runnerprofilecountparams";
+
+  search?: IRunnerProfileSearch = null;
+}
+
+export class RunnerprofileDeleteParams implements IRunnerprofileDeleteParams {
+  static entityName = "runnerprofiledeleteparams";
+
+  id: number = 0;
+}
+
+export class RunnerprofileGetByIDParams implements IRunnerprofileGetByIDParams {
+  static entityName = "runnerprofilegetbyidparams";
+
+  id: number = 0;
+}
+
+export class RunnerprofileGetParams implements IRunnerprofileGetParams {
+  static entityName = "runnerprofilegetparams";
+
+  search?: IRunnerProfileSearch = null;
+  viewOps?: IViewOps = null;
+}
+
+export class RunnerprofileUpdateParams implements IRunnerprofileUpdateParams {
+  static entityName = "runnerprofileupdateparams";
+
+  runnerProfile: IRunnerProfile = null;
+}
+
+export class RunnerprofileValidateParams implements IRunnerprofileValidateParams {
+  static entityName = "runnerprofilevalidateparams";
+
+  runnerProfile: IRunnerProfile = null;
 }
 
 export class SlackChannel implements ISlackChannel {
@@ -958,6 +1126,50 @@ export const factory = (send: any) => ({
      */
     validate(params: IPromptValidateParams): Promise<Array<IFieldError>> {
       return send('prompt.Validate', params)
+    }
+  },
+  runnerprofile: {
+    /**
+     * Add adds a RunnerProfile from the query.
+     */
+    add(params: IRunnerprofileAddParams): Promise<IRunnerProfile> {
+      return send('runnerprofile.Add', params)
+    },
+    /**
+     * Count returns count RunnerProfiles according to conditions in search params.
+     */
+    count(params: IRunnerprofileCountParams): Promise<number> {
+      return send('runnerprofile.Count', params)
+    },
+    /**
+     * Delete deletes the RunnerProfile by its ID.
+     */
+    delete(params: IRunnerprofileDeleteParams): Promise<boolean> {
+      return send('runnerprofile.Delete', params)
+    },
+    /**
+     * Get returns а list of RunnerProfiles according to conditions in search params.
+     */
+    get(params: IRunnerprofileGetParams): Promise<Array<IRunnerProfileSummary>> {
+      return send('runnerprofile.Get', params)
+    },
+    /**
+     * GetByID returns a RunnerProfile by its ID.
+     */
+    getByID(params: IRunnerprofileGetByIDParams): Promise<IRunnerProfile> {
+      return send('runnerprofile.GetByID', params)
+    },
+    /**
+     * Update updates the RunnerProfile data identified by id from the query.
+     */
+    update(params: IRunnerprofileUpdateParams): Promise<boolean> {
+      return send('runnerprofile.Update', params)
+    },
+    /**
+     * Validate verifies that RunnerProfile data is valid.
+     */
+    validate(params: IRunnerprofileValidateParams): Promise<Array<IFieldError>> {
+      return send('runnerprofile.Validate', params)
     }
   },
   slackchannel: {

@@ -4588,7 +4588,7 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "params",
-							Ref:  "#/definitions/db.RunnerProfileParams",
+							Ref:  "#/definitions/RunnerProfileParams",
 							Type: smd.Object,
 						},
 						{
@@ -4607,13 +4607,12 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 						},
 					},
 					Definitions: map[string]smd.Definition{
-						"db.RunnerProfileParams": {
+						"RunnerProfileParams": {
 							Type: "object",
 							Properties: smd.PropertyList{
 								{
-									Name:        "allowDangerousPermissions",
-									Description: `AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.`,
-									Type:        smd.Boolean,
+									Name: "allowDangerousPermissions",
+									Type: smd.Boolean,
 								},
 							},
 						},
@@ -4700,7 +4699,7 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "params",
-								Ref:  "#/definitions/db.RunnerProfileParams",
+								Ref:  "#/definitions/RunnerProfileParams",
 								Type: smd.Object,
 							},
 							{
@@ -4719,13 +4718,12 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 						},
 						Definitions: map[string]smd.Definition{
-							"db.RunnerProfileParams": {
+							"RunnerProfileParams": {
 								Type: "object",
 								Properties: smd.PropertyList{
 									{
-										Name:        "allowDangerousPermissions",
-										Description: `AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.`,
-										Type:        smd.Boolean,
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
 									},
 								},
 							},
@@ -4805,7 +4803,7 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name: "params",
-							Ref:  "#/definitions/db.RunnerProfileParams",
+							Ref:  "#/definitions/RunnerProfileParams",
 							Type: smd.Object,
 						},
 						{
@@ -4824,13 +4822,12 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 						},
 					},
 					Definitions: map[string]smd.Definition{
-						"db.RunnerProfileParams": {
+						"RunnerProfileParams": {
 							Type: "object",
 							Properties: smd.PropertyList{
 								{
-									Name:        "allowDangerousPermissions",
-									Description: `AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.`,
-									Type:        smd.Boolean,
+									Name: "allowDangerousPermissions",
+									Type: smd.Boolean,
 								},
 							},
 						},
@@ -4916,7 +4913,7 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "params",
-								Ref:  "#/definitions/db.RunnerProfileParams",
+								Ref:  "#/definitions/RunnerProfileParams",
 								Type: smd.Object,
 							},
 							{
@@ -4935,13 +4932,12 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 						},
 						Definitions: map[string]smd.Definition{
-							"db.RunnerProfileParams": {
+							"RunnerProfileParams": {
 								Type: "object",
 								Properties: smd.PropertyList{
 									{
-										Name:        "allowDangerousPermissions",
-										Description: `AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.`,
-										Type:        smd.Boolean,
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
 									},
 								},
 							},
@@ -5054,7 +5050,7 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name: "params",
-								Ref:  "#/definitions/db.RunnerProfileParams",
+								Ref:  "#/definitions/RunnerProfileParams",
 								Type: smd.Object,
 							},
 							{
@@ -5073,13 +5069,12 @@ func (RunnerProfileService) SMD() smd.ServiceInfo {
 							},
 						},
 						Definitions: map[string]smd.Definition{
-							"db.RunnerProfileParams": {
+							"RunnerProfileParams": {
 								Type: "object",
 								Properties: smd.PropertyList{
 									{
-										Name:        "allowDangerousPermissions",
-										Description: `AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.`,
-										Type:        smd.Boolean,
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
 									},
 								},
 							},

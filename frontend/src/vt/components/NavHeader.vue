@@ -19,6 +19,7 @@
             <router-link to="/prompts" class="hover:text-fg transition-colors" active-class="!text-accent" :class="$route.path.startsWith('/prompts') ? 'text-accent' : 'text-fg-secondary'">Prompts</router-link>
             <router-link to="/task-trackers" class="hover:text-fg transition-colors" active-class="!text-accent" :class="$route.path.startsWith('/task-trackers') ? 'text-accent' : 'text-fg-secondary'">Trackers</router-link>
             <router-link to="/slack-channels" class="hover:text-fg transition-colors" active-class="!text-accent" :class="$route.path.startsWith('/slack-channels') ? 'text-accent' : 'text-fg-secondary'">Slack</router-link>
+            <router-link to="/runner-profiles" class="hover:text-fg transition-colors" active-class="!text-accent" :class="$route.path.startsWith('/runner-profiles') ? 'text-accent' : 'text-fg-secondary'">Runners</router-link>
             <router-link to="/users" class="hover:text-fg transition-colors" active-class="!text-accent" :class="$route.path.startsWith('/users') ? 'text-accent' : 'text-fg-secondary'">Users</router-link>
           </nav>
         </div>
@@ -84,6 +85,7 @@ const navLinks = [
   { to: '/prompts', label: 'Prompts' },
   { to: '/task-trackers', label: 'Task Trackers' },
   { to: '/slack-channels', label: 'Slack Channels' },
+  { to: '/runner-profiles', label: 'Runner Profiles' },
   { to: '/users', label: 'Users' },
 ]
 

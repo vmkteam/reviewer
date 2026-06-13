@@ -8,6 +8,7 @@ export type { IProject as Project, IProjectSummary as ProjectSummary, IProjectSe
 export type { IPrompt as Prompt, IPromptSummary as PromptSummary, IPromptSearch as PromptSearch } from './vt.generated'
 export type { ISlackChannel as SlackChannel, ISlackChannelSummary as SlackChannelSummary, ISlackChannelSearch as SlackChannelSearch } from './vt.generated'
 export type { ITaskTracker as TaskTracker, ITaskTrackerSummary as TaskTrackerSummary, ITaskTrackerSearch as TaskTrackerSearch } from './vt.generated'
+export type { IRunnerProfile as RunnerProfile, IRunnerProfileSummary as RunnerProfileSummary, IRunnerProfileSearch as RunnerProfileSearch } from './vt.generated'
 export type { IUser as User, IUserSummary as UserSummary, IUserSearch as UserSearch, IUserProfile as UserProfile } from './vt.generated'
 
 export const client = new HttpRpcClient({ url: '/v1/vt/', isClient: true })

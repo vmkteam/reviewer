@@ -20,7 +20,7 @@ func NewRunnerProfile(in *db.RunnerProfile) *RunnerProfile {
 		Token:       nil, // never expose the raw token to the admin API
 		TokenMasked: maskSecret(in.Token),
 		HasToken:    in.Token != nil && *in.Token != "",
-		Params:      in.Params,
+		Params:      NewRunnerProfileParams(in.Params),
 		IsDefault:   in.IsDefault,
 		StatusID:    in.StatusID,
 

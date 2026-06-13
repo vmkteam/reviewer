@@ -46,7 +46,7 @@
           class="font-mono text-xs px-1.5 py-0.5 rounded transition-colors cursor-pointer"
           :class="keyCopied === (item as ProjectSummary).projectKey ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-edge-light text-fg-secondary hover:bg-accent-light hover:text-accent'"
           title="Copy to clipboard"
-        >{{ keyCopied === (item as ProjectSummary).projectKey ? 'Copied!' : (item as ProjectSummary).projectKey }}</button>
+        >{{ keyCopied === (item as ProjectSummary).projectKey ? 'Copied!' : maskKey((item as ProjectSummary).projectKey) }}</button>
       </template>
       <template #cell-prompt="{ item }">
         {{ (item as ProjectSummary).prompt?.title ?? '—' }}
@@ -184,6 +184,10 @@ function copyKey(key: string) {
   navigator.clipboard.writeText(key)
   keyCopied.value = key
   setTimeout(() => { keyCopied.value = '' }, 2000)
+}
+function maskKey(key: string): string {
+  if (!key) return ''
+  return key.length <= 8 ? key : key.slice(0, 8) + '…'
 }
 
 // Modal refs

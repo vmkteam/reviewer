@@ -6,21 +6,36 @@ import (
 )
 
 type RunnerProfile struct {
-	ID          int                    `json:"id"`
-	Title       string                 `json:"title" validate:"required,max=255"`
-	Runner      string                 `json:"runner" validate:"required,max=32"`
-	Model       *string                `json:"model" validate:"omitempty,max=128"`
-	Effort      *string                `json:"effort" validate:"omitempty,max=16"`
-	APIProvider *string                `json:"apiProvider" validate:"omitempty,max=32"`
-	APIBaseURL  *string                `json:"apiBaseURL" validate:"omitempty,max=255"`
-	Token       *string                `json:"token,omitempty" validate:"omitempty,max=255"` // write-only: nil on read, set-or-keep on write
-	TokenMasked string                 `json:"tokenMasked"`                                  // read-only masked display
-	HasToken    bool                   `json:"hasToken"`                                     // read-only
-	Params      db.RunnerProfileParams `json:"params"`
-	IsDefault   bool                   `json:"isDefault"`
-	StatusID    int                    `json:"statusId" validate:"required,status"`
+	ID          int                 `json:"id"`
+	Title       string              `json:"title" validate:"required,max=255"`
+	Runner      string              `json:"runner" validate:"required,max=32"`
+	Model       *string             `json:"model" validate:"omitempty,max=128"`
+	Effort      *string             `json:"effort" validate:"omitempty,max=16"`
+	APIProvider *string             `json:"apiProvider" validate:"omitempty,max=32"`
+	APIBaseURL  *string             `json:"apiBaseURL" validate:"omitempty,max=255"`
+	Token       *string             `json:"token,omitempty" validate:"omitempty,max=255"` // write-only: nil on read, set-or-keep on write
+	TokenMasked string              `json:"tokenMasked"`                                  // read-only masked display
+	HasToken    bool                `json:"hasToken"`                                     // read-only
+	Params      RunnerProfileParams `json:"params"`
+	IsDefault   bool                `json:"isDefault"`
+	StatusID    int                 `json:"statusId" validate:"required,status"`
 
 	Status *Status `json:"status"`
+}
+
+// RunnerProfileParams mirrors db.RunnerProfileParams as a VT-local type so the
+// TypeScript client generator emits a clean interface (a db-qualified type name
+// produces invalid TS).
+type RunnerProfileParams struct {
+	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+}
+
+func NewRunnerProfileParams(in db.RunnerProfileParams) RunnerProfileParams {
+	return RunnerProfileParams{AllowDangerousPermissions: in.AllowDangerousPermissions}
+}
+
+func (p RunnerProfileParams) ToDB() db.RunnerProfileParams {
+	return db.RunnerProfileParams{AllowDangerousPermissions: p.AllowDangerousPermissions}
 }
 
 func (rp *RunnerProfile) ToDB() *db.RunnerProfile {
@@ -37,7 +52,7 @@ func (rp *RunnerProfile) ToDB() *db.RunnerProfile {
 		APIProvider: rp.APIProvider,
 		APIBaseURL:  rp.APIBaseURL,
 		Token:       rp.Token,
-		Params:      rp.Params,
+		Params:      rp.Params.ToDB(),
 		IsDefault:   rp.IsDefault,
 		StatusID:    rp.StatusID,
 	}

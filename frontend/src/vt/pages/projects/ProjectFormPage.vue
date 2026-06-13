@@ -32,11 +32,22 @@
         </FormField>
 
         <FormField v-if="isEdit" label="Project Key">
-          <VInput :model-value="entity.projectKey" type="text" readonly class="border-edge bg-surface-alt text-fg-muted" />
+          <button
+            type="button"
+            @click="copyKey"
+            class="font-mono text-xs px-2 py-1.5 rounded transition-colors cursor-pointer"
+            :class="keyCopied ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-surface-alt text-fg-muted hover:bg-accent-light hover:text-accent'"
+            title="Copy to clipboard"
+          >{{ keyCopied ? 'Copied!' : maskKey(entity.projectKey) }}</button>
         </FormField>
 
         <FormField label="Prompt" :error="fieldError('promptId')">
           <FKSelect v-model="entity.promptId" :load-fn="loadPrompts" />
+        </FormField>
+
+        <FormField label="Runner Profile" :error="fieldError('runnerProfileId')">
+          <FKSelect v-model="entity.runnerProfileId" :load-fn="loadRunnerProfiles" nullable />
+          <p class="mt-1 text-xs text-fg-subtle">Leave as “— None —” to use the default profile.</p>
         </FormField>
 
         <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
@@ -94,11 +105,30 @@ const showConfirm = ref(false)
 const activeTab = ref('general')
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
-  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1, instructions: '',
+  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, runnerProfileId: undefined, statusId: 1, instructions: '',
 }))
+
+const keyCopied = ref(false)
+
+function maskKey(key?: string): string {
+  if (!key) return ''
+  return key.length <= 8 ? key : key.slice(0, 8) + '…'
+}
+
+function copyKey() {
+  if (!entity.projectKey) return
+  navigator.clipboard.writeText(entity.projectKey)
+  keyCopied.value = true
+  setTimeout(() => { keyCopied.value = false }, 2000)
+}
 
 async function loadPrompts() {
   const list = await vtApi.prompt.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
+  return (list ?? []).map(p => ({ id: p.id, title: p.title }))
+}
+
+async function loadRunnerProfiles() {
+  const list = await vtApi.runnerprofile.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
   return (list ?? []).map(p => ({ id: p.id, title: p.title }))
 }
 
