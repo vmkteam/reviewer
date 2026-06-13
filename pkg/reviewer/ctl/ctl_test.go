@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"reviewsrv/pkg/reviewer/runner"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"reviewsrv/pkg/reviewer/runner"
 )
 
 // testClaudeRunner returns a fixed ClaudeResult from testdata. The optional

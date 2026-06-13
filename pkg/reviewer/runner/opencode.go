@@ -349,9 +349,9 @@ func (a *opencodeAggregate) applyStepFinish(p *opencodeStepFinishPart) {
 
 func (a *opencodeAggregate) toClaudeResult(fallbackModel string) *ClaudeResult {
 	isError := a.stopReason != "" && a.stopReason != "stop" && a.stopReason != "end_turn"
-	subtype := "success"
+	subtype := directSubtypeSuccess
 	if isError {
-		subtype = "error"
+		subtype = directSubtypeError
 	}
 
 	modelName := a.modelID

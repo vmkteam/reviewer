@@ -3,9 +3,9 @@ package ctl
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"reviewsrv/pkg/reviewer/runner"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigValidate(t *testing.T) {

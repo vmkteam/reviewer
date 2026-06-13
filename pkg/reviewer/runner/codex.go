@@ -48,6 +48,9 @@ func (r *ExecCodexRunner) SetSession(sessionID string) {
 // working dir while keeping the network closed.
 const codexSandbox = "workspace-write"
 
+// codexExecCmd is the codex subcommand that runs a non-interactive turn.
+const codexExecCmd = "exec"
+
 // buildArgs assembles argv for `codex exec`. With a session id it resumes the
 // thread (round-2 follow-up); `exec resume` rejects --sandbox/--color, so the
 // sandbox is set via `-c sandbox_mode=...` there.
@@ -55,14 +58,14 @@ func (r *ExecCodexRunner) buildArgs() []string {
 	var args []string
 	if r.SessionID != "" {
 		args = []string{
-			"exec", "resume", r.SessionID,
+			codexExecCmd, "resume", r.SessionID,
 			"--json",
 			"--skip-git-repo-check",
 			"-c", fmt.Sprintf("sandbox_mode=%q", codexSandbox),
 		}
 	} else {
 		args = []string{
-			"exec",
+			codexExecCmd,
 			"--json",
 			"--sandbox", codexSandbox,
 			"--skip-git-repo-check",
@@ -252,9 +255,9 @@ func (a *codexAggregate) toClaudeResult(fallbackModel string) *ClaudeResult {
 	freshInput := a.inputTotal - cached
 	cost := codexEstimateCostUSD(fallbackModel, freshInput, a.output, cached)
 
-	stop, subtype := "end_turn", "success"
+	stop, subtype := "end_turn", directSubtypeSuccess
 	if a.isError {
-		stop, subtype = "error", "error"
+		stop, subtype = directSubtypeError, directSubtypeError
 	}
 
 	cr := &ClaudeResult{

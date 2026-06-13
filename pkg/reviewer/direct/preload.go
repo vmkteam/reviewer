@@ -38,7 +38,7 @@ func PreloadContext(ctx context.Context, root, base, head string) (string, []str
 	}
 
 	b.WriteString("### Изменённые файлы (полное содержимое)\n")
-	var preloaded []string
+	preloaded := make([]string, 0, len(files))
 	for i, f := range files {
 		if len(preloaded) >= preloadMaxFiles || b.Len() > preloadMaxBytes {
 			rest := files[i:]
@@ -64,14 +64,14 @@ func PreloadContext(ctx context.Context, root, base, head string) (string, []str
 // both are set, otherwise the working-tree diff vs base plus untracked files.
 func changedFiles(ctx context.Context, root, base, head string) ([]string, error) {
 	if base != "" && head != "" {
-		out, err := runGit(ctx, root, false, withExcludes("--no-pager", "diff", "--name-only", base+"..."+head)...)
+		out, err := runGit(ctx, root, false, withExcludes(gitNoPager, gitDiffCmd, "--name-only", base+"..."+head)...)
 		if err != nil {
 			return nil, err
 		}
 		return dedupeStrings(splitLines(out)), nil
 	}
 
-	args := []string{"--no-pager", "diff", "--name-only"}
+	args := []string{gitNoPager, gitDiffCmd, "--name-only"}
 	if base != "" {
 		args = append(args, base)
 	}

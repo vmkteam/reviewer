@@ -19,6 +19,10 @@ const (
 	maxUntrackedFiles = 200
 	// emptyDiff is the sentinel returned when there is nothing to review.
 	emptyDiff = "empty diff"
+	// gitNoPager disables git's pager so output streams straight to stdout.
+	gitNoPager = "--no-pager"
+	// gitDiffCmd is the git subcommand shared by the diff/preload helpers.
+	gitDiffCmd = "diff"
 )
 
 // pathspec returns the trailing git pathspec: scoped to a single path when one is
@@ -123,11 +127,11 @@ func gitDiffTool(root, defBase, defHead string) (ToolDef, Handler) {
 func gitDiff(ctx context.Context, root, base, head, path string) (string, error) {
 	ps := pathspec(path)
 	if base != "" && head != "" {
-		return runGit(ctx, root, false, append([]string{"--no-pager", "diff", base + "..." + head}, ps...)...)
+		return runGit(ctx, root, false, append([]string{gitNoPager, gitDiffCmd, base + "..." + head}, ps...)...)
 	}
 
 	var b strings.Builder
-	trackedArgs := []string{"--no-pager", "diff"}
+	trackedArgs := []string{gitNoPager, gitDiffCmd}
 	if base != "" {
 		trackedArgs = append(trackedArgs, base)
 	}
@@ -157,7 +161,7 @@ func gitDiff(ctx context.Context, root, base, head, path string) (string, error)
 		}
 		// --no-index against /dev/null renders the new file as an addition; it
 		// exits 1 when content differs (expected), so allow exit code 1.
-		d, derr := runGit(ctx, root, true, "--no-pager", "diff", "--no-index", "--", os.DevNull, f)
+		d, derr := runGit(ctx, root, true, gitNoPager, gitDiffCmd, "--no-index", "--", os.DevNull, f)
 		if derr != nil {
 			continue
 		}
