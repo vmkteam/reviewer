@@ -38,6 +38,7 @@ var (
 	flJSONLogs         = fs.Bool("json", false, "enable json output")
 	flDev              = fs.Bool("dev", false, "enable dev mode")
 	flGenerateTSClient = fs.String("ts_client", "", "generate TypeScript vt rpc client and exit")
+	flGenerateGoClient = fs.String("go_client", "", "generate reviewctl Go client (package name) and exit")
 	flPatchesDir       = fs.String("patches", "", "path to SQL patches directory for auto-migration")
 	cfg                app.Config
 )
@@ -93,12 +94,12 @@ func main() {
 	// create & run app
 	a := app.New(appName, version, sl, cfg, dbc, pgdb)
 
-	// generate TS client from cmd flags
+	// generate a client from cmd flags and exit
 	if *flGenerateTSClient != "" {
-		b, er := a.TypeScriptClient(*flGenerateTSClient)
-		exitOnError(er)
-		_, _ = fmt.Fprint(os.Stdout, string(b))
-		os.Exit(0)
+		printClientAndExit(a.TypeScriptClient(*flGenerateTSClient))
+	}
+	if *flGenerateGoClient != "" {
+		printClientAndExit(a.GoClient(*flGenerateGoClient))
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -159,6 +160,14 @@ func runMigrations(ctx context.Context, pgdb *pg.DB, dir string, sl embedlog.Log
 	}
 
 	return nil
+}
+
+// printClientAndExit writes a generated client to stdout and exits, or aborts on
+// error. Used by the -ts_client / -go_client generation flags.
+func printClientAndExit(b []byte, err error) {
+	exitOnError(err)
+	_, _ = fmt.Fprint(os.Stdout, string(b))
+	os.Exit(0)
 }
 
 // exitOnError calls log.Fatal if err wasn't nil.

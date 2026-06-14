@@ -1,15 +1,13 @@
 package ctl
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"reviewsrv/pkg/reviewer/ctl/reviewctlclient"
 )
 
 // CI metadata placeholders left in the prompt body and the review.json
@@ -30,10 +28,13 @@ const (
 	PlaceholderMRTitle = "%MR_TITLE%"
 )
 
-// jsonRPCVersion is the JSON-RPC protocol version sent to /v1/reviewctl/rpc/.
-const jsonRPCVersion = "2.0"
+// reviewctlRPCPath is the internal JSON-RPC endpoint reviewctl talks to. The
+// generated client posts to the exact endpoint it is given, so the full path is
+// appended to the server URL here.
+const reviewctlRPCPath = "/v1/reviewctl/rpc/"
 
-// PromptClient fetches review prompts from the reviewsrv server.
+// PromptClient fetches the runner profile and review prompt from the reviewsrv
+// server over the internal reviewctl JSON-RPC, using the rpcgen-generated client.
 type PromptClient struct {
 	httpClient *http.Client
 	log        *slog.Logger
@@ -65,81 +66,45 @@ type ReviewConfig struct {
 	Params          RunnerProfileParams `json:"params"`
 }
 
+// client builds a generated reviewctl client pointed at serverURL. The endpoint
+// (server URL + the RPC path) is only known per call, so it is built on demand
+// over the shared httpClient (which keeps the 10s timeout).
+func (c *PromptClient) client(serverURL string) *reviewctlclient.Client {
+	return reviewctlclient.NewClient(strings.TrimRight(serverURL, "/")+reviewctlRPCPath, c.httpClient)
+}
+
 // FetchConfig fetches the resolved runner profile for the project key over the
 // internal reviewctl RPC.
 func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey string) (*ReviewConfig, error) {
-	var rc ReviewConfig
-	if err := c.rpcCall(ctx, serverURL, "ReviewConfig", projectKey, &rc); err != nil {
+	cfg, err := c.client(serverURL).Reviewctl.ReviewConfig(ctx, projectKey)
+	if err != nil {
 		return nil, err
 	}
+
+	rc := &ReviewConfig{
+		RunnerProfileID: cfg.RunnerProfileID,
+		Title:           cfg.Title,
+		Runner:          cfg.Runner,
+		Model:           cfg.Model,
+		Effort:          cfg.Effort,
+		APIProvider:     cfg.ApiProvider,
+		APIBaseURL:      cfg.ApiBaseURL,
+		Token:           cfg.Token,
+		Params:          RunnerProfileParams{AllowDangerousPermissions: cfg.Params.AllowDangerousPermissions},
+	}
 	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey, "profileId", rc.RunnerProfileID, "runner", rc.Runner, "model", rc.Model)
-	return &rc, nil
+	return rc, nil
 }
 
 // FetchPrompt fetches the assembled prompt for the given project key over the
 // internal reviewctl RPC.
 func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey string) (string, error) {
-	var prompt string
-	if err := c.rpcCall(ctx, serverURL, "Prompt", projectKey, &prompt); err != nil {
+	prompt, err := c.client(serverURL).Reviewctl.Prompt(ctx, projectKey)
+	if err != nil {
 		return "", err
 	}
 	c.log.InfoContext(ctx, "fetched prompt", "projectKey", projectKey, "length", len(prompt))
 	return prompt, nil
-}
-
-// rpcCall performs a JSON-RPC 2.0 call to /v1/reviewctl/rpc/ and decodes the
-// result into out.
-func (c *PromptClient) rpcCall(ctx context.Context, serverURL, method, projectKey string, out any) error {
-	url := strings.TrimRight(serverURL, "/") + "/v1/reviewctl/rpc/"
-	reqBody, err := json.Marshal(map[string]any{
-		"jsonrpc": jsonRPCVersion,
-		"method":  method,
-		"params":  map[string]string{"projectKey": projectKey},
-		"id":      1,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal %s request: %w", method, err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
-	if err != nil {
-		return fmt.Errorf("create %s request: %w", method, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("%s: %w", method, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read %s response: %w", method, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: HTTP %d: %s", method, resp.StatusCode, string(body))
-	}
-
-	var env struct {
-		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &env); err != nil {
-		return fmt.Errorf("parse %s response: %w", method, err)
-	}
-	if env.Error != nil {
-		return fmt.Errorf("reviewctl %s: %s", method, env.Error.Message)
-	}
-	if out != nil && len(env.Result) > 0 {
-		if err := json.Unmarshal(env.Result, out); err != nil {
-			return fmt.Errorf("decode %s result: %w", method, err)
-		}
-	}
-	return nil
 }
 
 // SubstituteVariables replaces CI placeholders in the prompt text. Empty
