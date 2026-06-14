@@ -24,15 +24,16 @@
       </FormField>
 
       <FormField label="Model" :error="fieldError('model')">
-        <VInput v-model="entity.model" type="text" :placeholder="modelPlaceholder" />
+        <ComboInput v-model="entity.model" :suggestions="modelSuggestions" :placeholder="modelPlaceholder" />
         <p class="mt-1 text-xs text-fg-subtle">Leave empty to use the runner default.</p>
       </FormField>
 
       <FormField label="Effort" :error="fieldError('effort')">
         <VSelect v-model="entity.effort">
           <option :value="''">— default —</option>
-          <option v-for="e in efforts" :key="e" :value="e">{{ e }}</option>
+          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
         </VSelect>
+        <p v-if="!effortUsed" class="mt-1 text-xs text-fg-subtle">Ignored by this runner/provider.</p>
       </FormField>
 
       <template v-if="entity.runner === 'direct'">
@@ -44,7 +45,7 @@
         </FormField>
 
         <FormField label="API Base URL" :error="fieldError('apiBaseURL')">
-          <VInput v-model="entity.apiBaseURL" type="text" placeholder="https://api.deepseek.com" />
+          <VInput v-model="entity.apiBaseURL" type="text" :placeholder="apiBaseURLPlaceholder" />
         </FormField>
       </template>
 
@@ -100,6 +101,7 @@ import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import VInput from '../../components/VInput.vue'
 import VSelect from '../../components/VSelect.vue'
+import ComboInput from '../../components/ComboInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
 
@@ -112,6 +114,30 @@ const runners = ['claude', 'opencode', 'codex', 'direct']
 const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
 const providers = ['anthropic', 'deepseek', 'openai', 'openai-compat']
 
+// Runner-dependent model suggestions for the datalist (free text still allowed).
+// Keep in sync with ResolveDefaults and the price tables in codex.go /
+// provider_factory.go. As of 2026-06.
+const MODEL_SUGGESTIONS: Record<string, string[]> = {
+  claude: ['opus', 'sonnet', 'haiku', 'claude-opus-4-8', 'claude-fable-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  codex: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex'],
+  opencode: ['anthropic/claude-opus-4-8', 'openai/gpt-5.5', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash'],
+}
+// For the direct runner, suggestions depend on the selected API provider.
+// deepseek-chat/reasoner are intentionally omitted — they retire 2026-07-24.
+const DIRECT_MODEL_SUGGESTIONS: Record<string, string[]> = {
+  anthropic: ['claude-opus-4-8', 'claude-fable-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  deepseek: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  openai: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+  'openai-compat': [],
+}
+// Default API base URL per direct provider, shown as the input placeholder.
+const PROVIDER_BASE_URL: Record<string, string> = {
+  anthropic: 'https://api.anthropic.com',
+  deepseek: 'https://api.deepseek.com',
+  openai: 'https://api.openai.com/v1',
+  'openai-compat': '',
+}
+
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<RunnerProfile>(vtApi.runnerprofile, 'runnerProfile', () => ({
   id: 0, title: '', runner: 'claude', model: '', effort: '', apiProvider: '', apiBaseURL: '',
   params: { allowDangerousPermissions: false }, isDefault: false, statusId: 1, tokenMasked: '', hasToken: false,
@@ -120,14 +146,32 @@ const { entity, loading, saving, error, fieldError, load, save, remove } = useFo
 // Token is write-only: bind a separate input so an untouched field stays "keep".
 const tokenInput = ref('')
 
+// Model suggestions for the current runner (and provider, for direct). Free text
+// stays allowed; this only populates the datalist and the placeholder.
+const modelSuggestions = computed<string[]>(() =>
+  entity.runner === 'direct'
+    ? DIRECT_MODEL_SUGGESTIONS[entity.apiProvider ?? ''] ?? []
+    : MODEL_SUGGESTIONS[entity.runner] ?? [],
+)
+
 const modelPlaceholder = computed(() => {
-  switch (entity.runner) {
-    case 'claude': return 'opus'
-    case 'codex': return 'gpt-5.1-codex'
-    case 'direct': return 'claude-opus-4-8, deepseek-v4-pro...'
-    default: return 'provider/model'
-  }
+  if (modelSuggestions.value.length) return modelSuggestions.value[0]
+  return entity.runner === 'opencode' ? 'provider/model' : 'model'
 })
+
+const apiBaseURLPlaceholder = computed(() => PROVIDER_BASE_URL[entity.apiProvider ?? ''] || 'https://...')
+
+// Effort is honoured by the claude/codex CLIs and, for the direct runner, only by
+// the Anthropic provider; deepseek/openai-compat and opencode ignore it. codex has
+// no "max" level.
+const effortUsed = computed(() => {
+  if (entity.runner === 'claude' || entity.runner === 'codex') return true
+  if (entity.runner === 'direct') return entity.apiProvider === 'anthropic'
+  return false
+})
+const effortOptions = computed(() =>
+  entity.runner === 'codex' ? efforts.filter((e) => e !== 'max') : efforts,
+)
 
 onMounted(() => {
   if (props.id) load(parseInt(props.id))
