@@ -88,7 +88,7 @@ func (c *Config) Validate(cmd string) error {
 		return errors.New("--url / $REVIEWSRV_URL is required")
 	}
 
-	if cmd == "comment" && c.ReviewID == 0 {
+	if cmd == "comment" && c.ReviewID == 0 { //nolint:goconst // CLI subcommand name
 		return errors.New("--review-id is required for comment subcommand")
 	}
 
@@ -118,19 +118,19 @@ func (c *Config) PublicBaseURL() string {
 // we pin opus to keep review cost and quality predictable.
 func (c *Config) ResolveDefaults() {
 	if c.Model == "" && (c.Runner == "" || c.Runner == runner.RunnerClaude) {
-		c.Model = "opus"
+		c.Model = "opus" //nolint:goconst // Claude model alias
 	}
 	// Direct runner against Anthropic: pin a concrete model and reasoning effort
 	// so cost/quality stay predictable. Without an explicit effort the Anthropic
 	// API silently defaults to "high", whereas Claude Code uses "xhigh" for
 	// agentic coding — match it so the direct runner isn't a notch weaker out of
 	// the box. DeepSeek/openai-compat ignore effort and require an explicit --model.
-	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" {
+	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" { //nolint:goconst // provider id; canonical const lives in pkg/reviewer/direct
 		if c.Model == "" {
-			c.Model = "claude-opus-4-8"
+			c.Model = "claude-opus-4-8" //nolint:goconst // pinned model id
 		}
 		if c.Effort == "" {
-			c.Effort = "xhigh"
+			c.Effort = "xhigh" //nolint:goconst // reasoning effort level
 		}
 	}
 	// Codex reports no dollar cost, so pin a concrete model: the CLI then uses a

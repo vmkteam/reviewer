@@ -31,9 +31,9 @@ const (
 )
 
 var errorMap = map[string]string{
-	"max":           FieldErrorMax,
-	"min":           FieldErrorMin,
-	"required":      FieldErrorRequired,
+	"max":           FieldErrorMax,      //nolint:goconst // validator tag name, only coincidentally equals FieldErrorMax
+	"min":           FieldErrorMin,      //nolint:goconst // validator tag name, only coincidentally equals FieldErrorMin
+	"required":      FieldErrorRequired, //nolint:goconst // validator tag name, only coincidentally equals FieldErrorRequired
 	"gt":            FieldErrorRequired,
 	"len":           FieldErrorLen,
 	CustomStatusTag: FieldErrorIncorrect,

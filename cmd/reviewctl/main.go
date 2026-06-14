@@ -169,12 +169,12 @@ func applyTokenFallback(cfg *ctl.Config) {
 	}
 	switch cfg.Runner {
 	case "", runner.RunnerClaude:
-		if os.Getenv("ANTHROPIC_API_KEY") == "" {
-			_ = os.Setenv("ANTHROPIC_API_KEY", cfg.Token)
+		if os.Getenv(envAnthropicAPIKey) == "" {
+			_ = os.Setenv(envAnthropicAPIKey, cfg.Token)
 		}
 	case runner.RunnerCodex:
-		if os.Getenv("OPENAI_API_KEY") == "" {
-			_ = os.Setenv("OPENAI_API_KEY", cfg.Token)
+		if os.Getenv(envOpenAIAPIKey) == "" {
+			_ = os.Setenv(envOpenAIAPIKey, cfg.Token)
 		}
 	}
 }
@@ -230,6 +230,14 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 	}, nil
 }
 
+// Env var names that may carry the direct-runner API key.
+const (
+	envReviewAPIKey    = "REVIEW_API_KEY"
+	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
+	envOpenAIAPIKey    = "OPENAI_API_KEY"
+	envDeepSeekAPIKey  = "DEEPSEEK_API_KEY"
+)
+
 // directKeyEnvs reports the env vars that may hold the API key for the given
 // provider, in priority order. REVIEW_API_KEY is a provider-agnostic override so
 // an arbitrary OpenAI-compatible endpoint need not borrow the DEEPSEEK_API_KEY
@@ -238,11 +246,11 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 func directKeyEnvs(provider string) []string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "anthropic":
-		return []string{"REVIEW_API_KEY", "ANTHROPIC_API_KEY"}
+		return []string{envReviewAPIKey, envAnthropicAPIKey}
 	case "openai", "openai-compat":
-		return []string{"REVIEW_API_KEY", "OPENAI_API_KEY"}
+		return []string{envReviewAPIKey, envOpenAIAPIKey}
 	default: // deepseek (the default) and any other openai-compatible backend
-		return []string{"REVIEW_API_KEY", "DEEPSEEK_API_KEY"}
+		return []string{envReviewAPIKey, envDeepSeekAPIKey}
 	}
 }
 

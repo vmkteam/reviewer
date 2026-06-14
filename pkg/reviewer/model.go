@@ -21,6 +21,10 @@ const (
 	SeverityHigh     = "high"
 	SeverityMedium   = "medium"
 	SeverityLow      = "low"
+
+	TrafficLightRed    = "red"
+	TrafficLightYellow = "yellow"
+	TrafficLightGreen  = "green"
 )
 
 var (
@@ -158,13 +162,13 @@ func calcIssueStats(issues Issues) IssueStats {
 	var s IssueStats
 	for _, iss := range issues {
 		switch iss.Severity {
-		case "critical":
+		case SeverityCritical:
 			s.Critical++
-		case "high":
+		case SeverityHigh:
 			s.High++
-		case "medium":
+		case SeverityMedium:
 			s.Medium++
-		case "low":
+		case SeverityLow:
 			s.Low++
 		}
 	}
@@ -180,11 +184,11 @@ func CalcTrafficLight(s IssueStats) string {
 func calcTrafficLight(s IssueStats) string {
 	switch {
 	case s.Critical >= 1 || s.High >= 2:
-		return "red"
+		return TrafficLightRed
 	case s.High >= 1 || s.Medium >= 3:
-		return "yellow"
+		return TrafficLightYellow
 	default:
-		return "green"
+		return TrafficLightGreen
 	}
 }
 

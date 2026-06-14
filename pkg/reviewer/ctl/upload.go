@@ -24,10 +24,10 @@ import (
 
 // reviewTypeByPrefix maps R*.md file prefixes to review types.
 var reviewTypeByPrefix = map[string]string{
-	"R1": "architecture",
-	"R2": "code",
-	"R3": "security",
-	"R4": "tests",
+	"R1": "architecture", //nolint:goconst // review-type label
+	"R2": "code",         //nolint:goconst // review-type label
+	"R3": "security",     //nolint:goconst // review-type label
+	"R4": "tests",        //nolint:goconst // review-type label
 	"R5": "operability",
 }
 
@@ -262,7 +262,7 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 // directory (the R*.md bodies are matched separately by FindMDFiles). Shared by
 // CollectDebugArtifacts (read for the bundle) and CleanReviewArtifacts (wiped
 // before a run) so the set stays in one place.
-var reviewArtifactFiles = []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"}
+var reviewArtifactFiles = []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"} //nolint:goconst // artifact filename
 
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
