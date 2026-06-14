@@ -110,7 +110,7 @@ const showConfirm = ref(false)
 
 const runners = ['claude', 'opencode', 'codex', 'direct']
 const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
-const providers = ['anthropic', 'deepseek', 'openai-compat']
+const providers = ['anthropic', 'deepseek', 'openai', 'openai-compat']
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<RunnerProfile>(vtApi.runnerprofile, 'runnerProfile', () => ({
   id: 0, title: '', runner: 'claude', model: '', effort: '', apiProvider: '', apiBaseURL: '',

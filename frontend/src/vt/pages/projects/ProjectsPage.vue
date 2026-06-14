@@ -161,6 +161,7 @@ import SearchBar from '../../components/SearchBar.vue'
 import VInput from '../../components/VInput.vue'
 import VSelect from '../../components/VSelect.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
+import { maskKey } from '../../format'
 import VButton from '../../components/VButton.vue'
 
 const router = useRouter()
@@ -184,10 +185,6 @@ function copyKey(key: string) {
   navigator.clipboard.writeText(key)
   keyCopied.value = key
   setTimeout(() => { keyCopied.value = '' }, 2000)
-}
-function maskKey(key: string): string {
-  if (!key) return ''
-  return key.length <= 8 ? key : key.slice(0, 8) + '…'
 }
 
 // Modal refs

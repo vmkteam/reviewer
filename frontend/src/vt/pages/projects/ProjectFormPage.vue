@@ -95,6 +95,7 @@ import StatusRadio from '../../components/StatusRadio.vue'
 import FKSelect from '../../components/FKSelect.vue'
 import VInput from '../../components/VInput.vue'
 import VTextarea from '../../components/VTextarea.vue'
+import { maskKey } from '../../format'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
 
@@ -109,11 +110,6 @@ const { entity, loading, saving, error, fieldError, load, save, remove } = useFo
 }))
 
 const keyCopied = ref(false)
-
-function maskKey(key?: string): string {
-  if (!key) return ''
-  return key.length <= 8 ? key : key.slice(0, 8) + '…'
-}
 
 function copyKey() {
   if (!entity.projectKey) return
