@@ -304,10 +304,6 @@
     <index name="ix_projects_runnerProfileId" table="projects" using="btree">
       <column name="runnerProfileId"></column>
     </index>
-    <index name="UNQ_runnerProfiles_isDefault" table="runnerProfiles" unique="true" using="btree">
-      <column name="isDefault"></column>
-      <where><![CDATA[isDefault]]></where>
-    </index>
   </schema>
   <functions></functions>
   <triggers></triggers>

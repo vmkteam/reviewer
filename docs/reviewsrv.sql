@@ -225,10 +225,6 @@ CREATE INDEX "ix_projects_runnerProfileId" ON "projects" (
 	"runnerProfileId"
 );
 
-CREATE UNIQUE INDEX "UNQ_runnerProfiles_isDefault" ON "runnerProfiles" (
-	"isDefault"
-) WHERE "isDefault";
-
 ALTER TABLE "prompts" ADD CONSTRAINT "Ref_prompts_to_statuses" FOREIGN KEY ("statusId")
 	REFERENCES "statuses"("statusId")
 	ON DELETE RESTRICT

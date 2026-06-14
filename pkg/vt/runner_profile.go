@@ -4,16 +4,19 @@ import (
 	"context"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/reviewer/direct"
+	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/vmkteam/embedlog"
 	"github.com/vmkteam/zenrpc/v2"
 )
 
-// Allowed enum values for a runner profile. Kept in sync with pkg/reviewer/runner
-// and pkg/reviewer/direct; validated here so the admin can't save an unusable profile.
+// Allowed enum values for a runner profile, validated here so the admin can't save
+// an unusable profile. Runners and providers reuse the canonical sources of truth
+// (runner.Runner* constants and direct.IsValidProvider); efforts have no shared
+// constant and stay in sync with the runner's effort handling by hand.
 var (
-	validRunners   = map[string]bool{"claude": true, "opencode": true, "codex": true, "direct": true}
-	validProviders = map[string]bool{"anthropic": true, "deepseek": true, "openai-compat": true}
+	validRunners = map[string]bool{runner.RunnerClaude: true, runner.RunnerOpenCode: true, runner.RunnerCodex: true, runner.RunnerDirect: true}
 	//nolint:goconst // "max" here is an effort level, not the FieldErrorMax error code
 	validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 )
@@ -214,7 +217,7 @@ func (s RunnerProfileService) isValid(ctx context.Context, runnerProfile RunnerP
 	if runnerProfile.Runner != "" && !validRunners[runnerProfile.Runner] {
 		v.Append("runner", FieldErrorIncorrect)
 	}
-	if runnerProfile.APIProvider != nil && *runnerProfile.APIProvider != "" && !validProviders[*runnerProfile.APIProvider] {
+	if runnerProfile.APIProvider != nil && *runnerProfile.APIProvider != "" && !direct.IsValidProvider(*runnerProfile.APIProvider) {
 		v.Append("apiProvider", FieldErrorIncorrect)
 	}
 	if runnerProfile.Effort != nil && *runnerProfile.Effort != "" && !validEfforts[*runnerProfile.Effort] {
@@ -225,8 +228,11 @@ func (s RunnerProfileService) isValid(ctx context.Context, runnerProfile RunnerP
 }
 
 // unsetCurrentDefault clears isDefault on the existing default profile when a
-// different profile is being marked default, so the single-default partial-unique
-// index never rejects the write. No-op when rp is not default or already is it.
+// different profile is being marked default. This is the *only* guarantee of a
+// single default — there is deliberately no partial-unique DB index, because
+// soft-delete keeps isDefault set and the index would then count a deleted
+// profile as a live default and block setting any new one. No-op when rp is not
+// default or already is it.
 func (s RunnerProfileService) unsetCurrentDefault(ctx context.Context, rp *db.RunnerProfile) error {
 	if !rp.IsDefault {
 		return nil

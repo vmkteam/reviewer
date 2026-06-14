@@ -5,9 +5,33 @@ import (
 	"strings"
 )
 
-// providerDeepSeek is the default provider id and the DeepSeek model-family
-// prefix (the published pricing table keys off the same token).
-const providerDeepSeek = "deepseek"
+// Provider ids accepted by NewProvider for the direct runner. ProviderDeepSeek
+// doubles as the DeepSeek model-family prefix (the published pricing table keys
+// off the same token); the empty provider id defaults to DeepSeek.
+const (
+	ProviderDeepSeek     = "deepseek"
+	ProviderOpenAI       = "openai"
+	ProviderOpenAICompat = "openai-compat"
+	ProviderAnthropic    = "anthropic"
+)
+
+// validProviders is the set of explicit (non-empty) provider ids NewProvider
+// accepts. Defined next to the switch below so the two can't drift, and reused
+// by IsValidProvider so the VT admin validates against this single source.
+var validProviders = map[string]bool{
+	ProviderDeepSeek:     true,
+	ProviderOpenAI:       true,
+	ProviderOpenAICompat: true,
+	ProviderAnthropic:    true,
+}
+
+// IsValidProvider reports whether name is an explicit provider id that
+// NewProvider accepts (case-insensitive, matching NewProvider). The empty
+// default is intentionally excluded — callers validating a user-entered value
+// should treat "" as "unset", not as a valid provider.
+func IsValidProvider(name string) bool {
+	return validProviders[strings.ToLower(name)]
+}
 
 // ProviderConfig selects and configures an LLM backend.
 type ProviderConfig struct {
@@ -27,15 +51,15 @@ func NewProvider(cfg ProviderConfig) (LLMProvider, error) {
 		pricing = pricingFor(cfg.Model)
 	}
 	switch strings.ToLower(cfg.Provider) {
-	case "", providerDeepSeek:
+	case "", ProviderDeepSeek:
 		base := cfg.BaseURL
 		if base == "" {
 			base = "https://api.deepseek.com"
 		}
 		return NewOpenAIProvider(OpenAIConfig{APIKey: cfg.APIKey, BaseURL: base, Model: cfg.Model, Pricing: pricing, Temperature: cfg.Temperature})
-	case "openai", "openai-compat":
+	case ProviderOpenAI, ProviderOpenAICompat:
 		return NewOpenAIProvider(OpenAIConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Pricing: pricing, Temperature: cfg.Temperature})
-	case "anthropic":
+	case ProviderAnthropic:
 		// effort flows through Request.Effort (from DirectRunner.Effort).
 		return NewAnthropicProvider(AnthropicConfig{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Pricing: pricing})
 	default:
@@ -62,7 +86,7 @@ func pricingFor(model string) Pricing {
 	case strings.HasPrefix(model, "deepseek-v4-flash"):
 		// V4 Flash rates (also the deepseek-chat/reasoner compatibility aliases).
 		return Pricing{InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadPerMTok: 0.0028, CacheWritePerMTok: 0.14}
-	case strings.HasPrefix(model, providerDeepSeek):
+	case strings.HasPrefix(model, ProviderDeepSeek):
 		// Legacy deepseek-chat/reasoner alias to V4 Flash (deprecating 2026-07-24).
 		return Pricing{InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadPerMTok: 0.0028, CacheWritePerMTok: 0.14}
 	default:

@@ -21,7 +21,9 @@ ALTER TABLE "runnerProfiles" ADD CONSTRAINT "Ref_runnerProfiles_to_statuses" FOR
 	NOT DEFERRABLE;
 
 CREATE INDEX "ix_runnerProfiles_statusId" ON "runnerProfiles" ("statusId");
-CREATE UNIQUE INDEX "UNQ_runnerProfiles_isDefault" ON "runnerProfiles" ("isDefault") WHERE "isDefault";
+-- Single default is enforced in code (RunnerProfileService.unsetCurrentDefault),
+-- not by a partial unique index: soft-delete keeps isDefault set, which a DB
+-- constraint would count as a live default and block setting any new one.
 
 ALTER TABLE "projects" ADD COLUMN "runnerProfileId" integer;
 ALTER TABLE "projects" ADD CONSTRAINT "Ref_projects_to_runnerProfiles" FOREIGN KEY ("runnerProfileId")
