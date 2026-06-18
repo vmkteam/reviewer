@@ -73,6 +73,13 @@ func (h *Handler) CreateReview(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	// A fusion upload links its panel members as children (sets their parentReviewId).
+	if len(draft.Review.MemberReviewIDs) > 0 {
+		if err = h.rm.LinkMembers(c.Request().Context(), rv.ID, draft.Review.MemberReviewIDs); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+	}
+
 	h.notifySlack(project, rv)
 
 	return c.String(http.StatusOK, strconv.Itoa(rv.ID))

@@ -126,6 +126,19 @@ func (rm *ReviewManager) CreateReview(ctx context.Context, pr *Project, rv *Revi
 	return rv, err
 }
 
+// LinkMembers sets parentReviewId = parentID on each member review, making the
+// fusion review their parent (members are then filtered from default lists and
+// reachable only via the fusion's panel breakdown). Returns on the first failure.
+func (rm *ReviewManager) LinkMembers(ctx context.Context, parentID int, memberIDs []int) error {
+	for _, id := range memberIDs {
+		pid := parentID
+		if _, err := rm.repo.UpdateReview(ctx, &db.Review{ID: id, ParentReviewID: &pid}, db.WithColumns(db.Columns.Review.ParentReviewID)); err != nil {
+			return fmt.Errorf("link member %d to %d: %w", id, parentID, err)
+		}
+	}
+	return nil
+}
+
 type lastVersionResult struct {
 	ReviewID            int `pg:"reviewId"`
 	LastVersionReviewID int `pg:"lastVersionReviewId"`

@@ -33,6 +33,11 @@ type ReviewDraftMeta struct {
 	// ReviewRole is single | member | fusion (reviews.reviewRole). Empty is
 	// treated as single. Members of a multi-review panel upload with "member".
 	ReviewRole string `json:"reviewRole,omitempty"`
+
+	// MemberReviewIDs are the panel member review ids a fusion upload links as
+	// its children (their parentReviewId is set to this review). Not a Review
+	// column — consumed by the upload handler.
+	MemberReviewIDs []int `json:"memberReviewIds,omitempty"`
 }
 
 // ReviewDraftFile is one of the five review groups (architecture, code, …).
@@ -54,6 +59,10 @@ type ReviewDraftIssue struct {
 	IssueType    string `json:"issueType"`
 	FileType     string `json:"fileType"`
 	SuggestedFix string `json:"suggestedFix"`
+	// Sources is the per-issue provenance on a fusion review — the panel member
+	// model labels that flagged it (e.g. ["gpt-5.5","deepseek-v4-pro"], "judge"
+	// for a verified net-new). Empty for single/member reviews.
+	Sources []string `json:"sources,omitempty"`
 }
 
 // Validate checks that all reviewType and fileType values are valid.
@@ -118,6 +127,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 				File:         iss.File,
 				Lines:        iss.Lines,
 				SuggestedFix: ptrString(iss.SuggestedFix),
+				Sources:      db.IssueSources(iss.Sources),
 			},
 		})
 	}

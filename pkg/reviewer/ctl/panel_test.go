@@ -88,3 +88,18 @@ func TestMemberLabel(t *testing.T) {
 	// bare runner, no model
 	assert.Equal(t, "1-claude", memberLabel(0, MemberSpec{Runner: "claude"}))
 }
+
+func TestSourceLabels(t *testing.T) {
+	got := sourceLabels([]MemberSpec{
+		{Runner: "codex", Model: "gpt-5.5"},
+		{Runner: "opencode", Model: "openrouter/deepseek/deepseek-v4-pro"},
+		{Runner: "direct", Model: "gpt-5.5"}, // duplicate model → -2 suffix keeps it distinct
+		{Runner: "claude"},                   // no model → runner name
+	})
+	assert.Equal(t, []string{
+		"gpt-5.5",
+		"openrouter-deepseek-deepseek-v4-pro",
+		"gpt-5.5-2",
+		"claude",
+	}, got)
+}

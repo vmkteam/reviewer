@@ -64,6 +64,11 @@ type Config struct {
 	// (with per-member tokens) arrives in a later phase.
 	Multi []MemberSpec
 
+	// Judge is the synthesizer for a multi-review panel (--judge / $REVIEW_JUDGE).
+	// When set with >=2 members, reviewctl runs the panel then the judge over the
+	// members' outputs and uploads one fused review. Nil = no fusion (members only).
+	Judge *MemberSpec
+
 	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
 	// On failure, the upload happens regardless of this flag.
 	DebugUpload bool
@@ -185,4 +190,21 @@ func ParseMulti(s string) ([]MemberSpec, error) {
 		out = append(out, MemberSpec{Runner: r, Model: m})
 	}
 	return out, nil
+}
+
+// ParseJudge parses the --judge value: a single runner:model spec (same grammar
+// as one --multi member). Returns nil for an empty string (no judge / no fusion).
+func ParseJudge(s string) (*MemberSpec, error) {
+	specs, err := ParseMulti(s)
+	if err != nil {
+		return nil, err
+	}
+	switch len(specs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &specs[0], nil
+	default:
+		return nil, fmt.Errorf("--judge expects a single runner:model, got %d", len(specs))
+	}
 }

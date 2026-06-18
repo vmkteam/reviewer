@@ -17,7 +17,7 @@ var version = "dev"
 
 func main() {
 	cfg := &ctl.Config{}
-	var multiRaw string
+	var multiRaw, judgeRaw string
 
 	rootCmd := &cobra.Command{
 		Use:          "reviewctl",
@@ -63,12 +63,13 @@ func main() {
 	pf.StringVar(&cfg.APIBaseURL, "api-base-url", os.Getenv("REVIEW_API_BASE_URL"), "direct runner API base URL (defaults to provider's standard endpoint)")
 	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
 	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
+	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
 		Short: "Full review cycle: prompt → Claude → upload → comment → HTML",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runReview(cmd, cfg, multiRaw, slog.Default())
+			return runReview(cmd, cfg, multiRaw, judgeRaw, slog.Default())
 		},
 	}
 
@@ -116,7 +117,7 @@ func main() {
 // either resolve the server profile and build the primary runner (single review)
 // or hand the per-member factory to the controller (multi-review panel, which
 // builds one runner per member inside its worktree and bypasses server config).
-func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw string, log *slog.Logger) error {
+func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw, judgeRaw string, log *slog.Logger) error {
 	if err := cfg.Validate("review"); err != nil {
 		return err
 	}
@@ -126,6 +127,9 @@ func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw string, log *slog.L
 		return err
 	}
 	cfg.Multi = multi
+	if cfg.Judge, err = ctl.ParseJudge(judgeRaw); err != nil {
+		return err
+	}
 
 	var rr runner.ReviewRunner
 	if len(cfg.Multi) == 0 {

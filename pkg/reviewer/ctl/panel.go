@@ -10,14 +10,26 @@ import (
 	"strings"
 	"time"
 
+	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer"
 )
 
-// reviewPanel runs each --multi panel member in its own detached git worktree and
-// uploads it as a reviewRole=member review. Members share the project prompt and
-// MR metadata; only the runner/model/working dir differ. Sequential for now
-// (parallelism is a later phase) and there is no judge/fusion yet, so the member
-// reviews are the only output. Fails fast on the first member error.
+// memberOutput is a panel member's produced review, kept until the judge has
+// staged it. The worktree dir stays alive until panel cleanup so the judge can
+// read review.json + R*.md from it.
+type memberOutput struct {
+	spec    MemberSpec
+	label   string            // provenance/source label (model-based) → members/<label>/
+	dir     string            // member worktree
+	draft   *rest.ReviewDraft // filled review (role set at upload time)
+	mdFiles map[string]string // reviewType → R*.md path in dir
+}
+
+// reviewPanel fans out the --multi panel into per-member git worktrees, then —
+// when a judge is configured and ≥2 members succeed — runs the judge over the
+// members' outputs to produce one fused review. Members and the judge share the
+// project prompt and MR metadata; only runner/model/working dir differ.
+// Sequential and fail-fast; parallelism is a later phase.
 func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	if c.runnerFactory == nil {
 		return errors.New("panel review requires a runner factory")
@@ -33,85 +45,269 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	if err != nil {
 		return fmt.Errorf("create worktree base: %w", err)
 	}
-	// Safety net: individual worktrees are removed in runMember; this clears any
-	// directory a failed removal left behind. Detached so a cancelled ctx still cleans up.
 	defer func() { _ = os.RemoveAll(base) }()
 
 	commit := c.panelCommit()
-	memberIDs := make([]int, 0, len(c.cfg.Multi))
-	for i, m := range c.cfg.Multi {
-		label := memberLabel(i, m)
-		id, err := c.runMember(ctx, base, commit, label, m, prompt)
-		if err != nil {
-			return fmt.Errorf("panel member %s: %w", label, err)
+	labels := sourceLabels(c.cfg.Multi)
+
+	// Member worktrees stay alive until the judge has staged them; remove them all
+	// (plus the judge's) on the way out.
+	var outputs []*memberOutput
+	defer func() {
+		for _, o := range outputs {
+			c.gitWorktreeRemove(ctx, o.dir)
 		}
-		memberIDs = append(memberIDs, id)
-		c.log.InfoContext(ctx, "panel member uploaded", "label", label, "reviewId", id)
+	}()
+
+	for i, m := range c.cfg.Multi {
+		dir := filepath.Join(base, "wt-"+memberLabel(i, m))
+		if err = c.gitWorktreeAdd(ctx, dir, commit); err != nil {
+			return fmt.Errorf("panel member %s: worktree add: %w", labels[i], err)
+		}
+		out, perr := c.produceMember(ctx, dir, labels[i], m, prompt)
+		if perr != nil {
+			return fmt.Errorf("panel member %s: %w", labels[i], perr)
+		}
+		outputs = append(outputs, out)
+		c.log.InfoContext(ctx, "panel member reviewed", "label", labels[i], "issues", len(out.draft.Issues))
+	}
+
+	primaryID, err := c.finishPanel(ctx, base, commit, outputs)
+	if err != nil {
+		return err
 	}
 
 	c.log.InfoContext(ctx, "panel completed",
-		"members", len(memberIDs), "reviewIds", memberIDs, "duration", time.Since(start).Round(time.Second))
+		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second))
 	return nil
 }
 
-// runMember reviews a single panel member in an isolated detached worktree and
-// uploads the result as a member review. The worktree is removed on return.
-func (c *Controller) runMember(ctx context.Context, base, commit, label string, m MemberSpec, prompt string) (int, error) {
-	dir := filepath.Join(base, "wt-"+label)
-	if err := c.gitWorktreeAdd(ctx, dir, commit); err != nil {
-		return 0, fmt.Errorf("worktree add: %w", err)
-	}
-	defer c.gitWorktreeRemove(ctx, dir)
+// finishPanel decides what to upload from the produced member outputs: a fused
+// review when a judge is set and ≥2 members ran, the lone member promoted to a
+// standalone review when exactly one ran, or plain member reviews when no judge
+// is configured (Phase 2 behaviour). Returns the primary review id.
+func (c *Controller) finishPanel(ctx context.Context, base, commit string, outputs []*memberOutput) (int, error) {
+	switch {
+	case c.cfg.Judge != nil && len(outputs) >= 2:
+		return c.fuse(ctx, base, commit, outputs)
 
-	// Clone the base config and override only the runner, model and working dir;
-	// MR metadata and credentials are shared. Clear Multi so the member runs a
-	// plain single review, not another panel.
+	case c.cfg.Judge != nil && len(outputs) == 1:
+		c.log.InfoContext(ctx, "judge skipped: single member promoted to single review")
+		return c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+
+	default: // no judge → member reviews only, no fusion
+		var lastID int
+		for _, o := range outputs {
+			id, err := c.uploadMember(ctx, o, reviewer.ReviewRoleMember)
+			if err != nil {
+				return 0, err
+			}
+			c.log.InfoContext(ctx, "panel member uploaded", "label", o.label, "reviewId", id)
+			lastID = id
+		}
+		return lastID, nil
+	}
+}
+
+// fuse runs the judge over the staged member outputs and uploads one fused
+// review that links the members as children. If the judge fails after a retry,
+// it degrades to a single review from the primary member so CI never goes red on
+// a judge flap.
+func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*memberOutput) (int, error) {
+	judgeDir := filepath.Join(base, "wt-judge")
+	if err := c.gitWorktreeAdd(ctx, judgeDir, commit); err != nil {
+		return 0, fmt.Errorf("judge worktree add: %w", err)
+	}
+	defer c.gitWorktreeRemove(ctx, judgeDir)
+
+	fusion, err := c.runJudge(ctx, judgeDir, outputs)
+	if err != nil {
+		c.log.ErrorContext(ctx, "judge failed, promoting primary member to single", "err", err)
+		return c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+	}
+
+	// Upload members first to get their ids, then the fusion that links them.
+	memberIDs := make([]int, 0, len(outputs))
+	for _, o := range outputs {
+		id, uerr := c.uploadMember(ctx, o, reviewer.ReviewRoleMember)
+		if uerr != nil {
+			return 0, uerr
+		}
+		memberIDs = append(memberIDs, id)
+	}
+
+	fusion.draft.Review.ReviewRole = reviewer.ReviewRoleFusion
+	fusion.draft.Review.MemberReviewIDs = memberIDs
+	id, err := c.upload.UploadAll(ctx, c.cfg.URL, c.cfg.Key, fusion.draft, fusion.mdFiles)
+	if err != nil {
+		return 0, fmt.Errorf("upload fusion: %w", err)
+	}
+	c.log.InfoContext(ctx, "fusion uploaded", "reviewId", id, "memberIds", memberIDs, "issues", len(fusion.draft.Issues))
+	return id, nil
+}
+
+// produceMember reviews a single panel member in its worktree and returns the
+// filled draft + R*.md paths (not yet uploaded; the worktree stays alive).
+func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (*memberOutput, error) {
 	mc := *c.cfg
 	mc.Dir = dir
 	mc.Runner = m.Runner
 	mc.Model = m.Model
 	mc.Multi = nil
+	mc.Judge = nil
 
 	rr, err := c.runnerFactory(&mc)
 	if err != nil {
-		return 0, fmt.Errorf("build runner: %w", err)
+		return nil, fmt.Errorf("build runner: %w", err)
 	}
-
 	if err = WriteReviewSkeleton(mc.Dir, &mc); err != nil {
-		return 0, fmt.Errorf("write review.json skeleton: %w", err)
+		return nil, fmt.Errorf("write review.json skeleton: %w", err)
 	}
 
 	result, err := rr.Run(ctx, prompt)
 	if err != nil {
-		return 0, fmt.Errorf("run %s: %w", mc.Runner, err)
+		return nil, fmt.Errorf("run %s: %w", mc.Runner, err)
 	}
 
 	draft, err := ReadReviewJSON(mc.Dir)
 	if err != nil {
-		return 0, fmt.Errorf("read review: %w", err)
+		return nil, fmt.Errorf("read review: %w", err)
 	}
-
 	draft.Review.ModelInfo = result.ToModelInfo(mc.Model)
 	draft.Review.ModelInfo.Runner = rr.Name()
 	draft.Review.DurationMs = result.DurationMs
 	draft.Review.RunnerProfile = mc.RunnerProfileSnapshot()
-	draft.Review.ReviewRole = reviewer.ReviewRoleMember
 	c.fillMetadata(draft)
 
 	mdFiles, err := FindMDFiles(mc.Dir)
 	if err != nil {
-		return 0, fmt.Errorf("find md files: %w", err)
+		return nil, fmt.Errorf("find md files: %w", err)
+	}
+	return &memberOutput{spec: m, label: label, dir: dir, draft: draft, mdFiles: mdFiles}, nil
+}
+
+// runJudge stages each member's outputs into members/<label>/ inside the judge
+// worktree, then runs the judge with the fusion prompt (one retry) and returns
+// the fused draft + R*.md.
+func (c *Controller) runJudge(ctx context.Context, judgeDir string, outputs []*memberOutput) (*memberOutput, error) {
+	if err := stageMembers(judgeDir, outputs); err != nil {
+		return nil, fmt.Errorf("stage members: %w", err)
 	}
 
-	id, err := c.upload.UploadAll(ctx, c.cfg.URL, c.cfg.Key, draft, mdFiles)
+	jc := *c.cfg
+	jc.Dir = judgeDir
+	jc.Runner = c.cfg.Judge.Runner
+	jc.Model = c.cfg.Judge.Model
+	jc.Multi = nil
+	jc.Judge = nil
+
+	rr, err := c.runnerFactory(&jc)
 	if err != nil {
-		return 0, fmt.Errorf("upload: %w", err)
+		return nil, fmt.Errorf("build judge runner: %w", err)
+	}
+	prompt := SubstituteVariables(reviewer.FusionPrompt, &jc)
+
+	var lastErr error
+	for attempt := 1; attempt <= 2; attempt++ { // initial run + one retry
+		// Wipe the previous attempt's root artifacts; the staged members/ subdirs
+		// are untouched (CleanReviewArtifacts only looks at the dir root).
+		if err = CleanReviewArtifacts(judgeDir); err != nil {
+			c.log.WarnContext(ctx, "clean judge artifacts", "err", err)
+		}
+		if err = WriteReviewSkeleton(judgeDir, &jc); err != nil {
+			return nil, fmt.Errorf("write judge skeleton: %w", err)
+		}
+
+		result, err := rr.Run(ctx, prompt)
+		if err != nil {
+			lastErr = err
+			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", err)
+			continue
+		}
+		draft, err := ReadReviewJSON(jc.Dir)
+		if err != nil {
+			lastErr = err
+			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
+			continue
+		}
+		draft.Review.ModelInfo = result.ToModelInfo(jc.Model)
+		draft.Review.ModelInfo.Runner = rr.Name()
+		draft.Review.DurationMs = result.DurationMs
+		draft.Review.RunnerProfile = jc.RunnerProfileSnapshot()
+		c.fillMetadata(draft)
+
+		mdFiles, err := FindMDFiles(jc.Dir)
+		if err != nil {
+			return nil, fmt.Errorf("find judge md files: %w", err)
+		}
+		return &memberOutput{label: "judge", dir: judgeDir, draft: draft, mdFiles: mdFiles}, nil
+	}
+	return nil, lastErr
+}
+
+// uploadMember uploads a produced output under the given review role.
+func (c *Controller) uploadMember(ctx context.Context, o *memberOutput, role string) (int, error) {
+	o.draft.Review.ReviewRole = role
+	id, err := c.upload.UploadAll(ctx, c.cfg.URL, c.cfg.Key, o.draft, o.mdFiles)
+	if err != nil {
+		return 0, fmt.Errorf("upload %s: %w", o.label, err)
 	}
 	return id, nil
 }
 
-// panelCommit is the commit checked out into each member worktree — the MR commit
-// when known, else the current HEAD of the working repo.
+// stageMembers copies each member's review.json + R*.md into members/<label>/
+// inside the judge worktree, where the fusion prompt expects them.
+func stageMembers(judgeDir string, outputs []*memberOutput) error {
+	for _, o := range outputs {
+		dst := filepath.Join(judgeDir, "members", o.label)
+		if err := os.MkdirAll(dst, 0o750); err != nil {
+			return err
+		}
+		if err := copyFile(filepath.Join(o.dir, "review.json"), filepath.Join(dst, "review.json")); err != nil {
+			return err
+		}
+		for _, p := range o.mdFiles {
+			if err := copyFile(p, filepath.Join(dst, filepath.Base(p))); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o600)
+}
+
+// sourceLabels returns the provenance label for each panel member — its model,
+// or runner when no model — deduped with a -N suffix so duplicate members stay
+// distinct. These name the members/<label>/ dirs the judge reads and the source
+// tags it writes into issues[].sources.
+func sourceLabels(members []MemberSpec) []string {
+	seen := make(map[string]int, len(members))
+	out := make([]string, len(members))
+	for i, m := range members {
+		base := m.Model
+		if base == "" {
+			base = m.Runner
+		}
+		base = sanitizeLabel(base)
+		seen[base]++
+		if seen[base] == 1 {
+			out[i] = base
+		} else {
+			out[i] = fmt.Sprintf("%s-%d", base, seen[base])
+		}
+	}
+	return out
+}
+
+// panelCommit is the commit checked out into each worktree — the MR commit when
+// known, else the current HEAD of the working repo.
 func (c *Controller) panelCommit() string {
 	if c.cfg.Commit != "" {
 		return c.cfg.Commit
@@ -119,8 +315,8 @@ func (c *Controller) panelCommit() string {
 	return "HEAD"
 }
 
-// gitWorktreeAdd creates a detached worktree at dir checked out to commit, run from
-// the working repo so git finds it.
+// gitWorktreeAdd creates a detached worktree at dir checked out to commit, run
+// from the working repo so git finds it.
 func (c *Controller) gitWorktreeAdd(ctx context.Context, dir, commit string) error {
 	cmd := exec.CommandContext(ctx, "git", "worktree", "add", "--detach", dir, commit)
 	cmd.Dir = c.cfg.Dir
@@ -130,8 +326,8 @@ func (c *Controller) gitWorktreeAdd(ctx context.Context, dir, commit string) err
 	return nil
 }
 
-// gitWorktreeRemove tears down a member worktree. Best-effort; uses a detached
-// context so cleanup still runs when the review context was cancelled.
+// gitWorktreeRemove tears down a worktree. Best-effort; uses a detached context
+// so cleanup still runs when the review context was cancelled.
 func (c *Controller) gitWorktreeRemove(ctx context.Context, dir string) {
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), "git", "worktree", "remove", "--force", dir)
 	cmd.Dir = c.cfg.Dir
@@ -140,8 +336,8 @@ func (c *Controller) gitWorktreeRemove(ctx context.Context, dir string) {
 	}
 }
 
-// memberLabel builds a filesystem-safe, unique label for a member, e.g.
-// "1-codex-gpt-5.5". The index keeps duplicate runner:model members distinct.
+// memberLabel builds a filesystem-safe, unique label for a member worktree dir,
+// e.g. "1-codex-gpt-5.5". The index keeps duplicate runner:model members distinct.
 func memberLabel(i int, m MemberSpec) string {
 	name := m.Runner
 	if m.Model != "" {
@@ -150,7 +346,7 @@ func memberLabel(i int, m MemberSpec) string {
 	return fmt.Sprintf("%d-%s", i+1, sanitizeLabel(name))
 }
 
-// sanitizeLabel reduces a member name to a path-safe slug.
+// sanitizeLabel reduces a name to a path-safe slug.
 func sanitizeLabel(s string) string {
 	var b strings.Builder
 	for _, r := range s {
