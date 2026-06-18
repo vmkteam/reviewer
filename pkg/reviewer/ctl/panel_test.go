@@ -1,17 +1,36 @@
 package ctl
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// fakeRunner is a ReviewRunner that leaves the on-disk review.json skeleton as-is
+// (so ReadReviewJSON sees a valid empty review) or fails when err is set.
+type fakeRunner struct {
+	name string
+	err  error
+}
+
+func (f *fakeRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &runner.ClaudeResult{}, nil
+}
+func (f *fakeRunner) Name() string      { return f.name }
+func (f *fakeRunner) SetSession(string) {}
 
 func TestParseMulti(t *testing.T) {
 	t.Run("empty is nil, no panel", func(t *testing.T) {
@@ -68,6 +87,44 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 
 	c.gitWorktreeRemove(t.Context(), wt)
 	assert.NoDirExists(t, wt, "worktree dir must be gone after remove")
+}
+
+func TestRunMembers_ToleratesFailures(t *testing.T) {
+	c := &Controller{
+		cfg: &Config{
+			Multi: []MemberSpec{
+				{Runner: runner.RunnerClaude, Model: "ok-a"},
+				{Runner: runner.RunnerClaude, Model: "boom"},
+				{Runner: runner.RunnerClaude, Model: "ok-b"},
+			},
+		},
+		log: slog.Default(),
+		runnerFactory: func(mc *Config) (runner.ReviewRunner, error) {
+			if mc.Model == "boom" {
+				return &fakeRunner{name: runner.RunnerClaude, err: errors.New("kaboom")}, nil
+			}
+			return &fakeRunner{name: runner.RunnerClaude}, nil
+		},
+	}
+	dirs := []string{t.TempDir(), t.TempDir(), t.TempDir()}
+	labels := []string{"ok-a", "boom", "ok-b"}
+
+	out := c.runMembers(t.Context(), dirs, labels, "prompt")
+	require.Len(t, out, 2, "the failing member is tolerated, the rest succeed")
+	assert.Equal(t, "ok-a", out[0].label, "successful members keep panel order")
+	assert.Equal(t, "ok-b", out[1].label)
+}
+
+func TestWithTimeout(t *testing.T) {
+	ctx, cancel := withTimeout(t.Context(), 0)
+	defer cancel()
+	_, ok := ctx.Deadline()
+	assert.False(t, ok, "0 duration → no deadline")
+
+	ctx2, cancel2 := withTimeout(t.Context(), time.Minute)
+	defer cancel2()
+	_, ok = ctx2.Deadline()
+	assert.True(t, ok, "positive duration → deadline set")
 }
 
 func runGit(t *testing.T, dir string, args ...string) {

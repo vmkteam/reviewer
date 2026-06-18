@@ -4,6 +4,7 @@ import (
 	"net/mail"
 	"os"
 	"strconv"
+	"time"
 )
 
 // EnvDefault returns the value of env var key, or fallback when unset/empty.
@@ -28,6 +29,20 @@ func EnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+// EnvDuration parses an env var via time.ParseDuration ("30m", "1h30m"). Falls
+// back when the var is unset or unparseable.
+func EnvDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return fallback
+	}
+	return d
 }
 
 // AuthorName extracts the display name from "Name <email>" (CI_COMMIT_AUTHOR

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"reviewsrv/pkg/reviewer/ctl"
 	"reviewsrv/pkg/reviewer/direct"
@@ -64,6 +65,7 @@ func main() {
 	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
 	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
 	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
+	pf.DurationVar(&cfg.Timeout, "timeout", ctl.EnvDuration("REVIEW_TIMEOUT", 30*time.Minute), "per-member/judge run timeout (e.g. 30m, 1h); 0 = no timeout")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",

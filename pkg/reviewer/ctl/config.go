@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer/runner"
@@ -68,6 +69,10 @@ type Config struct {
 	// When set with >=2 members, reviewctl runs the panel then the judge over the
 	// members' outputs and uploads one fused review. Nil = no fusion (members only).
 	Judge *MemberSpec
+
+	// Timeout bounds each member and the judge run (--timeout / $REVIEW_TIMEOUT).
+	// 0 = no timeout. Members run concurrently, so this caps the slowest one.
+	Timeout time.Duration
 
 	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
 	// On failure, the upload happens regardless of this flag.

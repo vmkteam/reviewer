@@ -8,11 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer"
 )
+
+// panelConcurrency bounds how many members review at once. Panels are small
+// (2–3 typically); the cap guards against a pathologically large --multi list.
+const panelConcurrency = 4
 
 // memberOutput is a panel member's produced review, kept until the judge has
 // staged it. The worktree dir stays alive until panel cleanup so the judge can
@@ -28,8 +33,9 @@ type memberOutput struct {
 // reviewPanel fans out the --multi panel into per-member git worktrees, then —
 // when a judge is configured and ≥2 members succeed — runs the judge over the
 // members' outputs to produce one fused review. Members and the judge share the
-// project prompt and MR metadata; only runner/model/working dir differ.
-// Sequential and fail-fast; parallelism is a later phase.
+// project prompt and MR metadata; only runner/model/working dir differ. Members
+// run concurrently (bounded by panelConcurrency), and per-member failures are
+// tolerated as long as one member produces a review.
 func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	if c.runnerFactory == nil {
 		return errors.New("panel review requires a runner factory")
@@ -50,26 +56,29 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	commit := c.panelCommit()
 	labels := sourceLabels(c.cfg.Multi)
 
-	// Member worktrees stay alive until the judge has staged them; remove them all
-	// (plus the judge's) on the way out.
-	var outputs []*memberOutput
+	// Create the worktrees sequentially — `git worktree add` mutates the repo's
+	// shared worktree metadata and isn't safe to run concurrently — then review the
+	// members in parallel. Worktrees stay alive until the judge has staged them;
+	// remove them all (plus the judge's) on the way out.
+	dirs := make([]string, len(c.cfg.Multi))
 	defer func() {
-		for _, o := range outputs {
-			c.gitWorktreeRemove(ctx, o.dir)
+		for _, d := range dirs {
+			if d != "" {
+				c.gitWorktreeRemove(ctx, d)
+			}
 		}
 	}()
-
 	for i, m := range c.cfg.Multi {
 		dir := filepath.Join(base, "wt-"+memberLabel(i, m))
 		if err = c.gitWorktreeAdd(ctx, dir, commit); err != nil {
 			return fmt.Errorf("panel member %s: worktree add: %w", labels[i], err)
 		}
-		out, perr := c.produceMember(ctx, dir, labels[i], m, prompt)
-		if perr != nil {
-			return fmt.Errorf("panel member %s: %w", labels[i], perr)
-		}
-		outputs = append(outputs, out)
-		c.log.InfoContext(ctx, "panel member reviewed", "label", labels[i], "issues", len(out.draft.Issues))
+		dirs[i] = dir
+	}
+
+	outputs := c.runMembers(ctx, dirs, labels, prompt)
+	if len(outputs) == 0 {
+		return errors.New("panel: every member failed to produce a review")
 	}
 
 	primaryID, err := c.finishPanel(ctx, base, commit, outputs)
@@ -80,6 +89,59 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	c.log.InfoContext(ctx, "panel completed",
 		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second))
 	return nil
+}
+
+// runMembers reviews all panel members concurrently (bounded by panelConcurrency)
+// and returns the successful outputs in panel order. Member failures are logged
+// and tolerated — the caller requires at least one success. Each run is bounded by
+// cfg.Timeout.
+//
+// Safe to parallelize for --multi: produceMember clones the config per member and
+// the local flow carries no profile token, so buildRunner never mutates process
+// env. The server-driven path (per-member tokens) will need per-runner creds, not
+// global env, before it can fan out concurrently.
+func (c *Controller) runMembers(ctx context.Context, dirs, labels []string, prompt string) []*memberOutput {
+	type result struct {
+		out *memberOutput
+		err error
+	}
+	results := make([]result, len(c.cfg.Multi))
+
+	sem := make(chan struct{}, panelConcurrency)
+	var wg sync.WaitGroup
+	for i, m := range c.cfg.Multi {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			mctx, cancel := withTimeout(ctx, c.cfg.Timeout)
+			defer cancel()
+			out, err := c.produceMember(mctx, dirs[i], labels[i], m, prompt)
+			results[i] = result{out: out, err: err}
+		}()
+	}
+	wg.Wait()
+
+	var outputs []*memberOutput
+	for i := range results {
+		if results[i].err != nil {
+			c.log.ErrorContext(ctx, "panel member failed", "label", labels[i], "err", results[i].err)
+			continue
+		}
+		outputs = append(outputs, results[i].out)
+		c.log.InfoContext(ctx, "panel member reviewed", "label", labels[i], "issues", len(results[i].out.draft.Issues))
+	}
+	return outputs
+}
+
+// withTimeout derives a context bounded by d, or a plain cancellable one when d <= 0.
+func withTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if d <= 0 {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // finishPanel decides what to upload from the produced member outputs: a fused
@@ -218,7 +280,9 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir string, outputs []*m
 			return nil, fmt.Errorf("write judge skeleton: %w", err)
 		}
 
-		result, err := rr.Run(ctx, prompt)
+		rctx, cancel := withTimeout(ctx, c.cfg.Timeout)
+		result, err := rr.Run(rctx, prompt)
+		cancel()
 		if err != nil {
 			lastErr = err
 			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", err)
