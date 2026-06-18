@@ -119,6 +119,10 @@ func (r Review) Validate() (errors map[string]string, valid bool) {
 		errors[Columns.Review.Author] = ErrMaxLength
 	}
 
+	if utf8.RuneCountInString(r.ReviewRole) > 16 {
+		errors[Columns.Review.ReviewRole] = ErrMaxLength
+	}
+
 	return errors, len(errors) == 0
 }
 

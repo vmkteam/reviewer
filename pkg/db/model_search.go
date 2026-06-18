@@ -367,26 +367,29 @@ func (rfs *ReviewFileSearch) Q() applier {
 type ReviewSearch struct {
 	search
 
-	ID            *int
-	ProjectID     *int
-	Title         *string
-	Description   *string
-	ExternalID    *string
-	TrafficLight  *string
-	CommitHash    *string
-	SourceBranch  *string
-	TargetBranch  *string
-	Author        *string
-	CreatedAt     *time.Time
-	DurationMS    *int
-	StatusID      *int
-	PromptID      *int
-	EffortMinutes *int
-	AiSlopScore   *float32
-	IDs           []int
-	IDLt          *int
-	TitleILike    *string
-	AuthorILike   *string
+	ID              *int
+	ProjectID       *int
+	Title           *string
+	Description     *string
+	ExternalID      *string
+	TrafficLight    *string
+	CommitHash      *string
+	SourceBranch    *string
+	TargetBranch    *string
+	Author          *string
+	CreatedAt       *time.Time
+	DurationMS      *int
+	StatusID        *int
+	PromptID        *int
+	EffortMinutes   *int
+	AiSlopScore     *float32
+	ParentReviewID  *int
+	ReviewRole      *string
+	IDs             []int
+	IDLt            *int
+	TitleILike      *string
+	AuthorILike     *string
+	ReviewRoleILike *string
 }
 
 func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
@@ -441,6 +444,12 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	if rs.AiSlopScore != nil {
 		rs.where(query, Tables.Review.Alias, Columns.Review.AiSlopScore, rs.AiSlopScore)
 	}
+	if rs.ParentReviewID != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.ParentReviewID, rs.ParentReviewID)
+	}
+	if rs.ReviewRole != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.ReviewRole, rs.ReviewRole)
+	}
 	if len(rs.IDs) > 0 {
 		Filter{Columns.Review.ID, rs.IDs, SearchTypeArray, false}.Apply(query)
 	}
@@ -452,6 +461,9 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if rs.AuthorILike != nil {
 		Filter{Columns.Review.Author, *rs.AuthorILike, SearchTypeILike, false}.Apply(query)
+	}
+	if rs.ReviewRoleILike != nil {
+		Filter{Columns.Review.ReviewRole, *rs.ReviewRoleILike, SearchTypeILike, false}.Apply(query)
 	}
 
 	rs.apply(query)
@@ -471,23 +483,24 @@ func (rs *ReviewSearch) Q() applier {
 type ProjectSearch struct {
 	search
 
-	ID              *int
-	Title           *string
-	VcsURL          *string
-	Language        *string
-	ProjectKey      *string
-	PromptID        *int
-	TaskTrackerID   *int
-	SlackChannelID  *int
-	CreatedAt       *time.Time
-	StatusID        *int
-	Instructions    *string
-	RunnerProfileID *int
-	IDs             []int
-	TitleILike      *string
-	VcsURLILike     *string
-	LanguageILike   *string
-	ProjectKeyILike *string
+	ID                   *int
+	Title                *string
+	VcsURL               *string
+	Language             *string
+	ProjectKey           *string
+	PromptID             *int
+	TaskTrackerID        *int
+	SlackChannelID       *int
+	CreatedAt            *time.Time
+	StatusID             *int
+	Instructions         *string
+	RunnerProfileID      *int
+	JudgeRunnerProfileID *int
+	IDs                  []int
+	TitleILike           *string
+	VcsURLILike          *string
+	LanguageILike        *string
+	ProjectKeyILike      *string
 }
 
 func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
@@ -529,6 +542,9 @@ func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.RunnerProfileID != nil {
 		ps.where(query, Tables.Project.Alias, Columns.Project.RunnerProfileID, ps.RunnerProfileID)
+	}
+	if ps.JudgeRunnerProfileID != nil {
+		ps.where(query, Tables.Project.Alias, Columns.Project.JudgeRunnerProfileID, ps.JudgeRunnerProfileID)
 	}
 	if len(ps.IDs) > 0 {
 		Filter{Columns.Project.ID, ps.IDs, SearchTypeArray, false}.Apply(query)

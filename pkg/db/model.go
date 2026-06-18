@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID string
 	}
 	Issue struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt, Sources string
 
 		ReviewFile, Review, User string
 	}
@@ -23,14 +23,14 @@ var Columns = struct {
 		Review string
 	}
 	Review struct {
-		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, RunnerProfile, StatusID, PromptID, EffortMinutes, AiSlopScore string
+		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, RunnerProfile, StatusID, PromptID, EffortMinutes, AiSlopScore, ParentReviewID, ReviewRole string
 
-		Project, Prompt string
+		Project, Prompt, ParentReview string
 	}
 	Project struct {
-		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions, RunnerProfileID string
+		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions, RunnerProfileID, RunnerProfileIDs, JudgeRunnerProfileID string
 
-		Prompt, TaskTracker, SlackChannel, RunnerProfile string
+		Prompt, TaskTracker, SlackChannel, RunnerProfile, JudgeRunnerProfile string
 	}
 	Prompt struct {
 		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
@@ -57,7 +57,7 @@ var Columns = struct {
 		StatusID:       "statusId",
 	},
 	Issue: struct {
-		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt string
+		ID, ReviewFileID, IssueType, ReviewID, Title, Severity, Description, Content, File, Lines, Comment, ProcessedAt, CreatedAt, UserID, StatusID, LocalID, SuggestedFix, ArchivedAt, Sources string
 
 		ReviewFile, Review, User string
 	}{
@@ -79,6 +79,7 @@ var Columns = struct {
 		LocalID:      "localId",
 		SuggestedFix: "suggestedFix",
 		ArchivedAt:   "archivedAt",
+		Sources:      "sources",
 
 		ReviewFile: "ReviewFile",
 		Review:     "Review",
@@ -103,54 +104,60 @@ var Columns = struct {
 		Review: "Review",
 	},
 	Review: struct {
-		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, RunnerProfile, StatusID, PromptID, EffortMinutes, AiSlopScore string
+		ID, ProjectID, Title, Description, ExternalID, TrafficLight, CommitHash, SourceBranch, TargetBranch, Author, CreatedAt, DurationMS, ModelInfo, RunnerProfile, StatusID, PromptID, EffortMinutes, AiSlopScore, ParentReviewID, ReviewRole string
 
-		Project, Prompt string
+		Project, Prompt, ParentReview string
 	}{
-		ID:            "reviewId",
-		ProjectID:     "projectId",
-		Title:         "title",
-		Description:   "description",
-		ExternalID:    "externalId",
-		TrafficLight:  "trafficLight",
-		CommitHash:    "commitHash",
-		SourceBranch:  "sourceBranch",
-		TargetBranch:  "targetBranch",
-		Author:        "author",
-		CreatedAt:     "createdAt",
-		DurationMS:    "durationMS",
-		ModelInfo:     "modelInfo",
-		RunnerProfile: "runnerProfile",
-		StatusID:      "statusId",
-		PromptID:      "promptId",
-		EffortMinutes: "effortMinutes",
-		AiSlopScore:   "aiSlopScore",
+		ID:             "reviewId",
+		ProjectID:      "projectId",
+		Title:          "title",
+		Description:    "description",
+		ExternalID:     "externalId",
+		TrafficLight:   "trafficLight",
+		CommitHash:     "commitHash",
+		SourceBranch:   "sourceBranch",
+		TargetBranch:   "targetBranch",
+		Author:         "author",
+		CreatedAt:      "createdAt",
+		DurationMS:     "durationMS",
+		ModelInfo:      "modelInfo",
+		RunnerProfile:  "runnerProfile",
+		StatusID:       "statusId",
+		PromptID:       "promptId",
+		EffortMinutes:  "effortMinutes",
+		AiSlopScore:    "aiSlopScore",
+		ParentReviewID: "parentReviewId",
+		ReviewRole:     "reviewRole",
 
-		Project: "Project",
-		Prompt:  "Prompt",
+		Project:      "Project",
+		Prompt:       "Prompt",
+		ParentReview: "ParentReview",
 	},
 	Project: struct {
-		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions, RunnerProfileID string
+		ID, Title, VcsURL, Language, ProjectKey, PromptID, TaskTrackerID, SlackChannelID, CreatedAt, StatusID, Instructions, RunnerProfileID, RunnerProfileIDs, JudgeRunnerProfileID string
 
-		Prompt, TaskTracker, SlackChannel, RunnerProfile string
+		Prompt, TaskTracker, SlackChannel, RunnerProfile, JudgeRunnerProfile string
 	}{
-		ID:              "projectId",
-		Title:           "title",
-		VcsURL:          "vcsURL",
-		Language:        "language",
-		ProjectKey:      "projectKey",
-		PromptID:        "promptId",
-		TaskTrackerID:   "taskTrackerId",
-		SlackChannelID:  "slackChannelId",
-		CreatedAt:       "createdAt",
-		StatusID:        "statusId",
-		Instructions:    "instructions",
-		RunnerProfileID: "runnerProfileId",
+		ID:                   "projectId",
+		Title:                "title",
+		VcsURL:               "vcsURL",
+		Language:             "language",
+		ProjectKey:           "projectKey",
+		PromptID:             "promptId",
+		TaskTrackerID:        "taskTrackerId",
+		SlackChannelID:       "slackChannelId",
+		CreatedAt:            "createdAt",
+		StatusID:             "statusId",
+		Instructions:         "instructions",
+		RunnerProfileID:      "runnerProfileId",
+		RunnerProfileIDs:     "runnerProfileIds",
+		JudgeRunnerProfileID: "judgeRunnerProfileId",
 
-		Prompt:        "Prompt",
-		TaskTracker:   "TaskTracker",
-		SlackChannel:  "SlackChannel",
-		RunnerProfile: "RunnerProfile",
+		Prompt:             "Prompt",
+		TaskTracker:        "TaskTracker",
+		SlackChannel:       "SlackChannel",
+		RunnerProfile:      "RunnerProfile",
+		JudgeRunnerProfile: "JudgeRunnerProfile",
 	},
 	Prompt: struct {
 		ID, Title, Common, Architecture, Code, Security, Tests, Operability, CreatedAt, StatusID string
@@ -304,24 +311,25 @@ type User struct {
 type Issue struct {
 	tableName struct{} `pg:"issues,alias:t,discard_unknown_columns"`
 
-	ID           int        `pg:"issueId,pk"`
-	ReviewFileID int        `pg:"reviewFileId,use_zero"`
-	IssueType    string     `pg:"issueType,use_zero"`
-	ReviewID     int        `pg:"reviewId,use_zero"`
-	Title        string     `pg:"title,use_zero"`
-	Severity     string     `pg:"severity,use_zero"`
-	Description  string     `pg:"description,use_zero"`
-	Content      string     `pg:"content,use_zero"`
-	File         string     `pg:"file,use_zero"`
-	Lines        string     `pg:"lines,use_zero"`
-	Comment      *string    `pg:"comment"`
-	ProcessedAt  *time.Time `pg:"processedAt"`
-	CreatedAt    time.Time  `pg:"createdAt,use_zero"`
-	UserID       *int       `pg:"userId"`
-	StatusID     int        `pg:"statusId,use_zero"`
-	LocalID      *string    `pg:"localId"`
-	SuggestedFix *string    `pg:"suggestedFix"`
-	ArchivedAt   *time.Time `pg:"archivedAt"`
+	ID           int          `pg:"issueId,pk"`
+	ReviewFileID int          `pg:"reviewFileId,use_zero"`
+	IssueType    string       `pg:"issueType,use_zero"`
+	ReviewID     int          `pg:"reviewId,use_zero"`
+	Title        string       `pg:"title,use_zero"`
+	Severity     string       `pg:"severity,use_zero"`
+	Description  string       `pg:"description,use_zero"`
+	Content      string       `pg:"content,use_zero"`
+	File         string       `pg:"file,use_zero"`
+	Lines        string       `pg:"lines,use_zero"`
+	Comment      *string      `pg:"comment"`
+	ProcessedAt  *time.Time   `pg:"processedAt"`
+	CreatedAt    time.Time    `pg:"createdAt,use_zero"`
+	UserID       *int         `pg:"userId"`
+	StatusID     int          `pg:"statusId,use_zero"`
+	LocalID      *string      `pg:"localId"`
+	SuggestedFix *string      `pg:"suggestedFix"`
+	ArchivedAt   *time.Time   `pg:"archivedAt"`
+	Sources      IssueSources `pg:"sources,use_zero"`
 
 	ReviewFile *ReviewFile `pg:"fk:reviewFileId,rel:has-one"`
 	Review     *Review     `pg:"fk:reviewId,rel:has-one"`
@@ -348,49 +356,55 @@ type ReviewFile struct {
 type Review struct {
 	tableName struct{} `pg:"reviews,alias:t,discard_unknown_columns"`
 
-	ID            int                 `pg:"reviewId,pk"`
-	ProjectID     int                 `pg:"projectId,use_zero"`
-	Title         string              `pg:"title,use_zero"`
-	Description   string              `pg:"description,use_zero"`
-	ExternalID    string              `pg:"externalId,use_zero"`
-	TrafficLight  string              `pg:"trafficLight,use_zero"`
-	CommitHash    string              `pg:"commitHash,use_zero"`
-	SourceBranch  string              `pg:"sourceBranch,use_zero"`
-	TargetBranch  string              `pg:"targetBranch,use_zero"`
-	Author        string              `pg:"author,use_zero"`
-	CreatedAt     time.Time           `pg:"createdAt,use_zero"`
-	DurationMS    int                 `pg:"durationMS,use_zero"`
-	ModelInfo     ReviewModelInfo     `pg:"modelInfo,use_zero"`
-	RunnerProfile ReviewRunnerProfile `pg:"runnerProfile,use_zero"`
-	StatusID      int                 `pg:"statusId,use_zero"`
-	PromptID      int                 `pg:"promptId,use_zero"`
-	EffortMinutes *int                `pg:"effortMinutes"`
-	AiSlopScore   *float32            `pg:"aiSlopScore"`
+	ID             int                 `pg:"reviewId,pk"`
+	ProjectID      int                 `pg:"projectId,use_zero"`
+	Title          string              `pg:"title,use_zero"`
+	Description    string              `pg:"description,use_zero"`
+	ExternalID     string              `pg:"externalId,use_zero"`
+	TrafficLight   string              `pg:"trafficLight,use_zero"`
+	CommitHash     string              `pg:"commitHash,use_zero"`
+	SourceBranch   string              `pg:"sourceBranch,use_zero"`
+	TargetBranch   string              `pg:"targetBranch,use_zero"`
+	Author         string              `pg:"author,use_zero"`
+	CreatedAt      time.Time           `pg:"createdAt,use_zero"`
+	DurationMS     int                 `pg:"durationMS,use_zero"`
+	ModelInfo      ReviewModelInfo     `pg:"modelInfo,use_zero"`
+	RunnerProfile  ReviewRunnerProfile `pg:"runnerProfile,use_zero"`
+	StatusID       int                 `pg:"statusId,use_zero"`
+	PromptID       int                 `pg:"promptId,use_zero"`
+	EffortMinutes  *int                `pg:"effortMinutes"`
+	AiSlopScore    *float32            `pg:"aiSlopScore"`
+	ParentReviewID *int                `pg:"parentReviewId"`
+	ReviewRole     string              `pg:"reviewRole,use_zero"`
 
-	Project *Project `pg:"fk:projectId,rel:has-one"`
-	Prompt  *Prompt  `pg:"fk:promptId,rel:has-one"`
+	Project      *Project `pg:"fk:projectId,rel:has-one"`
+	Prompt       *Prompt  `pg:"fk:promptId,rel:has-one"`
+	ParentReview *Review  `pg:"fk:parentReviewId,rel:has-one"`
 }
 
 type Project struct {
 	tableName struct{} `pg:"projects,alias:t,discard_unknown_columns"`
 
-	ID              int       `pg:"projectId,pk"`
-	Title           string    `pg:"title,use_zero"`
-	VcsURL          string    `pg:"vcsURL,use_zero"`
-	Language        string    `pg:"language,use_zero"`
-	ProjectKey      string    `pg:"projectKey,type:uuid,use_zero"`
-	PromptID        int       `pg:"promptId,use_zero"`
-	TaskTrackerID   *int      `pg:"taskTrackerId"`
-	SlackChannelID  *int      `pg:"slackChannelId"`
-	CreatedAt       time.Time `pg:"createdAt,use_zero"`
-	StatusID        int       `pg:"statusId,use_zero"`
-	Instructions    *string   `pg:"instructions"`
-	RunnerProfileID *int      `pg:"runnerProfileId"`
+	ID                   int                     `pg:"projectId,pk"`
+	Title                string                  `pg:"title,use_zero"`
+	VcsURL               string                  `pg:"vcsURL,use_zero"`
+	Language             string                  `pg:"language,use_zero"`
+	ProjectKey           string                  `pg:"projectKey,type:uuid,use_zero"`
+	PromptID             int                     `pg:"promptId,use_zero"`
+	TaskTrackerID        *int                    `pg:"taskTrackerId"`
+	SlackChannelID       *int                    `pg:"slackChannelId"`
+	CreatedAt            time.Time               `pg:"createdAt,use_zero"`
+	StatusID             int                     `pg:"statusId,use_zero"`
+	Instructions         *string                 `pg:"instructions"`
+	RunnerProfileID      *int                    `pg:"runnerProfileId"`
+	RunnerProfileIDs     ProjectRunnerProfileIDs `pg:"runnerProfileIds,use_zero"`
+	JudgeRunnerProfileID *int                    `pg:"judgeRunnerProfileId"`
 
-	Prompt        *Prompt        `pg:"fk:promptId,rel:has-one"`
-	TaskTracker   *TaskTracker   `pg:"fk:taskTrackerId,rel:has-one"`
-	SlackChannel  *SlackChannel  `pg:"fk:slackChannelId,rel:has-one"`
-	RunnerProfile *RunnerProfile `pg:"fk:runnerProfileId,rel:has-one"`
+	Prompt             *Prompt        `pg:"fk:promptId,rel:has-one"`
+	TaskTracker        *TaskTracker   `pg:"fk:taskTrackerId,rel:has-one"`
+	SlackChannel       *SlackChannel  `pg:"fk:slackChannelId,rel:has-one"`
+	RunnerProfile      *RunnerProfile `pg:"fk:runnerProfileId,rel:has-one"`
+	JudgeRunnerProfile *RunnerProfile `pg:"fk:judgeRunnerProfileId,rel:has-one"`
 }
 
 type Prompt struct {

@@ -34,7 +34,7 @@ func NewProjectRepo(db orm.DB) ProjectRepo {
 			Tables.RunnerProfile.Name: {{Column: Columns.RunnerProfile.CreatedAt, Direction: SortDesc}},
 		},
 		join: map[string][]string{
-			Tables.Project.Name:       {TableColumns, Columns.Project.Prompt, Columns.Project.TaskTracker, Columns.Project.SlackChannel, Columns.Project.RunnerProfile},
+			Tables.Project.Name:       {TableColumns, Columns.Project.Prompt, Columns.Project.TaskTracker, Columns.Project.SlackChannel, Columns.Project.RunnerProfile, Columns.Project.JudgeRunnerProfile},
 			Tables.Prompt.Name:        {TableColumns},
 			Tables.SlackChannel.Name:  {TableColumns},
 			Tables.TaskTracker.Name:   {TableColumns},

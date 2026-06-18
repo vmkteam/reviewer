@@ -15,6 +15,8 @@
                 <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="Instructions" DBName="instructions" DBType="text" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="RunnerProfileID" DBName="runnerProfileId" DBType="int4" GoType="*int" PK="false" FK="RunnerProfile" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="RunnerProfileIDs" DBName="runnerProfileIds" DBType="jsonb" GoType="ProjectRunnerProfileIDs" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="JudgeRunnerProfileID" DBName="judgeRunnerProfileId" DBType="int4" GoType="*int" PK="false" FK="RunnerProfile" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
             </Attributes>
             <Searches>
                 <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>

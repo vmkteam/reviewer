@@ -106,6 +106,8 @@
       <column name="taskTrackerId" type="integer"></column>
       <column name="slackChannelId" type="integer"></column>
       <column name="runnerProfileId" type="integer"></column>
+      <column name="runnerProfileIds" type="jsonb" nullable="false" default="&#39;[]&#39;"></column>
+      <column name="judgeRunnerProfileId" type="integer"></column>
       <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <pk name="projects_pkey">
@@ -122,6 +124,9 @@
       </fk>
       <fk name="Ref_projects_to_runnerProfiles" to-table="runnerProfiles" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="runnerProfileId" references="runnerProfileId"></column>
+      </fk>
+      <fk name="Ref_projects_to_runnerProfiles_judge" to-table="runnerProfiles" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="judgeRunnerProfileId" references="runnerProfileId"></column>
       </fk>
       <fk name="Ref_projects_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="statusId" references="statusId"></column>
@@ -151,6 +156,8 @@
       <column name="promptId" type="integer" nullable="false"></column>
       <column name="effortMinutes" type="integer"></column>
       <column name="aiSlopScore" type="real"></column>
+      <column name="parentReviewId" type="integer"></column>
+      <column name="reviewRole" type="varchar" length="16" nullable="false" default="&#39;single&#39;"></column>
       <pk name="reviews_pkey">
         <column name="reviewId"></column>
       </pk>
@@ -162,6 +169,9 @@
       </fk>
       <fk name="Ref_reviews_to_prompts" to-table="prompts" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="promptId" references="promptId"></column>
+      </fk>
+      <fk name="Ref_reviews_to_reviews" to-table="reviews" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="parentReviewId" references="reviewId"></column>
       </fk>
     </table>
     <table name="reviewFiles">
@@ -208,6 +218,7 @@
       <column name="suggestedFix" type="text"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <column name="archivedAt" type="timestamptz"></column>
+      <column name="sources" type="jsonb" nullable="false" default="&#39;[]&#39;"></column>
       <pk name="issues_pkey">
         <column name="issueId"></column>
       </pk>
@@ -303,6 +314,12 @@
     </index>
     <index name="ix_projects_runnerProfileId" table="projects" using="btree">
       <column name="runnerProfileId"></column>
+    </index>
+    <index name="ix_projects_judgeRunnerProfileId" table="projects" using="btree">
+      <column name="judgeRunnerProfileId"></column>
+    </index>
+    <index name="ix_reviews_parentReviewId" table="reviews" using="btree">
+      <column name="parentReviewId"></column>
     </index>
   </schema>
   <functions></functions>

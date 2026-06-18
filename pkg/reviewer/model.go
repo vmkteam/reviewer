@@ -25,11 +25,18 @@ const (
 	TrafficLightRed    = "red"
 	TrafficLightYellow = "yellow"
 	TrafficLightGreen  = "green"
+
+	// Review roles (reviews.reviewRole): a standalone review, a panel member of
+	// a fusion, or the fusion/synthesis itself. See docs/llm/MultiReview.md.
+	ReviewRoleSingle = "single"
+	ReviewRoleMember = "member"
+	ReviewRoleFusion = "fusion"
 )
 
 var (
 	ReviewTypes            = []string{ReviewTypeArchitecture, ReviewTypeCode, ReviewTypeSecurity, ReviewTypeTests, ReviewTypeOperability}
 	Severities             = []string{SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow}
+	ReviewRoles            = []string{ReviewRoleSingle, ReviewRoleMember, ReviewRoleFusion}
 	ErrInvalidReviewType   = errors.New("invalid review type")
 	ErrDuplicateReviewType = errors.New("duplicate review type")
 	ErrReviewNotFound      = errors.New("review not found")
@@ -44,6 +51,11 @@ func IsValidReviewType(rt string) bool {
 // IsValidSeverity checks if the given severity is supported.
 func IsValidSeverity(s string) bool {
 	return slices.Contains(Severities, s)
+}
+
+// IsValidReviewRole checks if the given review role is supported.
+func IsValidReviewRole(r string) bool {
+	return slices.Contains(ReviewRoles, r)
 }
 
 type Review struct {

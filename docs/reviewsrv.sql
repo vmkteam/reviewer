@@ -66,6 +66,8 @@ CREATE TABLE "projects" (
 	"taskTrackerId" integer,
 	"slackChannelId" integer,
 	"runnerProfileId" integer,
+	"runnerProfileIds" jsonb NOT NULL DEFAULT '[]',
+	"judgeRunnerProfileId" integer,
 	"createdAt" timestamptz NOT NULL DEFAULT now(),
 	"statusId" integer NOT NULL,
 	CONSTRAINT "projects_pkey" PRIMARY KEY("projectId"),
@@ -91,6 +93,8 @@ CREATE TABLE "reviews" (
 	"promptId" integer NOT NULL,
 	"effortMinutes" integer,
 	"aiSlopScore" real,
+	"parentReviewId" integer,
+	"reviewRole" varchar(16) NOT NULL DEFAULT 'single',
 	CONSTRAINT "reviews_pkey" PRIMARY KEY("reviewId")
 );
 
@@ -127,6 +131,7 @@ CREATE TABLE "issues" (
 	"suggestedFix" text,
 	"statusId" integer NOT NULL,
 	"archivedAt" timestamptz,
+	"sources" jsonb NOT NULL DEFAULT '[]',
 	CONSTRAINT "issues_pkey" PRIMARY KEY("issueId")
 );
 
@@ -225,6 +230,14 @@ CREATE INDEX "ix_projects_runnerProfileId" ON "projects" (
 	"runnerProfileId"
 );
 
+CREATE INDEX "ix_projects_judgeRunnerProfileId" ON "projects" (
+	"judgeRunnerProfileId"
+);
+
+CREATE INDEX "ix_reviews_parentReviewId" ON "reviews" (
+	"parentReviewId"
+);
+
 ALTER TABLE "prompts" ADD CONSTRAINT "Ref_prompts_to_statuses" FOREIGN KEY ("statusId")
 	REFERENCES "statuses"("statusId")
 	ON DELETE RESTRICT
@@ -273,6 +286,12 @@ ALTER TABLE "projects" ADD CONSTRAINT "Ref_projects_to_runnerProfiles" FOREIGN K
 	ON UPDATE RESTRICT
 	NOT DEFERRABLE;
 
+ALTER TABLE "projects" ADD CONSTRAINT "Ref_projects_to_runnerProfiles_judge" FOREIGN KEY ("judgeRunnerProfileId")
+	REFERENCES "runnerProfiles"("runnerProfileId")
+	ON DELETE RESTRICT
+	ON UPDATE RESTRICT
+	NOT DEFERRABLE;
+
 ALTER TABLE "projects" ADD CONSTRAINT "Ref_projects_to_statuses" FOREIGN KEY ("statusId")
 	REFERENCES "statuses"("statusId")
 	ON DELETE RESTRICT
@@ -281,6 +300,12 @@ ALTER TABLE "projects" ADD CONSTRAINT "Ref_projects_to_statuses" FOREIGN KEY ("s
 
 ALTER TABLE "reviews" ADD CONSTRAINT "Ref_reviews_to_projects" FOREIGN KEY ("projectId")
 	REFERENCES "projects"("projectId")
+	ON DELETE RESTRICT
+	ON UPDATE RESTRICT
+	NOT DEFERRABLE;
+
+ALTER TABLE "reviews" ADD CONSTRAINT "Ref_reviews_to_reviews" FOREIGN KEY ("parentReviewId")
+	REFERENCES "reviews"("reviewId")
 	ON DELETE RESTRICT
 	ON UPDATE RESTRICT
 	NOT DEFERRABLE;
