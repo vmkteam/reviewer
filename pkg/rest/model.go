@@ -29,6 +29,10 @@ type ReviewDraftMeta struct {
 	AiSlopScore   float32                `json:"aiSlopScore"`
 	ModelInfo     db.ReviewModelInfo     `json:"modelInfo"`
 	RunnerProfile db.ReviewRunnerProfile `json:"runnerProfile"`
+
+	// ReviewRole is single | member | fusion (reviews.reviewRole). Empty is
+	// treated as single. Members of a multi-review panel upload with "member".
+	ReviewRole string `json:"reviewRole,omitempty"`
 }
 
 // ReviewDraftFile is one of the five review groups (architecture, code, …).
@@ -74,6 +78,14 @@ func (rd ReviewDraft) Validate() error {
 
 // ToModel converts ReviewDraft to reviewer.Review with nested ReviewFiles and Issues.
 func (rd ReviewDraft) ToModel() reviewer.Review {
+	// reviews.reviewRole has a DB default of 'single', but db.Review.ReviewRole is
+	// use_zero — an empty string would be written verbatim, overriding the default.
+	// Map empty to single explicitly so single uploads keep the canonical role.
+	role := rd.Review.ReviewRole
+	if role == "" {
+		role = reviewer.ReviewRoleSingle
+	}
+
 	rv := reviewer.Review{
 		Review: db.Review{
 			Title:         rd.Review.Title,
@@ -89,6 +101,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 			AiSlopScore:   ptrFloat32(rd.Review.AiSlopScore),
 			ModelInfo:     rd.Review.ModelInfo,
 			RunnerProfile: rd.Review.RunnerProfile,
+			ReviewRole:    role,
 		},
 	}
 

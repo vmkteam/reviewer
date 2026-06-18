@@ -2,6 +2,8 @@ package ctl
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer/runner"
@@ -55,6 +57,12 @@ type Config struct {
 	// previous behaviour — unattended CI runs need it to avoid permission
 	// prompts. Set false for local interactive review on untrusted code.
 	AllowDangerousPermissions bool
+
+	// Multi holds the panel members for a local multi-review run (--multi /
+	// $REVIEW_MULTI). Empty = single review. Each member is a runner+model run in
+	// its own git worktree with ambient credentials; the server-driven panel
+	// (with per-member tokens) arrives in a later phase.
+	Multi []MemberSpec
 
 	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
 	// On failure, the upload happens regardless of this flag.
@@ -139,4 +147,42 @@ func (c *Config) ResolveDefaults() {
 	if c.Runner == runner.RunnerCodex && c.Model == "" {
 		c.Model = "gpt-5.1-codex"
 	}
+}
+
+// MemberSpec is one panel member for a local --multi run: a runner and its model.
+// Per-member tokens/providers come from the server in the full flow; --multi is a
+// debug override that relies on ambient credentials.
+type MemberSpec struct {
+	Runner string
+	Model  string
+}
+
+// ParseMulti parses the --multi value: a comma-separated list of runner:model
+// members, e.g. "codex:gpt-5.5,opencode:openrouter/deepseek/deepseek-v4-pro". Only
+// the first colon separates runner from model (models may contain slashes); a bare
+// "runner" with no colon uses the runner's default model. Returns nil for an empty
+// string (single review, no panel).
+func ParseMulti(s string) ([]MemberSpec, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, nil
+	}
+
+	var out []MemberSpec
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		r, m, _ := strings.Cut(part, ":")
+		r = strings.TrimSpace(r)
+		m = strings.TrimSpace(m)
+		switch r {
+		case runner.RunnerClaude, runner.RunnerOpenCode, runner.RunnerCodex, runner.RunnerDirect:
+		default:
+			return nil, fmt.Errorf("--multi: unknown runner %q in %q (want claude|opencode|codex|direct)", r, part)
+		}
+		out = append(out, MemberSpec{Runner: r, Model: m})
+	}
+	return out, nil
 }

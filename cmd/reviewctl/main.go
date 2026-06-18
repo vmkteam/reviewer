@@ -17,6 +17,7 @@ var version = "dev"
 
 func main() {
 	cfg := &ctl.Config{}
+	var multiRaw string
 
 	rootCmd := &cobra.Command{
 		Use:          "reviewctl",
@@ -61,24 +62,13 @@ func main() {
 	pf.StringVar(&cfg.APIProvider, "api-provider", ctl.EnvDefault("REVIEW_API_PROVIDER", "deepseek"), "direct runner provider: deepseek | openai-compat | anthropic (key from ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env)")
 	pf.StringVar(&cfg.APIBaseURL, "api-base-url", os.Getenv("REVIEW_API_BASE_URL"), "direct runner API base URL (defaults to provider's standard endpoint)")
 	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
+	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
 		Short: "Full review cycle: prompt → Claude → upload → comment → HTML",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := cfg.Validate("review"); err != nil {
-				return err
-			}
-			log := slog.Default()
-			if err := applyReviewConfig(cmd, cfg, log); err != nil {
-				return err
-			}
-			rr, err := buildRunner(cfg, log)
-			if err != nil {
-				return err
-			}
-			c := ctl.NewController(cfg, rr, log)
-			return c.Review(cmd.Context())
+			return runReview(cmd, cfg, multiRaw, slog.Default())
 		},
 	}
 
@@ -120,6 +110,35 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+// runReview drives the review subcommand: parse the optional --multi panel, then
+// either resolve the server profile and build the primary runner (single review)
+// or hand the per-member factory to the controller (multi-review panel, which
+// builds one runner per member inside its worktree and bypasses server config).
+func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw string, log *slog.Logger) error {
+	if err := cfg.Validate("review"); err != nil {
+		return err
+	}
+
+	multi, err := ctl.ParseMulti(multiRaw)
+	if err != nil {
+		return err
+	}
+	cfg.Multi = multi
+
+	var rr runner.ReviewRunner
+	if len(cfg.Multi) == 0 {
+		if err = applyReviewConfig(cmd, cfg, log); err != nil {
+			return err
+		}
+		if rr, err = buildRunner(cfg, log); err != nil {
+			return err
+		}
+	}
+
+	factory := func(mc *ctl.Config) (runner.ReviewRunner, error) { return buildRunner(mc, log) }
+	return ctl.NewController(cfg, rr, log, ctl.WithRunnerFactory(factory)).Review(cmd.Context())
 }
 
 // applyReviewConfig fetches the project's runner profile from the server and

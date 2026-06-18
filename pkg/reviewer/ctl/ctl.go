@@ -19,10 +19,25 @@ type Controller struct {
 	upload *UploadClient
 	gitlab *GitLabClient
 	runner runner.ReviewRunner
+
+	// runnerFactory builds a runner from a per-member config; used by the panel
+	// path to build one runner per member after creating its worktree.
+	runnerFactory RunnerFactory
+}
+
+// RunnerFactory builds a runner from a (per-member) config.
+type RunnerFactory func(*Config) (runner.ReviewRunner, error)
+
+// Option configures a Controller.
+type Option func(*Controller)
+
+// WithRunnerFactory sets the factory the panel path uses to build per-member runners.
+func WithRunnerFactory(f RunnerFactory) Option {
+	return func(c *Controller) { c.runnerFactory = f }
 }
 
 // NewController creates a new Controller from Config.
-func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger) *Controller {
+func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger, opts ...Option) *Controller {
 	c := &Controller{
 		cfg:    cfg,
 		log:    log,
@@ -35,6 +50,10 @@ func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger) *Contr
 		c.gitlab = NewGitLabClient(cfg, log)
 	}
 
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	return c
 }
 
@@ -42,6 +61,12 @@ func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger) *Contr
 func (c *Controller) Review(ctx context.Context) (retErr error) {
 	start := time.Now()
 	c.log.InfoContext(ctx, "starting review", "projectKey", c.cfg.Key, "model", c.cfg.Model)
+
+	// Multi-review: a configured panel fans out to one member review per runner,
+	// each in its own git worktree. No judge/fusion yet — members are the output.
+	if len(c.cfg.Multi) > 0 {
+		return c.reviewPanel(ctx, start)
+	}
 
 	// Set when the runner skipped Step 2; forces a debug-bundle upload so
 	// the silent skip can be post-mortemed even on otherwise-clean runs.
