@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-surface rounded-xl border border-edge p-4 sm:p-6 mb-6 shadow-sm">
+  <div class="bg-surface rounded-xl border border-edge p-4 sm:p-6 shadow-sm">
     <div class="flex items-center gap-2 mb-1">
       <h2 class="text-sm font-semibold text-fg">Panel breakdown</h2>
       <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-accent-light text-accent">fusion</span>

@@ -132,9 +132,6 @@
         </div>
       </div>
 
-      <!-- Panel breakdown (fusion reviews only) -->
-      <PanelBreakdownCard v-if="review.members && review.members.length" :review="review" />
-
       <!-- Tabs -->
       <TabGroup :selected-index="selectedTab" @change="onTabChange">
         <TabList class="flex gap-1 border-b border-edge mb-6 overflow-x-auto">
@@ -255,6 +252,11 @@
               @copy-link="copyIssueLink"
               @update:expanded-id="onExpandedIdChange"
             />
+          </TabPanel>
+
+          <!-- Panel breakdown tab (fusion reviews only) -->
+          <TabPanel v-if="review.members && review.members.length">
+            <PanelBreakdownCard :review="review" />
           </TabPanel>
 
           <!-- Previous Reviews tab -->
@@ -438,6 +440,9 @@ const tabs = computed(() => {
     color: rf.trafficLight,
   }))
   const allTabs = [...rfTabs, { key: 'issues', label: 'Issues', color: '' }]
+  if (review.value?.members && review.value.members.length) {
+    allTabs.push({ key: 'panel', label: 'Panel', color: '' })
+  }
   if (previousCount.value >= 2) {
     allTabs.push({ key: 'previous', label: 'Previous Reviews', color: '' })
   }

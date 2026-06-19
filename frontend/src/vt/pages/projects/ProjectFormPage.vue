@@ -15,6 +15,7 @@
 
       <div class="flex gap-4 mb-6 border-b border-edge">
         <button type="button" @click="activeTab = 'general'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'general' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">General</button>
+        <button type="button" @click="activeTab = 'runner'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'runner' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">Runner</button>
         <button type="button" @click="activeTab = 'instructions'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'instructions' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">Instructions</button>
       </div>
 
@@ -45,6 +46,20 @@
           <FKSelect v-model="entity.promptId" :load-fn="loadPrompts" />
         </FormField>
 
+        <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
+          <FKSelect v-model="entity.taskTrackerId" :load-fn="loadTaskTrackers" nullable />
+        </FormField>
+
+        <FormField label="Slack Channel" :error="fieldError('slackChannelId')">
+          <FKSelect v-model="entity.slackChannelId" :load-fn="loadSlackChannels" nullable />
+        </FormField>
+
+        <FormField label="Status" :error="fieldError('statusId')">
+          <StatusRadio v-model="entity.statusId" name="statusId" />
+        </FormField>
+      </div>
+
+      <div v-show="activeTab === 'runner'">
         <FormField label="Runner Profile — Primary / fallback" :error="fieldError('runnerProfileId')">
           <FKSelect v-model="entity.runnerProfileId" :load-fn="loadRunnerProfiles" nullable />
           <p class="mt-1 text-xs text-fg-subtle">The primary runner and the promotion target. Leave as “— None —” to use the default profile.</p>
@@ -59,18 +74,6 @@
           <FKSelect v-model="entity.judgeRunnerProfileId" :load-fn="loadRunnerProfiles" nullable />
           <p class="mt-1 text-xs text-fg-subtle">Synthesizes the panel into one fused review. Setting a judge turns multi-review on; “— None —” means a single review.</p>
           <p v-if="dormantPanel" class="mt-1 text-xs text-amber-600 dark:text-amber-400">Panel members are set but no judge is selected — they stay dormant and the project runs a single review.</p>
-        </FormField>
-
-        <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
-          <FKSelect v-model="entity.taskTrackerId" :load-fn="loadTaskTrackers" nullable />
-        </FormField>
-
-        <FormField label="Slack Channel" :error="fieldError('slackChannelId')">
-          <FKSelect v-model="entity.slackChannelId" :load-fn="loadSlackChannels" nullable />
-        </FormField>
-
-        <FormField label="Status" :error="fieldError('statusId')">
-          <StatusRadio v-model="entity.statusId" name="statusId" />
         </FormField>
       </div>
 
