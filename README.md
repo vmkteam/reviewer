@@ -9,6 +9,7 @@ AI-powered code review platform using Claude. Collects, stores and displays code
 - **Severity levels**: critical, high, medium, low with traffic light system (red/yellow/green)
 - **reviewctl CLI** — single binary for the full review cycle: prompt fetch, runner (claude / opencode / codex CLIs, or a direct LLM-API runner), upload, GitLab MR comments, HTML report
 - **Runner profiles** — per-project runner configuration (runner type, model, effort, provider, optional fallback token) managed in the admin panel; one global default, any project may pin its own. `reviewctl` pulls the resolved profile from the server so CI stays thin (correct image + credentials only)
+- **Multi-review (panel + fusion)** — a project may attach several runner profiles as a panel plus a judge; `reviewctl` runs each member in its own git worktree (parallel, fault-tolerant), then the judge fuses them into one review while keeping the member reviews linked with per-issue provenance. Opt-in per project
 - **GitLab MR inline comments** — critical and high issues posted directly in the diff with cleanup on re-runs
 - **Session caching** — `--session`/`--continue` flags to reuse Claude prompt cache (~90% token savings)
 - **Auto-migrations** — pgmigrator integrated as Go library, runs SQL patches on server startup
@@ -113,7 +114,7 @@ Environment = ""
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/v1/reviewctl/rpc/` | Internal reviewctl JSON-RPC: `ReviewConfig` (resolved runner profile) and `Prompt` |
+| POST | `/v1/reviewctl/rpc/` | Internal reviewctl JSON-RPC: `ReviewConfig` (resolved runner profile / multi-review panel), `Prompt` and `FusionPrompt` |
 | POST | `/v1/reviewctl/upload/:projectKey/` | Create a new review |
 | POST | `/v1/reviewctl/upload/:projectKey/:reviewId/:reviewType/` | Upload a review file |
 | POST | `/v1/upload/:projectKey/[...]` | Deprecated upload aliases (kept for older CI images) |
@@ -159,6 +160,8 @@ Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `dire
 - `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`.
 - `codex` — `codex exec` CLI (OpenAI Codex), `--model gpt-5.1-codex`.
 - `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`).
+
+**Multi-review:** when a project attaches a panel of runner profiles plus a judge, `reviewctl review` runs each member in its own detached git worktree (parallel, fault-tolerant — one survivor suffices), then the judge fuses them into a single review and links the member reviews with per-issue provenance. Configured per project in the admin panel; CI runs the same `reviewctl review`.
 
 ```bash
 make build-reviewctl   # Build reviewctl binary
