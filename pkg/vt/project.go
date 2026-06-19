@@ -247,6 +247,29 @@ func (s ProjectService) isValid(ctx context.Context, project Project, isUpdate b
 		}
 	}
 
+	if project.JudgeRunnerProfileID != nil {
+		item, err := s.projectRepo.RunnerProfileByID(ctx, *project.JudgeRunnerProfileID)
+		if err != nil {
+			v.SetInternalError(err)
+		} else if item == nil {
+			v.Append("judgeRunnerProfileId", FieldErrorIncorrect)
+		}
+	}
+
+	// Each panel member must reference an existing runner profile (duplicates are
+	// allowed — same profile twice is self-fusion). One bad id flags the field.
+	for _, id := range project.RunnerProfileIDs {
+		item, err := s.projectRepo.RunnerProfileByID(ctx, id)
+		if err != nil {
+			v.SetInternalError(err)
+			break
+		}
+		if item == nil {
+			v.Append("runnerProfileIds", FieldErrorIncorrect)
+			break
+		}
+	}
+
 	// custom validation starts here
 	return v
 }

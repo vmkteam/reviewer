@@ -39,10 +39,13 @@ export interface IProject {
   runnerProfileId?: number,
   statusId: number,
   instructions?: string,
+  runnerProfileIds: Array<number>, // additional panel members (ordered, duplicates allowed)
+  judgeRunnerProfileId?: number, // judge; its presence turns multi-review on
   prompt?: IPromptSummary,
   taskTracker?: ITaskTrackerSummary,
   slackChannel?: ISlackChannelSummary,
   runnerProfile?: IRunnerProfileSummary,
+  judgeRunnerProfile?: IRunnerProfileSummary,
   status?: IStatus
 }
 
@@ -482,10 +485,13 @@ export class Project implements IProject {
   runnerProfileId?: number = 0;
   statusId: number = 0;
   instructions?: string = null;
+  runnerProfileIds: Array<number> = null;
+  judgeRunnerProfileId?: number = 0;
   prompt?: IPromptSummary = null;
   taskTracker?: ITaskTrackerSummary = null;
   slackChannel?: ISlackChannelSummary = null;
   runnerProfile?: IRunnerProfileSummary = null;
+  judgeRunnerProfile?: IRunnerProfileSummary = null;
   status?: IStatus = null;
 }
 

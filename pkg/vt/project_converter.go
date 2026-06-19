@@ -10,23 +10,26 @@ func NewProject(in *db.Project) *Project {
 	}
 
 	project := &Project{
-		ID:              in.ID,
-		Title:           in.Title,
-		VcsURL:          in.VcsURL,
-		Language:        in.Language,
-		ProjectKey:      in.ProjectKey,
-		PromptID:        in.PromptID,
-		TaskTrackerID:   in.TaskTrackerID,
-		SlackChannelID:  in.SlackChannelID,
-		RunnerProfileID: in.RunnerProfileID,
-		StatusID:        in.StatusID,
-		Instructions:    in.Instructions,
+		ID:                   in.ID,
+		Title:                in.Title,
+		VcsURL:               in.VcsURL,
+		Language:             in.Language,
+		ProjectKey:           in.ProjectKey,
+		PromptID:             in.PromptID,
+		TaskTrackerID:        in.TaskTrackerID,
+		SlackChannelID:       in.SlackChannelID,
+		RunnerProfileID:      in.RunnerProfileID,
+		RunnerProfileIDs:     in.RunnerProfileIDs,
+		JudgeRunnerProfileID: in.JudgeRunnerProfileID,
+		StatusID:             in.StatusID,
+		Instructions:         in.Instructions,
 
-		Prompt:        NewPromptSummary(in.Prompt),
-		TaskTracker:   NewTaskTrackerSummary(in.TaskTracker),
-		SlackChannel:  NewSlackChannelSummary(in.SlackChannel),
-		RunnerProfile: NewRunnerProfileSummary(in.RunnerProfile),
-		Status:        NewStatus(in.StatusID),
+		Prompt:             NewPromptSummary(in.Prompt),
+		TaskTracker:        NewTaskTrackerSummary(in.TaskTracker),
+		SlackChannel:       NewSlackChannelSummary(in.SlackChannel),
+		RunnerProfile:      NewRunnerProfileSummary(in.RunnerProfile),
+		JudgeRunnerProfile: NewRunnerProfileSummary(in.JudgeRunnerProfile),
+		Status:             NewStatus(in.StatusID),
 	}
 
 	return project

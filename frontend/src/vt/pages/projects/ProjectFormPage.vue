@@ -45,9 +45,20 @@
           <FKSelect v-model="entity.promptId" :load-fn="loadPrompts" />
         </FormField>
 
-        <FormField label="Runner Profile" :error="fieldError('runnerProfileId')">
+        <FormField label="Runner Profile — Primary / fallback" :error="fieldError('runnerProfileId')">
           <FKSelect v-model="entity.runnerProfileId" :load-fn="loadRunnerProfiles" nullable />
-          <p class="mt-1 text-xs text-fg-subtle">Leave as “— None —” to use the default profile.</p>
+          <p class="mt-1 text-xs text-fg-subtle">The primary runner and the promotion target. Leave as “— None —” to use the default profile.</p>
+        </FormField>
+
+        <FormField label="Panel — additional members" :error="fieldError('runnerProfileIds')">
+          <FKListEditor v-model="entity.runnerProfileIds" :load-fn="loadRunnerProfiles" placeholder="+ Add panel member…" />
+          <p class="mt-1 text-xs text-fg-subtle">Extra runners reviewed alongside the primary. Order matters; the same profile twice is self-fusion. The full panel is [Primary] + these.</p>
+        </FormField>
+
+        <FormField label="Judge" :error="fieldError('judgeRunnerProfileId')">
+          <FKSelect v-model="entity.judgeRunnerProfileId" :load-fn="loadRunnerProfiles" nullable />
+          <p class="mt-1 text-xs text-fg-subtle">Synthesizes the panel into one fused review. Setting a judge turns multi-review on; “— None —” means a single review.</p>
+          <p v-if="dormantPanel" class="mt-1 text-xs text-amber-600 dark:text-amber-400">Panel members are set but no judge is selected — they stay dormant and the project runs a single review.</p>
         </FormField>
 
         <FormField label="Task Tracker" :error="fieldError('taskTrackerId')">
@@ -93,6 +104,7 @@ import { extractTitleFromVcsURL } from '../../composables/useVcsTitle'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import FKSelect from '../../components/FKSelect.vue'
+import FKListEditor from '../../components/FKListEditor.vue'
 import VInput from '../../components/VInput.vue'
 import VTextarea from '../../components/VTextarea.vue'
 import { maskKey } from '../../format'
@@ -106,8 +118,12 @@ const showConfirm = ref(false)
 const activeTab = ref('general')
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
-  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, runnerProfileId: undefined, statusId: 1, instructions: '',
+  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, runnerProfileId: undefined, runnerProfileIds: [], judgeRunnerProfileId: undefined, statusId: 1, instructions: '',
 }))
+
+// Panel members configured without a judge stay dormant (the project still runs a
+// single review); surface that as a soft hint, not a validation error.
+const dormantPanel = computed(() => !!entity.runnerProfileIds?.length && !entity.judgeRunnerProfileId)
 
 const keyCopied = ref(false)
 

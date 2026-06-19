@@ -571,6 +571,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Type:     smd.String,
 						},
 						{
+							Name:        "runnerProfileIds",
+							Description: `additional panel members (ordered, duplicates allowed)`,
+							Type:        smd.Array,
+							Items: map[string]string{
+								"type": smd.Integer,
+							},
+						},
+						{
+							Name:        "judgeRunnerProfileId",
+							Optional:    true,
+							Description: `judge; its presence turns multi-review on`,
+							Type:        smd.Integer,
+						},
+						{
 							Name:     "prompt",
 							Optional: true,
 							Ref:      "#/definitions/PromptSummary",
@@ -590,6 +604,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name:     "runnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "judgeRunnerProfile",
 							Optional: true,
 							Ref:      "#/definitions/RunnerProfileSummary",
 							Type:     smd.Object,
@@ -823,6 +843,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
+							},
+							{
 								Name:     "prompt",
 								Optional: true,
 								Ref:      "#/definitions/PromptSummary",
@@ -842,6 +876,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
 								Optional: true,
 								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,
@@ -1068,6 +1108,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Type:     smd.String,
 						},
 						{
+							Name:        "runnerProfileIds",
+							Description: `additional panel members (ordered, duplicates allowed)`,
+							Type:        smd.Array,
+							Items: map[string]string{
+								"type": smd.Integer,
+							},
+						},
+						{
+							Name:        "judgeRunnerProfileId",
+							Optional:    true,
+							Description: `judge; its presence turns multi-review on`,
+							Type:        smd.Integer,
+						},
+						{
 							Name:     "prompt",
 							Optional: true,
 							Ref:      "#/definitions/PromptSummary",
@@ -1087,6 +1141,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 						},
 						{
 							Name:     "runnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "judgeRunnerProfile",
 							Optional: true,
 							Ref:      "#/definitions/RunnerProfileSummary",
 							Type:     smd.Object,
@@ -1319,6 +1379,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
+							},
+							{
 								Name:     "prompt",
 								Optional: true,
 								Ref:      "#/definitions/PromptSummary",
@@ -1338,6 +1412,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
 								Optional: true,
 								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,
@@ -1627,6 +1707,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
+							},
+							{
 								Name:     "prompt",
 								Optional: true,
 								Ref:      "#/definitions/PromptSummary",
@@ -1646,6 +1740,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
 								Optional: true,
 								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,

@@ -18,11 +18,15 @@ type Project struct {
 	StatusID        int     `json:"statusId" validate:"required,status"`
 	Instructions    *string `json:"instructions"`
 
-	Prompt        *PromptSummary        `json:"prompt"`
-	TaskTracker   *TaskTrackerSummary   `json:"taskTracker"`
-	SlackChannel  *SlackChannelSummary  `json:"slackChannel"`
-	RunnerProfile *RunnerProfileSummary `json:"runnerProfile"`
-	Status        *Status               `json:"status"`
+	RunnerProfileIDs     []int `json:"runnerProfileIds"`     // additional panel members (ordered, duplicates allowed)
+	JudgeRunnerProfileID *int  `json:"judgeRunnerProfileId"` // judge; its presence turns multi-review on
+
+	Prompt             *PromptSummary        `json:"prompt"`
+	TaskTracker        *TaskTrackerSummary   `json:"taskTracker"`
+	SlackChannel       *SlackChannelSummary  `json:"slackChannel"`
+	RunnerProfile      *RunnerProfileSummary `json:"runnerProfile"`
+	JudgeRunnerProfile *RunnerProfileSummary `json:"judgeRunnerProfile"`
+	Status             *Status               `json:"status"`
 }
 
 func (p *Project) ToDB() *db.Project {
@@ -31,17 +35,19 @@ func (p *Project) ToDB() *db.Project {
 	}
 
 	project := &db.Project{
-		ID:              p.ID,
-		Title:           p.Title,
-		VcsURL:          p.VcsURL,
-		Language:        p.Language,
-		ProjectKey:      p.ProjectKey,
-		PromptID:        p.PromptID,
-		TaskTrackerID:   p.TaskTrackerID,
-		SlackChannelID:  p.SlackChannelID,
-		RunnerProfileID: p.RunnerProfileID,
-		StatusID:        p.StatusID,
-		Instructions:    p.Instructions,
+		ID:                   p.ID,
+		Title:                p.Title,
+		VcsURL:               p.VcsURL,
+		Language:             p.Language,
+		ProjectKey:           p.ProjectKey,
+		PromptID:             p.PromptID,
+		TaskTrackerID:        p.TaskTrackerID,
+		SlackChannelID:       p.SlackChannelID,
+		RunnerProfileID:      p.RunnerProfileID,
+		RunnerProfileIDs:     db.ProjectRunnerProfileIDs(p.RunnerProfileIDs),
+		JudgeRunnerProfileID: p.JudgeRunnerProfileID,
+		StatusID:             p.StatusID,
+		Instructions:         p.Instructions,
 	}
 
 	return project
