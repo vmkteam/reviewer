@@ -34,7 +34,7 @@
     <select
       :value="''"
       @change="onAdd"
-      class="w-full rounded-lg border border-edge-strong bg-surface text-fg px-3 py-2 text-sm"
+      class="app-select cursor-pointer w-full rounded-lg border border-edge-strong bg-surface text-fg px-3 py-2 text-sm"
     >
       <option value="" disabled>{{ placeholder }}</option>
       <option v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.title }}</option>
