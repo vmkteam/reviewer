@@ -12,6 +12,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestReviewDraft_Validate(t *testing.T) {
+	codeFile := []ReviewDraftFile{{ReviewType: reviewer.ReviewTypeCode, Summary: "s"}}
+	codeIssue := func(opts ...func(*ReviewDraftIssue)) ReviewDraftIssue {
+		iss := ReviewDraftIssue{
+			LocalID: "C1", Severity: reviewer.SeverityLow, Title: "t",
+			FileType: reviewer.ReviewTypeCode, IssueType: "naming", File: "a.go", Lines: "1",
+		}
+		for _, o := range opts {
+			o(&iss)
+		}
+		return iss
+	}
+
+	cases := []struct {
+		name    string
+		draft   ReviewDraft
+		wantErr bool
+	}{
+		{
+			name:  "single review (empty role) ok",
+			draft: ReviewDraft{Files: codeFile, Issues: []ReviewDraftIssue{codeIssue()}},
+		},
+		{
+			name: "fusion with members and issue sources ok",
+			draft: ReviewDraft{
+				Review: ReviewDraftMeta{ReviewRole: reviewer.ReviewRoleFusion, MemberReviewIDs: []int{1, 2}},
+				Files:  codeFile,
+				Issues: []ReviewDraftIssue{codeIssue(func(i *ReviewDraftIssue) { i.Sources = []string{"gpt-5.5", "opus"} })},
+			},
+		},
+		{
+			name:    "invalid role",
+			draft:   ReviewDraft{Review: ReviewDraftMeta{ReviewRole: "panel"}, Files: codeFile},
+			wantErr: true,
+		},
+		{
+			name:    "member ids without fusion role",
+			draft:   ReviewDraft{Review: ReviewDraftMeta{ReviewRole: reviewer.ReviewRoleMember, MemberReviewIDs: []int{1}}, Files: codeFile},
+			wantErr: true,
+		},
+		{
+			name:    "non-positive member id",
+			draft:   ReviewDraft{Review: ReviewDraftMeta{ReviewRole: reviewer.ReviewRoleFusion, MemberReviewIDs: []int{0}}, Files: codeFile},
+			wantErr: true,
+		},
+		{
+			name: "empty issue source",
+			draft: ReviewDraft{
+				Review: ReviewDraftMeta{ReviewRole: reviewer.ReviewRoleFusion, MemberReviewIDs: []int{1}},
+				Files:  codeFile,
+				Issues: []ReviewDraftIssue{codeIssue(func(i *ReviewDraftIssue) { i.Sources = []string{" "} })},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.draft.Validate()
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 // A multi-review member uploads with reviewRole=member; a single review leaves it
 // empty. Verify the full server-side path (draft → ToModel → CreateReview → DB)
 // persists the role, and that an empty role maps to the canonical "single".
@@ -93,8 +161,8 @@ func TestDBReviewDraft_FusionSourcesAndLinking(t *testing.T) {
 	require.NoError(t, dbc.ModelContext(t.Context(), &gotIssue).WherePK().Select())
 	assert.Equal(t, db.IssueSources{"gpt-5.5", "deepseek-v4-pro"}, gotIssue.Sources)
 
-	// LinkMembers points the member at the fusion.
-	require.NoError(t, rm.LinkMembers(t.Context(), fusion.ID, []int{member.ID}))
+	// LinkMembers points the member at the fusion (scoped to the project).
+	require.NoError(t, rm.LinkMembers(t.Context(), proj.ID, fusion.ID, []int{member.ID}))
 	gotMember := db.Review{ID: member.ID}
 	require.NoError(t, dbc.ModelContext(t.Context(), &gotMember).WherePK().Select())
 	require.NotNil(t, gotMember.ParentReviewID)

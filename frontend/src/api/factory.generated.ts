@@ -1,6 +1,5 @@
 /* Code generated from jsonrpc schema by rpcgen v2.5.x with typescript v1.0.0; DO NOT EDIT. */
 /* eslint-disable */
-// @ts-nocheck
 export interface IIssue {
   issueId: number,
   reviewId: number,
@@ -16,7 +15,9 @@ export interface IIssue {
   commitHash: string,
   suggestedFix?: string,
   statusId: number,
-  comment?: string
+  comment?: string,
+  sources: Array<string> // Sources is per-issue provenance on a fusion review — the model labels that
+flagged it (or "judge" for a verified net-new). Empty for single/member issues.
 }
 
 export interface IIssueFilters {
@@ -70,6 +71,15 @@ export interface IModelUseStats {
   costUsd: number
 }
 
+export interface IPanelMember {
+  reviewId: number,
+  title: string,
+  trafficLight: string,
+  model: string,
+  costUsd: number,
+  reviewFiles: Array<IReviewFileSummary>
+}
+
 export interface IProject {
   projectId: number,
   title: string,
@@ -98,7 +108,14 @@ export interface IReview {
   reviewFiles: Array<IReviewFile>,
   effortMinutes?: number,
   aiSlopScore?: number,
-  lastVersionReviewId?: number
+  lastVersionReviewId?: number,
+  reviewRole: string, // Multi-review: a single|member|fusion role. A member points at its fusion via
+ParentReviewID. A fusion exposes its panel breakdown — the member children
+(Members) and the summed panel cost (PanelCostUsd, the judge's own cost is in
+ModelInfo). All three are empty/zero for a plain single review.
+  parentReviewId?: number,
+  members: Array<IPanelMember>,
+  panelCostUsd: number
 }
 
 export interface IReviewArchiveAcceptedRisksParams {
@@ -211,6 +228,7 @@ export class Issue implements IIssue {
   suggestedFix?: string = null;
   statusId: number = 0;
   comment?: string = null;
+  sources: Array<string> = null;
 }
 
 export class IssueFilters implements IIssueFilters {
@@ -274,6 +292,17 @@ export class ModelUseStats implements IModelUseStats {
   costUsd: number = 0;
 }
 
+export class PanelMember implements IPanelMember {
+  static entityName = "panelmember";
+
+  reviewId: number = 0;
+  title: string = null;
+  trafficLight: string = null;
+  model: string = null;
+  costUsd: number = 0;
+  reviewFiles: Array<IReviewFileSummary> = null;
+}
+
 export class Project implements IProject {
   static entityName = "project";
 
@@ -307,6 +336,10 @@ export class Review implements IReview {
   effortMinutes?: number = 0;
   aiSlopScore?: number = 0;
   lastVersionReviewId?: number = 0;
+  reviewRole: string = null;
+  parentReviewId?: number = 0;
+  members: Array<IPanelMember> = null;
+  panelCostUsd: number = 0;
 }
 
 export class ReviewArchiveAcceptedRisksParams implements IReviewArchiveAcceptedRisksParams {

@@ -94,6 +94,14 @@ func prepareReview(pr *Project, rv *Review) error {
 
 // CreateReview prepares and saves a review with all files and issues in a transaction.
 func (rm *ReviewManager) CreateReview(ctx context.Context, pr *Project, rv *Review) (*Review, error) {
+	return rm.CreateReviewWithMembers(ctx, pr, rv, nil)
+}
+
+// CreateReviewWithMembers persists a review with its files and issues and, when
+// memberIDs are given (a fusion upload), links those panel-member reviews as its
+// children in the SAME transaction. Linking inside the create tx means a failed
+// link rolls the fusion back instead of leaving a fusion with half-linked members.
+func (rm *ReviewManager) CreateReviewWithMembers(ctx context.Context, pr *Project, rv *Review, memberIDs []int) (*Review, error) {
 	if err := prepareReview(pr, rv); err != nil {
 		return nil, err
 	}
@@ -120,21 +128,46 @@ func (rm *ReviewManager) CreateReview(ctx context.Context, pr *Project, rv *Revi
 			}
 		}
 
+		if len(memberIDs) > 0 {
+			if err := txRM.LinkMembers(ctx, pr.ID, rv.ID, memberIDs); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	})
 
 	return rv, err
 }
 
-// LinkMembers sets parentReviewId = parentID on each member review, making the
-// fusion review their parent (members are then filtered from default lists and
-// reachable only via the fusion's panel breakdown). Returns on the first failure.
-func (rm *ReviewManager) LinkMembers(ctx context.Context, parentID int, memberIDs []int) error {
-	for _, id := range memberIDs {
-		pid := parentID
-		if _, err := rm.repo.UpdateReview(ctx, &db.Review{ID: id, ParentReviewID: &pid}, db.WithColumns(db.Columns.Review.ParentReviewID)); err != nil {
-			return fmt.Errorf("link member %d to %d: %w", id, parentID, err)
-		}
+// LinkMembers sets parentReviewId = parentID on the given panel member reviews in
+// one statement, making the fusion review their parent (members are then filtered
+// from default lists and reachable only via the fusion's panel breakdown).
+//
+// The update is scoped to projectID and reviewRole=member so it can never reparent
+// a review from another project or hijack a single/fusion review by id. The
+// parentReviewId guard makes it idempotent — members already linked to parentID
+// still match — while refusing to steal members already parented elsewhere. It
+// errors unless every requested member was linked, so the caller's transaction
+// rolls back on a bad/foreign id rather than committing a partially-linked fusion.
+func (rm *ReviewManager) LinkMembers(ctx context.Context, projectID, parentID int, memberIDs []int) error {
+	if len(memberIDs) == 0 {
+		return nil
+	}
+
+	res, err := rm.Conn().ExecContext(ctx, `
+		UPDATE reviews SET "parentReviewId" = ?
+		WHERE "reviewId" IN (?)
+		  AND "projectId" = ?
+		  AND "reviewRole" = ?
+		  AND ("parentReviewId" IS NULL OR "parentReviewId" = ?)
+	`, parentID, pg.In(memberIDs), projectID, ReviewRoleMember, parentID)
+	if err != nil {
+		return fmt.Errorf("link members %v to %d: %w", memberIDs, parentID, err)
+	}
+	if res.RowsAffected() != len(memberIDs) {
+		return fmt.Errorf("link members to %d: linked %d of %d (project %d) — foreign, non-member, or already-parented id",
+			parentID, res.RowsAffected(), len(memberIDs), projectID)
 	}
 	return nil
 }
@@ -159,6 +192,7 @@ func (rm *ReviewManager) FillLastVersions(ctx context.Context, reviews Reviews) 
 			FROM reviews
 			WHERE "statusId" = ?
 			AND "externalId" != ''
+			AND "reviewRole" <> ?
 			ORDER BY "projectId", "externalId", "reviewId" DESC
 		)
 		SELECT r."reviewId", l."lastVersionReviewId"
@@ -166,8 +200,9 @@ func (rm *ReviewManager) FillLastVersions(ctx context.Context, reviews Reviews) 
 		JOIN latest l ON l."projectId" = r."projectId" AND l."externalId" = r."externalId"
 		WHERE r."reviewId" IN (?)
 		AND r."externalId" != ''
+		AND r."reviewRole" <> ?
 		AND l."lastVersionReviewId" != r."reviewId"
-	`, db.StatusEnabled, pg.In(reviews.IDs()))
+	`, db.StatusEnabled, ReviewRoleMember, pg.In(reviews.IDs()), ReviewRoleMember)
 	if err != nil {
 		return err
 	}
@@ -201,8 +236,9 @@ func (rm *ReviewManager) ProjectsStats(ctx context.Context) (map[int]ProjectStat
 			"trafficLight"
 		FROM reviews
 		WHERE "statusId" = ?
+		AND "reviewRole" <> ?
 		ORDER BY "projectId", "createdAt" DESC
-	`, db.StatusEnabled)
+	`, db.StatusEnabled, ReviewRoleMember)
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +278,35 @@ func (rm *ReviewManager) ListReviews(ctx context.Context, search *ReviewSearch, 
 // CountReviews returns count of reviews matching search.
 func (rm *ReviewManager) CountReviews(ctx context.Context, search *ReviewSearch) (int, error) {
 	return rm.repo.CountReviews(ctx, search.ToDB())
+}
+
+// ListMembers returns the panel member reviews of a fusion (parentReviewId =
+// parentID within projectID), each with its review files for traffic light +
+// per-type stats. Members are normally filtered from lists; this query opts them
+// in to render the fusion's panel breakdown. Panels are small, so no pagination.
+func (rm *ReviewManager) ListMembers(ctx context.Context, projectID, parentID int) (Reviews, error) {
+	search := &ReviewSearch{ProjectID: projectID, ParentReviewID: &parentID, IncludeMembers: true}
+	dbReviews, err := rm.repo.ReviewsByFilters(ctx, search.ToDB(), db.PagerNoLimit, rm.repo.DefaultReviewSort())
+	if err != nil {
+		return nil, err
+	}
+
+	reviews := NewReviews(dbReviews)
+	if len(reviews) == 0 {
+		return reviews, nil
+	}
+
+	dbRFs, err := rm.repo.ReviewFilesByFilters(ctx, &db.ReviewFileSearch{ReviewIDs: reviews.IDs()}, db.PagerNoLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	rfByReview := NewReviewFiles(dbRFs).GroupByReviewID()
+	for i := range reviews {
+		reviews[i].ReviewFiles = rfByReview[reviews[i].ID]
+	}
+
+	return reviews, nil
 }
 
 // GetReview returns a review by ID with review files and issues.

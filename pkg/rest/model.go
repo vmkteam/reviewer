@@ -2,6 +2,7 @@ package rest
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -65,10 +66,27 @@ type ReviewDraftIssue struct {
 	Sources []string `json:"sources,omitempty"`
 }
 
-// Validate checks that all reviewType and fileType values are valid.
-// Errors include the offending index and value so the failure points at the
-// specific element, not just the field name.
+// Validate checks that all reviewType and fileType values are valid, plus the
+// multi-review fields (reviewRole, memberReviewIds, issue sources). Errors include
+// the offending index and value so the failure points at the specific element,
+// not just the field name.
 func (rd ReviewDraft) Validate() error {
+	// reviewRole is optional (empty maps to single); when set it must be a known
+	// role. memberReviewIds only make sense on a fusion that links its panel.
+	if rd.Review.ReviewRole != "" && !reviewer.IsValidReviewRole(rd.Review.ReviewRole) {
+		return fmt.Errorf("invalid reviewRole: %q", rd.Review.ReviewRole)
+	}
+	if len(rd.Review.MemberReviewIDs) > 0 {
+		if rd.Review.ReviewRole != reviewer.ReviewRoleFusion {
+			return fmt.Errorf("memberReviewIds require reviewRole=%q, got %q", reviewer.ReviewRoleFusion, rd.Review.ReviewRole)
+		}
+		for i, id := range rd.Review.MemberReviewIDs {
+			if id <= 0 {
+				return fmt.Errorf("invalid memberReviewId at memberReviewIds[%d]: %d", i, id)
+			}
+		}
+	}
+
 	for i, f := range rd.Files {
 		if !reviewer.IsValidReviewType(f.ReviewType) {
 			return fmt.Errorf("invalid reviewType at files[%d]: %q", i, f.ReviewType)
@@ -80,6 +98,11 @@ func (rd ReviewDraft) Validate() error {
 		}
 		if !reviewer.IsValidSeverity(iss.Severity) {
 			return fmt.Errorf("invalid severity at issues[%d] (localId=%s): %q", i, iss.LocalID, iss.Severity)
+		}
+		for j, src := range iss.Sources {
+			if strings.TrimSpace(src) == "" {
+				return fmt.Errorf("empty source at issues[%d].sources[%d] (localId=%s)", i, j, iss.LocalID)
+			}
 		}
 	}
 	return nil

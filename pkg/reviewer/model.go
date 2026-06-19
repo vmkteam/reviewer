@@ -221,6 +221,13 @@ type ReviewSearch struct {
 	TrafficLight *string
 	ExternalID   *string
 	FromReviewID *int
+	// ParentReviewID, when set, lists a fusion review's panel members (children).
+	ParentReviewID *int
+	// IncludeMembers keeps reviewRole='member' rows in the result. Default false:
+	// members are link-only and filtered from lists/aggregations (the fusion is
+	// primary). A ParentReviewID query implies members, so the exclusion is also
+	// skipped when ParentReviewID is set.
+	IncludeMembers bool
 }
 
 // ToDB converts domain search params to the database layer representation.
@@ -230,12 +237,19 @@ func (s *ReviewSearch) ToDB() *db.ReviewSearch {
 	}
 
 	search := &db.ReviewSearch{
-		ProjectID:    &s.ProjectID,
-		TitleILike:   s.Title,
-		AuthorILike:  s.Author,
-		TrafficLight: s.TrafficLight,
-		ExternalID:   s.ExternalID,
-		IDLt:         s.FromReviewID,
+		ProjectID:      &s.ProjectID,
+		TitleILike:     s.Title,
+		AuthorILike:    s.Author,
+		TrafficLight:   s.TrafficLight,
+		ExternalID:     s.ExternalID,
+		IDLt:           s.FromReviewID,
+		ParentReviewID: s.ParentReviewID,
+	}
+	// Members are link-only: exclude them from default lists so the fusion review
+	// is the primary one. A by-id read (ReviewByID) bypasses this search, so a
+	// member stays reachable by direct URL; a ParentReviewID query wants members.
+	if !s.IncludeMembers && s.ParentReviewID == nil {
+		search.With("?.? <> ?", pg.Ident("t"), pg.Ident(db.Columns.Review.ReviewRole), ReviewRoleMember)
 	}
 	return search
 }

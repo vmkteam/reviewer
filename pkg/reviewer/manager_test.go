@@ -70,6 +70,246 @@ func createTestReview(t *testing.T, rm *ReviewManager, pr *Project) *Review {
 	return created
 }
 
+// createRoleReview persists a minimal review with an explicit reviewRole and
+// externalId so multi-review filtering/linking can be exercised.
+func createRoleReview(t *testing.T, rm *ReviewManager, pr *Project, role, externalID string) *Review {
+	rv := &Review{
+		Review: db.Review{
+			Title:      role,
+			ExternalID: externalID,
+			Author:     "tester",
+			CreatedAt:  time.Now(),
+			ReviewRole: role,
+			ModelInfo:  db.ReviewModelInfo{Model: "opus", CostUsd: 1.5},
+		},
+		ReviewFiles: ReviewFiles{
+			{ReviewFile: db.ReviewFile{ReviewType: ReviewTypeCode, Summary: "s"}},
+		},
+	}
+	created, err := rm.CreateReview(t.Context(), pr, rv)
+	require.NoError(t, err)
+	return created
+}
+
+// cleanupReviews tears down reviews regardless of parent/child link order:
+// parentReviewId is ON DELETE RESTRICT, so it first nulls every link, then
+// deletes files/issues/reviews.
+func cleanupReviews(t *testing.T, dbc db.DB, reviews ...*Review) {
+	t.Cleanup(func() {
+		ctx := context.Background()
+		for _, rv := range reviews {
+			dbc.ExecContext(ctx, `UPDATE reviews SET "parentReviewId" = NULL WHERE "reviewId" = ?`, rv.ID)
+		}
+		for _, rv := range reviews {
+			for _, rf := range rv.ReviewFiles {
+				for _, iss := range rf.Issues {
+					dbc.ModelContext(ctx, &db.Issue{ID: iss.ID}).WherePK().Delete()
+				}
+				dbc.ModelContext(ctx, &db.ReviewFile{ID: rf.ID}).WherePK().Delete()
+			}
+			dbc.ModelContext(ctx, &db.Review{ID: rv.ID}).WherePK().Delete()
+		}
+	})
+}
+
+func reviewIDs(reviews Reviews) []int {
+	ids := make([]int, len(reviews))
+	for i := range reviews {
+		ids[i] = reviews[i].ID
+	}
+	return ids
+}
+
+func assertParent(t *testing.T, dbc db.DB, reviewID, wantParentID int) {
+	t.Helper()
+	got := db.Review{ID: reviewID}
+	require.NoError(t, dbc.ModelContext(context.Background(), &got).WherePK().Select())
+	require.NotNil(t, got.ParentReviewID)
+	assert.Equal(t, wantParentID, *got.ParentReviewID)
+}
+
+func TestDBReviewManager_MembersFilteredFromLists(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	single := createRoleReview(t, rm, pr, ReviewRoleSingle, "MR-1")
+	fusion := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-1")
+	member := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-1")
+	cleanupReviews(t, dbc, single, fusion, member)
+
+	t.Run("default list excludes members", func(t *testing.T) {
+		reviews, err := rm.ListReviews(t.Context(), &ReviewSearch{ProjectID: pr.ID}, 100)
+		require.NoError(t, err)
+		ids := reviewIDs(reviews)
+		assert.Contains(t, ids, single.ID)
+		assert.Contains(t, ids, fusion.ID)
+		assert.NotContains(t, ids, member.ID)
+	})
+
+	t.Run("count excludes members", func(t *testing.T) {
+		count, err := rm.CountReviews(t.Context(), &ReviewSearch{ProjectID: pr.ID})
+		require.NoError(t, err)
+		assert.Equal(t, 2, count) // single + fusion; member hidden
+	})
+
+	t.Run("IncludeMembers opts members back in", func(t *testing.T) {
+		reviews, err := rm.ListReviews(t.Context(), &ReviewSearch{ProjectID: pr.ID, IncludeMembers: true}, 100)
+		require.NoError(t, err)
+		assert.Contains(t, reviewIDs(reviews), member.ID)
+	})
+
+	t.Run("a member is still reachable by id", func(t *testing.T) {
+		got, err := rm.GetReview(t.Context(), member.ID)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, ReviewRoleMember, got.ReviewRole)
+	})
+}
+
+func TestDBReviewManager_LinkMembers(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	t.Run("links same-project members and is idempotent", func(t *testing.T) {
+		m1 := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-link")
+		m2 := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-link")
+		fusion := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-link")
+		cleanupReviews(t, dbc, m1, m2, fusion)
+
+		require.NoError(t, rm.LinkMembers(t.Context(), pr.ID, fusion.ID, []int{m1.ID, m2.ID}))
+		assertParent(t, dbc, m1.ID, fusion.ID)
+		assertParent(t, dbc, m2.ID, fusion.ID)
+
+		// Re-link is a no-op: members already parented to this fusion still match.
+		require.NoError(t, rm.LinkMembers(t.Context(), pr.ID, fusion.ID, []int{m1.ID, m2.ID}))
+		assertParent(t, dbc, m1.ID, fusion.ID)
+	})
+
+	t.Run("rejects a non-member review", func(t *testing.T) {
+		single := createRoleReview(t, rm, pr, ReviewRoleSingle, "MR-nm")
+		fusion := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-nm")
+		cleanupReviews(t, dbc, single, fusion)
+
+		err := rm.LinkMembers(t.Context(), pr.ID, fusion.ID, []int{single.ID})
+		require.Error(t, err)
+	})
+
+	t.Run("rejects a foreign-project member", func(t *testing.T) {
+		other, otherCl := createTestProject(t, dbc)
+		t.Cleanup(otherCl)
+		foreign := createRoleReview(t, rm, other, ReviewRoleMember, "MR-fp")
+		fusion := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-fp")
+		cleanupReviews(t, dbc, foreign, fusion)
+
+		err := rm.LinkMembers(t.Context(), pr.ID, fusion.ID, []int{foreign.ID})
+		require.Error(t, err)
+
+		got := db.Review{ID: foreign.ID}
+		require.NoError(t, dbc.ModelContext(t.Context(), &got).WherePK().Select())
+		assert.Nil(t, got.ParentReviewID, "foreign member stays unlinked")
+	})
+
+	t.Run("refuses to steal a member parented elsewhere", func(t *testing.T) {
+		m := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-steal")
+		f1 := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-steal")
+		f2 := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-steal")
+		cleanupReviews(t, dbc, m, f1, f2)
+
+		require.NoError(t, rm.LinkMembers(t.Context(), pr.ID, f1.ID, []int{m.ID}))
+		err := rm.LinkMembers(t.Context(), pr.ID, f2.ID, []int{m.ID})
+		require.Error(t, err)
+		assertParent(t, dbc, m.ID, f1.ID) // still f1
+	})
+}
+
+func TestDBReviewManager_CreateReviewWithMembersAtomic(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	member := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-atomic")
+	cleanupReviews(t, dbc, member)
+
+	t.Run("rolls the fusion back on a bad member id", func(t *testing.T) {
+		fm := &Review{
+			Review:      db.Review{Title: "fusion", ExternalID: "MR-atomic", CreatedAt: time.Now(), ReviewRole: ReviewRoleFusion},
+			ReviewFiles: ReviewFiles{{ReviewFile: db.ReviewFile{ReviewType: ReviewTypeCode, Summary: "s"}}},
+		}
+		// -1 never matches → LinkMembers errors → the whole tx rolls back.
+		_, err := rm.CreateReviewWithMembers(t.Context(), pr, fm, []int{member.ID, -1})
+		require.Error(t, err)
+
+		// No fusion leaked, and the valid member is untouched (not parented).
+		count, err := rm.CountReviews(t.Context(), &ReviewSearch{ProjectID: pr.ID})
+		require.NoError(t, err)
+		assert.Equal(t, 0, count, "fusion must not be committed")
+
+		got := db.Review{ID: member.ID}
+		require.NoError(t, dbc.ModelContext(t.Context(), &got).WherePK().Select())
+		assert.Nil(t, got.ParentReviewID)
+	})
+
+	t.Run("commits fusion and links members together", func(t *testing.T) {
+		fm := &Review{
+			Review:      db.Review{Title: "fusion", ExternalID: "MR-atomic", CreatedAt: time.Now(), ReviewRole: ReviewRoleFusion},
+			ReviewFiles: ReviewFiles{{ReviewFile: db.ReviewFile{ReviewType: ReviewTypeCode, Summary: "s"}}},
+		}
+		fusion, err := rm.CreateReviewWithMembers(t.Context(), pr, fm, []int{member.ID})
+		require.NoError(t, err)
+		// Clean fusion + member together so the parentReviewId link is nulled before
+		// either row is deleted (the link is ON DELETE RESTRICT).
+		cleanupReviews(t, dbc, fusion, member)
+		assertParent(t, dbc, member.ID, fusion.ID)
+	})
+}
+
+func TestDBReviewManager_ListMembers(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	m1 := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-lm")
+	m2 := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-lm")
+	fusion := createRoleReview(t, rm, pr, ReviewRoleFusion, "MR-lm")
+	cleanupReviews(t, dbc, m1, m2, fusion)
+	require.NoError(t, rm.LinkMembers(t.Context(), pr.ID, fusion.ID, []int{m1.ID, m2.ID}))
+
+	members, err := rm.ListMembers(t.Context(), pr.ID, fusion.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []int{m1.ID, m2.ID}, reviewIDs(members))
+	for _, m := range members {
+		assert.NotEmpty(t, m.ReviewFiles, "panel member carries review files for the breakdown")
+		assert.Equal(t, "opus", m.ModelInfo.Model)
+	}
+}
+
+func TestDBReviewManager_MembersExcludedFromAggregations(t *testing.T) {
+	rm, dbc := newTestReviewManager(t)
+	pr, prCl := createTestProject(t, dbc)
+	t.Cleanup(prCl)
+
+	single := createRoleReview(t, rm, pr, ReviewRoleSingle, "MR-agg")
+	member := createRoleReview(t, rm, pr, ReviewRoleMember, "MR-agg") // higher id than single
+	cleanupReviews(t, dbc, single, member)
+
+	t.Run("ProjectsStats ignores members", func(t *testing.T) {
+		stats, err := rm.ProjectsStats(t.Context())
+		require.NoError(t, err)
+		require.Contains(t, stats, pr.ID)
+		assert.Equal(t, 1, stats[pr.ID].ReviewCount, "only the single review counts")
+	})
+
+	t.Run("FillLastVersions ignores members", func(t *testing.T) {
+		reviews := Reviews{*single}
+		require.NoError(t, rm.FillLastVersions(t.Context(), reviews))
+		// The only non-member with this externalId is `single` itself → no newer
+		// version. Without the filter, the higher-id member would be picked.
+		assert.Nil(t, reviews[0].LastVersionReviewID)
+	})
+}
+
 func TestDBReviewManager_CreateReview(t *testing.T) {
 	rm, dbc := newTestReviewManager(t)
 	pr, prCl := createTestProject(t, dbc)

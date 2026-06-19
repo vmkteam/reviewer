@@ -215,6 +215,44 @@ type Review struct {
 	EffortMinutes       *int         `json:"effortMinutes,omitempty"`
 	AiSlopScore         *float32     `json:"aiSlopScore,omitempty"`
 	LastVersionReviewID *int         `json:"lastVersionReviewId,omitempty"`
+
+	// Multi-review: a single|member|fusion role. A member points at its fusion via
+	// ParentReviewID. A fusion exposes its panel breakdown — the member children
+	// (Members) and the summed panel cost (PanelCostUsd, the judge's own cost is in
+	// ModelInfo). All three are empty/zero for a plain single review.
+	ReviewRole     string        `json:"reviewRole"`
+	ParentReviewID *int          `json:"parentReviewId,omitempty"`
+	Members        []PanelMember `json:"members,omitempty"`
+	PanelCostUsd   float64       `json:"panelCostUsd,omitempty"`
+}
+
+// PanelMember — одно ревью-участник панели в разборе fusion-ревью.
+type PanelMember struct {
+	ID           int                 `json:"reviewId"`
+	Title        string              `json:"title"`
+	TrafficLight string              `json:"trafficLight"`
+	Model        string              `json:"model"`
+	CostUsd      float64             `json:"costUsd"`
+	ReviewFiles  []ReviewFileSummary `json:"reviewFiles"`
+}
+
+func newPanelMember(in *reviewer.Review) PanelMember {
+	pm := PanelMember{
+		ID:           in.ID,
+		Title:        in.Title,
+		TrafficLight: in.TrafficLight,
+		Model:        in.ModelInfo.Model,
+		CostUsd:      in.ModelInfo.CostUsd,
+		ReviewFiles:  make([]ReviewFileSummary, len(in.ReviewFiles)),
+	}
+	for i, rf := range in.ReviewFiles {
+		pm.ReviewFiles[i] = ReviewFileSummary{
+			ReviewType:   rf.ReviewType,
+			TrafficLight: rf.TrafficLight,
+			IssueStats:   newIssueStats(rf.IssueStats),
+		}
+	}
+	return pm
 }
 
 func newReview(in *reviewer.Review) *Review {
@@ -240,6 +278,8 @@ func newReview(in *reviewer.Review) *Review {
 		EffortMinutes:       in.EffortMinutes,
 		AiSlopScore:         in.AiSlopScore,
 		LastVersionReviewID: in.LastVersionReviewID,
+		ReviewRole:          in.ReviewRole,
+		ParentReviewID:      in.ParentReviewID,
 	}
 
 	return r
@@ -285,6 +325,9 @@ type Issue struct {
 	SuggestedFix *string `json:"suggestedFix,omitempty"`
 	StatusID     int     `json:"statusId"`
 	Comment      *string `json:"comment"`
+	// Sources is per-issue provenance on a fusion review — the model labels that
+	// flagged it (or "judge" for a verified net-new). Empty for single/member issues.
+	Sources []string `json:"sources,omitempty"`
 }
 
 func newIssue(in *reviewer.Issue) *Issue {
@@ -307,6 +350,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 		SuggestedFix: in.SuggestedFix,
 		StatusID:     in.StatusID,
 		Comment:      in.Comment,
+		Sources:      in.Sources,
 	}
 
 	if in.Review != nil {

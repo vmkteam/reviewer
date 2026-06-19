@@ -67,17 +67,13 @@ func (h *Handler) CreateReview(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	// A fusion upload carries memberReviewIds; the review and the child links are
+	// persisted in one transaction so a bad/foreign member id rolls the fusion back
+	// instead of leaving it with half-linked members. Empty for single/member uploads.
 	model := draft.ToModel()
-	rv, err := h.rm.CreateReview(c.Request().Context(), project, &model)
+	rv, err := h.rm.CreateReviewWithMembers(c.Request().Context(), project, &model, draft.Review.MemberReviewIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	// A fusion upload links its panel members as children (sets their parentReviewId).
-	if len(draft.Review.MemberReviewIDs) > 0 {
-		if err = h.rm.LinkMembers(c.Request().Context(), rv.ID, draft.Review.MemberReviewIDs); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
 	}
 
 	h.notifySlack(project, rv)
