@@ -164,6 +164,20 @@ type ReviewFileSummary struct {
 	IssueStats   IssueStats `json:"issueStats"`
 }
 
+// newReviewFileSummaries maps review files to their A/C/S/T summary cells, shared
+// by the review-list row and the fusion panel breakdown.
+func newReviewFileSummaries(in reviewer.ReviewFiles) []ReviewFileSummary {
+	out := make([]ReviewFileSummary, len(in))
+	for i, rf := range in {
+		out[i] = ReviewFileSummary{
+			ReviewType:   rf.ReviewType,
+			TrafficLight: rf.TrafficLight,
+			IssueStats:   newIssueStats(rf.IssueStats),
+		}
+	}
+	return out
+}
+
 func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 	if in == nil {
 		return nil
@@ -178,15 +192,7 @@ func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 		SourceBranch: in.SourceBranch,
 		TargetBranch: in.TargetBranch,
 		CreatedAt:    in.CreatedAt,
-		ReviewFiles:  make([]ReviewFileSummary, len(in.ReviewFiles)),
-	}
-
-	for i, rf := range in.ReviewFiles {
-		rs.ReviewFiles[i] = ReviewFileSummary{
-			ReviewType:   rf.ReviewType,
-			TrafficLight: rf.TrafficLight,
-			IssueStats:   newIssueStats(rf.IssueStats),
-		}
+		ReviewFiles:  newReviewFileSummaries(in.ReviewFiles),
 	}
 
 	rs.EffortMinutes = in.EffortMinutes
@@ -233,22 +239,14 @@ type PanelMember struct {
 }
 
 func newPanelMember(in *reviewer.Review) PanelMember {
-	pm := PanelMember{
+	return PanelMember{
 		ID:           in.ID,
 		Title:        in.Title,
 		TrafficLight: in.TrafficLight,
 		Model:        in.ModelInfo.Model,
 		CostUsd:      in.ModelInfo.CostUsd,
-		ReviewFiles:  make([]ReviewFileSummary, len(in.ReviewFiles)),
+		ReviewFiles:  newReviewFileSummaries(in.ReviewFiles),
 	}
-	for i, rf := range in.ReviewFiles {
-		pm.ReviewFiles[i] = ReviewFileSummary{
-			ReviewType:   rf.ReviewType,
-			TrafficLight: rf.TrafficLight,
-			IssueStats:   newIssueStats(rf.IssueStats),
-		}
-	}
-	return pm
 }
 
 func newReview(in *reviewer.Review) *Review {

@@ -9,8 +9,9 @@ package reviewer
 //
 // Reconstructed from the documented spike behaviour (keep consensus, verify
 // singletons against code, drop ~60% noise, normalize severity with reasons,
-// zero net-new without verification, every kept issue provenance-tagged). Phase 6
-// will serve it via the FusionPrompt rpc; for now reviewctl embeds it directly.
+// zero net-new without verification, every kept issue provenance-tagged). The
+// reviewctl service serves this via the FusionPrompt rpc and the CI client
+// fetches it (FetchFusionPrompt), so this stays the single source of truth.
 const FusionPrompt = fusionStep1 + "\n\n---\n\n# Шаг 2 — заполни review.json извлечением из fused MD-файлов\n\n" + promptStep2Body + "\n\n" + fusionSourcesAddendum
 
 const fusionStep1 = `# Ты — судья-синтезатор мульти-ревью

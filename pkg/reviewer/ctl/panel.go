@@ -215,16 +215,33 @@ func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*m
 	return id, nil
 }
 
-// produceMember reviews a single panel member in its worktree and returns the
-// filled draft + R*.md paths (not yet uploaded; the worktree stays alive).
-func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (*memberOutput, error) {
+// memberConfig clones the base config for one panel member (or the judge): its own
+// working dir + runner/model, the panel fields cleared, and — for a server-driven
+// member — its resolved profile's credentials/settings overlaid (nil profile = the
+// --multi local path, which keeps the base config's ambient credentials).
+func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 	mc := *c.cfg
 	mc.Dir = dir
 	mc.Runner = m.Runner
 	mc.Model = m.Model
 	mc.Multi = nil
 	mc.Judge = nil
-	applyMemberProfile(&mc, m.Profile)
+	if p := m.Profile; p != nil {
+		mc.Token = p.Token
+		mc.Effort = p.Effort
+		mc.APIProvider = p.APIProvider
+		mc.APIBaseURL = p.APIBaseURL
+		mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+		mc.RunnerProfileID = p.RunnerProfileID
+		mc.RunnerProfileTitle = p.Title
+	}
+	return mc
+}
+
+// produceMember reviews a single panel member in its worktree and returns the
+// filled draft + R*.md paths (not yet uploaded; the worktree stays alive).
+func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (*memberOutput, error) {
+	mc := c.memberConfig(dir, m)
 
 	rr, err := c.runnerFactory(&mc)
 	if err != nil {
@@ -264,13 +281,7 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 		return nil, fmt.Errorf("stage members: %w", err)
 	}
 
-	jc := *c.cfg
-	jc.Dir = judgeDir
-	jc.Runner = c.cfg.Judge.Runner
-	jc.Model = c.cfg.Judge.Model
-	jc.Multi = nil
-	jc.Judge = nil
-	applyMemberProfile(&jc, c.cfg.Judge.Profile)
+	jc := c.memberConfig(judgeDir, *c.cfg.Judge)
 
 	rr, err := c.runnerFactory(&jc)
 	if err != nil {

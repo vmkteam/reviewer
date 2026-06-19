@@ -169,24 +169,6 @@ type MemberSpec struct {
 	Profile *ResolvedProfile
 }
 
-// applyMemberProfile overlays a server-driven member's resolved profile onto a
-// per-member config so it runs with its own credentials and settings and records
-// its own snapshot. No-op for the --multi local path (nil profile), which inherits
-// the base config's ambient credentials. Runner/Model are set by the caller (they
-// also drive the member label), so only the profile-specific fields are applied.
-func applyMemberProfile(mc *Config, p *ResolvedProfile) {
-	if p == nil {
-		return
-	}
-	mc.Token = p.Token
-	mc.Effort = p.Effort
-	mc.APIProvider = p.APIProvider
-	mc.APIBaseURL = p.APIBaseURL
-	mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
-	mc.RunnerProfileID = p.RunnerProfileID
-	mc.RunnerProfileTitle = p.Title
-}
-
 // ParseMulti parses the --multi value: a comma-separated list of runner:model
 // members, e.g. "codex:gpt-5.5,opencode:openrouter/deepseek/deepseek-v4-pro". Only
 // the first colon separates runner from model (models may contain slashes); a bare
