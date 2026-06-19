@@ -441,7 +441,7 @@ const tabs = computed(() => {
   }))
   const allTabs = [...rfTabs, { key: 'issues', label: 'Issues', color: '' }]
   if (review.value?.members && review.value.members.length) {
-    allTabs.push({ key: 'panel', label: 'Panel', color: '' })
+    allTabs.push({ key: 'multireview', label: 'Multi-review', color: '' })
   }
   if (previousCount.value >= 2) {
     allTabs.push({ key: 'previous', label: 'Previous Reviews', color: '' })
