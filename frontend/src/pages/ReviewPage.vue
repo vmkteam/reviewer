@@ -132,6 +132,9 @@
         </div>
       </div>
 
+      <!-- Panel breakdown (fusion reviews only) -->
+      <PanelBreakdownCard v-if="review.members && review.members.length" :review="review" />
+
       <!-- Tabs -->
       <TabGroup :selected-index="selectedTab" @change="onTabChange">
         <TabList class="flex gap-1 border-b border-edge mb-6 overflow-x-auto">
@@ -288,6 +291,7 @@ import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
 import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
+import PanelBreakdownCard from '../components/PanelBreakdownCard.vue'
 import ReviewsTable from '../components/ReviewsTable.vue'
 import { useFormat, reviewTypes } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'

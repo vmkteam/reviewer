@@ -110,6 +110,7 @@
                     >{{ issue.file }}<span v-if="issue.lines" class="text-fg-subtle">:{{ issue.lines }}</span></a>
                     <template v-else>{{ issue.file }}<span v-if="issue.lines">:{{ issue.lines }}</span></template>
                   </span>
+                  <ProvenanceBadge :sources="issue.sources" />
                 </div>
                 <!-- Comment (moved up) -->
                 <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-edge-light" @click.stop>
@@ -169,6 +170,7 @@ import SeverityBadge from './SeverityBadge.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import PTextarea from './PTextarea.vue'
 import InfoBadge from './InfoBadge.vue'
+import ProvenanceBadge from './ProvenanceBadge.vue'
 import FeedbackButtons from './FeedbackButtons.vue'
 import { StatusFalsePositive } from '../constants/status'
 import { useFormat } from '../composables/useFormat'
