@@ -1,5 +1,6 @@
 /* Code generated from jsonrpc schema by rpcgen v2.5.x with typescript v1.0.0; DO NOT EDIT. */
 /* eslint-disable */
+// @ts-nocheck
 export interface IIssue {
   issueId: number,
   reviewId: number,
@@ -16,8 +17,7 @@ export interface IIssue {
   suggestedFix?: string,
   statusId: number,
   comment?: string,
-  sources: Array<string> // Sources is per-issue provenance on a fusion review — the model labels that
-flagged it (or "judge" for a verified net-new). Empty for single/member issues.
+  sources: Array<string> // fusion provenance: model labels that flagged the issue (empty for single/member)
 }
 
 export interface IIssueFilters {
@@ -109,13 +109,10 @@ export interface IReview {
   effortMinutes?: number,
   aiSlopScore?: number,
   lastVersionReviewId?: number,
-  reviewRole: string, // Multi-review: a single|member|fusion role. A member points at its fusion via
-ParentReviewID. A fusion exposes its panel breakdown — the member children
-(Members) and the summed panel cost (PanelCostUsd, the judge's own cost is in
-ModelInfo). All three are empty/zero for a plain single review.
+  reviewRole: string, // single|member|fusion (member points at its fusion via parentReviewId)
   parentReviewId?: number,
-  members: Array<IPanelMember>,
-  panelCostUsd: number
+  members: Array<IPanelMember>, // fusion panel breakdown: the member children
+  panelCostUsd: number // summed member cost (judge's own cost is in modelInfo)
 }
 
 export interface IReviewArchiveAcceptedRisksParams {

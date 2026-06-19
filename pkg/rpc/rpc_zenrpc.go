@@ -513,12 +513,9 @@ func (ReviewService) SMD() smd.ServiceInfo {
 							Type:     smd.Integer,
 						},
 						{
-							Name: "reviewRole",
-							Description: `Multi-review: a single|member|fusion role. A member points at its fusion via
-ParentReviewID. A fusion exposes its panel breakdown — the member children
-(Members) and the summed panel cost (PanelCostUsd, the judge's own cost is in
-ModelInfo). All three are empty/zero for a plain single review.`,
-							Type: smd.String,
+							Name:        "reviewRole",
+							Description: `single|member|fusion (member points at its fusion via parentReviewId)`,
+							Type:        smd.String,
 						},
 						{
 							Name:     "parentReviewId",
@@ -526,15 +523,17 @@ ModelInfo). All three are empty/zero for a plain single review.`,
 							Type:     smd.Integer,
 						},
 						{
-							Name: "members",
-							Type: smd.Array,
+							Name:        "members",
+							Description: `fusion panel breakdown: the member children`,
+							Type:        smd.Array,
 							Items: map[string]string{
 								"$ref": "#/definitions/PanelMember",
 							},
 						},
 						{
-							Name: "panelCostUsd",
-							Type: smd.Float,
+							Name:        "panelCostUsd",
+							Description: `summed member cost (judge's own cost is in modelInfo)`,
+							Type:        smd.Float,
 						},
 					},
 					Definitions: map[string]smd.Definition{
@@ -876,10 +875,9 @@ ModelInfo). All three are empty/zero for a plain single review.`,
 									Type:     smd.String,
 								},
 								{
-									Name: "sources",
-									Description: `Sources is per-issue provenance on a fusion review — the model labels that
-flagged it (or "judge" for a verified net-new). Empty for single/member issues.`,
-									Type: smd.Array,
+									Name:        "sources",
+									Description: `fusion provenance: model labels that flagged the issue (empty for single/member)`,
+									Type:        smd.Array,
 									Items: map[string]string{
 										"type": smd.String,
 									},
@@ -1069,10 +1067,9 @@ flagged it (or "judge" for a verified net-new). Empty for single/member issues.`
 									Type:     smd.String,
 								},
 								{
-									Name: "sources",
-									Description: `Sources is per-issue provenance on a fusion review — the model labels that
-flagged it (or "judge" for a verified net-new). Empty for single/member issues.`,
-									Type: smd.Array,
+									Name:        "sources",
+									Description: `fusion provenance: model labels that flagged the issue (empty for single/member)`,
+									Type:        smd.Array,
 									Items: map[string]string{
 										"type": smd.String,
 									},

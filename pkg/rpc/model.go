@@ -216,14 +216,10 @@ type Review struct {
 	AiSlopScore         *float32     `json:"aiSlopScore,omitempty"`
 	LastVersionReviewID *int         `json:"lastVersionReviewId,omitempty"`
 
-	// Multi-review: a single|member|fusion role. A member points at its fusion via
-	// ParentReviewID. A fusion exposes its panel breakdown — the member children
-	// (Members) and the summed panel cost (PanelCostUsd, the judge's own cost is in
-	// ModelInfo). All three are empty/zero for a plain single review.
-	ReviewRole     string        `json:"reviewRole"`
+	ReviewRole     string        `json:"reviewRole"` // single|member|fusion (member points at its fusion via parentReviewId)
 	ParentReviewID *int          `json:"parentReviewId,omitempty"`
-	Members        []PanelMember `json:"members,omitempty"`
-	PanelCostUsd   float64       `json:"panelCostUsd,omitempty"`
+	Members        []PanelMember `json:"members,omitempty"`      // fusion panel breakdown: the member children
+	PanelCostUsd   float64       `json:"panelCostUsd,omitempty"` // summed member cost (judge's own cost is in modelInfo)
 }
 
 // PanelMember — одно ревью-участник панели в разборе fusion-ревью.
@@ -310,24 +306,22 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 
 // Issue — строка таблицы issues в табе Issues.
 type Issue struct {
-	ID           int     `json:"issueId"`
-	ReviewID     int     `json:"reviewId"`
-	LocalID      *string `json:"localId"`
-	Title        string  `json:"title"`
-	Severity     string  `json:"severity"`
-	Description  string  `json:"description"`
-	Content      string  `json:"content"`
-	File         string  `json:"file"`
-	Lines        string  `json:"lines"`
-	IssueType    string  `json:"issueType"`
-	ReviewType   string  `json:"reviewType"`
-	CommitHash   string  `json:"commitHash"`
-	SuggestedFix *string `json:"suggestedFix,omitempty"`
-	StatusID     int     `json:"statusId"`
-	Comment      *string `json:"comment"`
-	// Sources is per-issue provenance on a fusion review — the model labels that
-	// flagged it (or "judge" for a verified net-new). Empty for single/member issues.
-	Sources []string `json:"sources,omitempty"`
+	ID           int      `json:"issueId"`
+	ReviewID     int      `json:"reviewId"`
+	LocalID      *string  `json:"localId"`
+	Title        string   `json:"title"`
+	Severity     string   `json:"severity"`
+	Description  string   `json:"description"`
+	Content      string   `json:"content"`
+	File         string   `json:"file"`
+	Lines        string   `json:"lines"`
+	IssueType    string   `json:"issueType"`
+	ReviewType   string   `json:"reviewType"`
+	CommitHash   string   `json:"commitHash"`
+	SuggestedFix *string  `json:"suggestedFix,omitempty"`
+	StatusID     int      `json:"statusId"`
+	Comment      *string  `json:"comment"`
+	Sources      []string `json:"sources,omitempty"` // fusion provenance: model labels that flagged the issue (empty for single/member)
 }
 
 func newIssue(in *reviewer.Issue) *Issue {
