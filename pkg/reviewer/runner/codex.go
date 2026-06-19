@@ -32,7 +32,10 @@ type ExecCodexRunner struct {
 	Dir             string
 	SessionID       string // if set, resumes the thread via `exec resume <id>`
 	ContinueSession bool   // codex has no auto-continue; kept for interface symmetry
-	Log             *slog.Logger
+	// Token is the runner-profile API key injected into the subprocess as
+	// OPENAI_API_KEY when that env var is not already set (env wins).
+	Token string
+	Log   *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -82,7 +85,7 @@ func (r *ExecCodexRunner) buildArgs() []string {
 func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface significant events (tool commands, failures) live as codex streams.
-	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
+	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, credEnv(envOpenAIAPIKey, r.Token), func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 

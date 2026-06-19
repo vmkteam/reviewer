@@ -53,8 +53,9 @@ type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
 }
 
-// ReviewConfig is the resolved runner configuration returned by the reviewctl RPC.
-type ReviewConfig struct {
+// ResolvedProfile is one resolved runner profile from the server (with its real
+// token): the primary, a panel member, or the judge.
+type ResolvedProfile struct {
 	RunnerProfileID int                 `json:"runnerProfileId"`
 	Title           string              `json:"title"`
 	Runner          string              `json:"runner"`
@@ -66,6 +67,15 @@ type ReviewConfig struct {
 	Params          RunnerProfileParams `json:"params"`
 }
 
+// ReviewConfig is the resolved multi-review panel returned by the reviewctl RPC:
+// the primary runner, the additional panel members and the optional judge. The
+// full run set is [Primary] + Panel; a nil Judge means single review via Primary.
+type ReviewConfig struct {
+	Primary *ResolvedProfile
+	Panel   []*ResolvedProfile
+	Judge   *ResolvedProfile
+}
+
 // client builds a generated reviewctl client pointed at serverURL. The endpoint
 // (server URL + the RPC path) is only known per call, so it is built on demand
 // over the shared httpClient (which keeps the 10s timeout).
@@ -73,15 +83,13 @@ func (c *PromptClient) client(serverURL string) *reviewctlclient.Client {
 	return reviewctlclient.NewClient(strings.TrimRight(serverURL, "/")+reviewctlRPCPath, c.httpClient)
 }
 
-// FetchConfig fetches the resolved runner profile for the project key over the
-// internal reviewctl RPC.
-func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey string) (*ReviewConfig, error) {
-	cfg, err := c.client(serverURL).Reviewctl.ReviewConfig(ctx, projectKey)
-	if err != nil {
-		return nil, err
+// newResolvedProfile maps a generated client Config to a ResolvedProfile,
+// returning nil for nil input (an absent judge).
+func newResolvedProfile(cfg *reviewctlclient.Config) *ResolvedProfile {
+	if cfg == nil {
+		return nil
 	}
-
-	rc := &ReviewConfig{
+	return &ResolvedProfile{
 		RunnerProfileID: cfg.RunnerProfileID,
 		Title:           cfg.Title,
 		Runner:          cfg.Runner,
@@ -92,8 +100,39 @@ func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey st
 		Token:           cfg.Token,
 		Params:          RunnerProfileParams{AllowDangerousPermissions: cfg.Params.AllowDangerousPermissions},
 	}
-	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey, "profileId", rc.RunnerProfileID, "runner", rc.Runner, "model", rc.Model)
+}
+
+// FetchConfig fetches the resolved multi-review panel (primary + panel + judge)
+// for the project key over the internal reviewctl RPC.
+func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey string) (*ReviewConfig, error) {
+	setup, err := c.client(serverURL).Reviewctl.ReviewConfig(ctx, projectKey)
+	if err != nil {
+		return nil, err
+	}
+
+	rc := &ReviewConfig{
+		Primary: newResolvedProfile(setup.Primary),
+		Judge:   newResolvedProfile(setup.Judge),
+	}
+	for i := range setup.Panel {
+		rc.Panel = append(rc.Panel, newResolvedProfile(&setup.Panel[i]))
+	}
+
+	judging := rc.Judge != nil
+	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey,
+		"panelMembers", 1+len(rc.Panel), "judging", judging)
 	return rc, nil
+}
+
+// FetchFusionPrompt fetches the built-in judge/synthesizer prompt over the
+// internal reviewctl RPC.
+func (c *PromptClient) FetchFusionPrompt(ctx context.Context, serverURL, projectKey string) (string, error) {
+	prompt, err := c.client(serverURL).Reviewctl.FusionPrompt(ctx, projectKey)
+	if err != nil {
+		return "", err
+	}
+	c.log.InfoContext(ctx, "fetched fusion prompt", "projectKey", projectKey, "length", len(prompt))
+	return prompt, nil
 }
 
 // FetchPrompt fetches the assembled prompt for the given project key over the

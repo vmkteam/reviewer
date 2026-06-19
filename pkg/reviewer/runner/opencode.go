@@ -73,8 +73,9 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 // Run executes `opencode run --format json` and parses the streamed events.
 func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
+	// opencode reads its own stored provider credentials, so no token is injected.
 	// Surface significant events (tool calls, per-step usage) live as opencode streams.
-	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, nil, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 

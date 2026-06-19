@@ -262,7 +262,11 @@ type ExecClaudeRunner struct {
 	Dir             string
 	SessionID       string // if set, uses --resume to reuse prompt cache
 	ContinueSession bool   // if true, uses --continue to resume last session
-	Log             *slog.Logger
+	// Token is the runner-profile API key injected into the subprocess as
+	// ANTHROPIC_API_KEY when that env var is not already set (env wins). Passing it
+	// per-process keeps concurrent panel members from racing on the global env.
+	Token string
+	Log   *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -311,7 +315,7 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface tool calls live as claude streams its NDJSON events.
-	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
+	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, credEnv(envAnthropicAPIKey, r.Token), func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -498,13 +502,36 @@ func (w *lineWriter) flush() {
 // focused on argv and result parsing. When onLine is non-nil it receives each
 // stdout line as it streams, so a runner can surface significant events live
 // (e.g. tool calls from a JSONL agent stream) instead of only after completion.
-func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string, onLine func([]byte)) *runOutput {
+// Credential env var names CLI runners read their API key from.
+const (
+	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
+	envOpenAIAPIKey    = "OPENAI_API_KEY"
+)
+
+// credEnv returns the single credential env entry (VAR=token) to inject into a
+// runner subprocess, or nil when the token is empty or VAR is already set in the
+// ambient environment — the operator's env wins, the profile token is a fallback.
+// Injecting per-process (via cmd.Env) instead of os.Setenv lets concurrent panel
+// members run with different tokens without racing on the shared process env.
+func credEnv(varName, token string) []string {
+	if token == "" || os.Getenv(varName) != "" {
+		return nil
+	}
+	return []string{varName + "=" + token}
+}
+
+func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string, extraEnv []string, onLine func([]byte)) *runOutput {
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
+	// credEnv only injects a var absent from the ambient env, so there is never a
+	// duplicate key to resolve here; nil extraEnv leaves cmd.Env nil = inherit.
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 
 	out := &runOutput{}
 	var lw *lineWriter

@@ -176,13 +176,20 @@ func (c *Controller) finishPanel(ctx context.Context, base, commit string, outpu
 // it degrades to a single review from the primary member so CI never goes red on
 // a judge flap.
 func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*memberOutput) (int, error) {
+	// The judge prompt is a server built-in (served via the reviewctl RPC) so a
+	// future per-project override needs no client change — same as the member prompt.
+	fusionPrompt, err := c.prompt.FetchFusionPrompt(ctx, c.cfg.URL, c.cfg.Key)
+	if err != nil {
+		return 0, fmt.Errorf("fetch fusion prompt: %w", err)
+	}
+
 	judgeDir := filepath.Join(base, "wt-judge")
-	if err := c.gitWorktreeAdd(ctx, judgeDir, commit); err != nil {
+	if err = c.gitWorktreeAdd(ctx, judgeDir, commit); err != nil {
 		return 0, fmt.Errorf("judge worktree add: %w", err)
 	}
 	defer c.gitWorktreeRemove(ctx, judgeDir)
 
-	fusion, err := c.runJudge(ctx, judgeDir, outputs)
+	fusion, err := c.runJudge(ctx, judgeDir, fusionPrompt, outputs)
 	if err != nil {
 		c.log.ErrorContext(ctx, "judge failed, promoting primary member to single", "err", err)
 		return c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
@@ -217,6 +224,7 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 	mc.Model = m.Model
 	mc.Multi = nil
 	mc.Judge = nil
+	applyMemberProfile(&mc, m.Profile)
 
 	rr, err := c.runnerFactory(&mc)
 	if err != nil {
@@ -251,7 +259,7 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 // runJudge stages each member's outputs into members/<label>/ inside the judge
 // worktree, then runs the judge with the fusion prompt (one retry) and returns
 // the fused draft + R*.md.
-func (c *Controller) runJudge(ctx context.Context, judgeDir string, outputs []*memberOutput) (*memberOutput, error) {
+func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (*memberOutput, error) {
 	if err := stageMembers(judgeDir, outputs); err != nil {
 		return nil, fmt.Errorf("stage members: %w", err)
 	}
@@ -262,12 +270,13 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir string, outputs []*m
 	jc.Model = c.cfg.Judge.Model
 	jc.Multi = nil
 	jc.Judge = nil
+	applyMemberProfile(&jc, c.cfg.Judge.Profile)
 
 	rr, err := c.runnerFactory(&jc)
 	if err != nil {
 		return nil, fmt.Errorf("build judge runner: %w", err)
 	}
-	prompt := SubstituteVariables(reviewer.FusionPrompt, &jc)
+	prompt := SubstituteVariables(fusionPrompt, &jc)
 
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ { // initial run + one retry

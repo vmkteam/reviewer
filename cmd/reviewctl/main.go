@@ -135,11 +135,16 @@ func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw, judgeRaw string, l
 
 	var rr runner.ReviewRunner
 	if len(cfg.Multi) == 0 {
+		// No local --multi override: fetch server config. applyReviewConfig applies
+		// the primary to cfg and, when the project has a judge, populates cfg.Multi
+		// (the [primary] + panel members) + cfg.Judge — a server-driven panel.
 		if err = applyReviewConfig(cmd, cfg, log); err != nil {
 			return err
 		}
-		if rr, err = buildRunner(cfg, log); err != nil {
-			return err
+		if len(cfg.Multi) == 0 { // still single after server config
+			if rr, err = buildRunner(cfg, log); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -147,69 +152,84 @@ func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw, judgeRaw string, l
 	return ctl.NewController(cfg, rr, log, ctl.WithRunnerFactory(factory)).Review(cmd.Context())
 }
 
-// applyReviewConfig fetches the project's runner profile from the server and
-// applies it to cfg. Explicit flags win over the profile; the profile fills the
-// rest, so CI needs only the image, project key, server URL and credentials.
+// applyReviewConfig fetches the project's resolved panel from the server and
+// applies it to cfg. The primary profile fills the single-review runner fields
+// (explicit flags still win); when the project configures a judge, the panel
+// members ([primary] + additional) and the judge are loaded into cfg so the run
+// fans out server-driven. CI needs only the image, project key, server URL and
+// credentials.
 func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) error {
 	rc, err := ctl.NewPromptClient(log).FetchConfig(cmd.Context(), cfg.URL, cfg.Key)
 	if err != nil {
 		return fmt.Errorf("fetch review config: %w", err)
 	}
 
+	p := rc.Primary // never nil: the server returns ErrNoRunnerProfile otherwise
 	fl := cmd.Flags()
-	cfg.RunnerProfileID = rc.RunnerProfileID
-	cfg.RunnerProfileTitle = rc.Title
-	cfg.Token = rc.Token
-	if !fl.Changed("runner") && rc.Runner != "" {
-		cfg.Runner = rc.Runner
+	cfg.RunnerProfileID = p.RunnerProfileID
+	cfg.RunnerProfileTitle = p.Title
+	cfg.Token = p.Token
+	if !fl.Changed("runner") && p.Runner != "" {
+		cfg.Runner = p.Runner
 	}
-	if !fl.Changed("model") && rc.Model != "" {
-		cfg.Model = rc.Model
+	if !fl.Changed("model") && p.Model != "" {
+		cfg.Model = p.Model
 	}
-	if !fl.Changed("effort") && rc.Effort != "" {
-		cfg.Effort = rc.Effort
+	if !fl.Changed("effort") && p.Effort != "" {
+		cfg.Effort = p.Effort
 	}
-	if !fl.Changed("api-provider") && rc.APIProvider != "" {
-		cfg.APIProvider = rc.APIProvider
+	if !fl.Changed("api-provider") && p.APIProvider != "" {
+		cfg.APIProvider = p.APIProvider
 	}
-	if !fl.Changed("api-base-url") && rc.APIBaseURL != "" {
-		cfg.APIBaseURL = rc.APIBaseURL
+	if !fl.Changed("api-base-url") && p.APIBaseURL != "" {
+		cfg.APIBaseURL = p.APIBaseURL
 	}
 	if !fl.Changed("allow-dangerous-permissions") {
-		cfg.AllowDangerousPermissions = rc.Params.AllowDangerousPermissions
+		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+	}
+
+	// A configured judge turns multi-review on: run the full panel ([primary] +
+	// additional members), then fuse. No judge → cfg.Multi stays empty → single.
+	if rc.Judge != nil {
+		cfg.Multi = serverPanelMembers(rc)
+		cfg.Judge = profileMember(rc.Judge)
 	}
 
 	log.InfoContext(cmd.Context(), "applied runner profile",
-		"profileId", rc.RunnerProfileID, "title", rc.Title,
-		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", cfg.APIProvider)
+		"profileId", p.RunnerProfileID, "title", p.Title,
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", cfg.APIProvider,
+		"panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
 	return nil
 }
 
-// applyTokenFallback exports the runner profile's token to the credential env
-// var a CLI runner reads, but only when that env var is empty — env always wins.
-// The direct runner consumes the token directly (see buildDirectRunner).
-func applyTokenFallback(cfg *ctl.Config) {
-	if cfg.Token == "" {
-		return
+// profileMember wraps a resolved profile as a panel MemberSpec carrying that
+// profile, so the member runs with its own credentials/settings and records its
+// own snapshot.
+func profileMember(p *ctl.ResolvedProfile) *ctl.MemberSpec {
+	return &ctl.MemberSpec{Runner: p.Runner, Model: p.Model, Profile: p}
+}
+
+// serverPanelMembers builds the full member list for a server-driven panel: the
+// primary runner first, then the additional panel members (the [primary] + panel
+// run set).
+func serverPanelMembers(rc *ctl.ReviewConfig) []ctl.MemberSpec {
+	members := make([]ctl.MemberSpec, 0, 1+len(rc.Panel))
+	members = append(members, *profileMember(rc.Primary))
+	for _, p := range rc.Panel {
+		members = append(members, *profileMember(p))
 	}
-	switch cfg.Runner {
-	case "", runner.RunnerClaude:
-		if os.Getenv(envAnthropicAPIKey) == "" {
-			_ = os.Setenv(envAnthropicAPIKey, cfg.Token)
-		}
-	case runner.RunnerCodex:
-		if os.Getenv(envOpenAIAPIKey) == "" {
-			_ = os.Setenv(envOpenAIAPIKey, cfg.Token)
-		}
-	}
+	return members
 }
 
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	cfg.ResolveDefaults()
-	applyTokenFallback(cfg)
+	// The profile token is passed to the runner as a per-process credential (the
+	// runner injects it only when the ambient env var is absent — env wins). This
+	// replaces a global os.Setenv so concurrent panel members with different tokens
+	// don't race. The direct runner consumes the token directly (buildDirectRunner).
 	switch cfg.Runner {
 	case "", runner.RunnerClaude:
-		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, Log: log}, nil
 	case runner.RunnerOpenCode:
 		return &runner.ExecOpenCodeRunner{
 			Model:                     cfg.Model,
@@ -220,7 +240,7 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 			Log:                       log,
 		}, nil
 	case runner.RunnerCodex:
-		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, Log: log}, nil
 	case runner.RunnerDirect:
 		return buildDirectRunner(cfg, log)
 	default:

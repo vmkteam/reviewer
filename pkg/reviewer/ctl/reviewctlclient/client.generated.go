@@ -55,6 +55,12 @@ type Config struct {
 	Token           string              `json:"token"`
 }
 
+type ReviewSetup struct {
+	Judge   *Config  `json:"judge,omitempty"`
+	Panel   []Config `json:"panel"`
+	Primary *Config  `json:"primary,omitempty"`
+}
+
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
 }
@@ -67,6 +73,33 @@ func newClientReviewctl(client *rpcClient) *svcReviewctl {
 	return &svcReviewctl{
 		client: client,
 	}
+}
+
+var (
+	ErrReviewctlFusionPrompt400 = zenrpc.NewError(400, fmt.Errorf("invalid project key"))
+)
+
+// FusionPrompt returns the built-in judge/synthesizer prompt for multi-review.
+// The algorithm is project-agnostic, so the same built-in is served for every
+// project; the projectKey is validated for a consistent contract with Prompt and
+// to leave room for a per-project override later.
+func (c *svcReviewctl) FusionPrompt(ctx context.Context, projectKey string) (res string, err error) {
+	_req := struct {
+		ProjectKey string
+	}{
+		ProjectKey: projectKey,
+	}
+
+	err = c.client.call(ctx, "reviewctl.FusionPrompt", _req, &res)
+
+	switch v := err.(type) {
+	case *zenrpc.Error:
+		if v.Code == 400 {
+			err = ErrReviewctlFusionPrompt400
+		}
+	}
+
+	return
 }
 
 var (
@@ -103,9 +136,11 @@ var (
 	ErrReviewctlReviewConfig500 = zenrpc.NewError(500, fmt.Errorf("internal error"))
 )
 
-// ReviewConfig resolves the runner profile for a project key — the project's pinned
-// profile or the default — and returns the run config including the real token.
-func (c *svcReviewctl) ReviewConfig(ctx context.Context, projectKey string) (res *Config, err error) {
+// ReviewConfig resolves the multi-review panel for a project key: the primary
+// runner (pinned profile or default), the additional panel members
+// (runnerProfileIds) and the optional judge (judgeRunnerProfileId). Each config
+// includes the real token. A nil judge means single review via the primary.
+func (c *svcReviewctl) ReviewConfig(ctx context.Context, projectKey string) (res *ReviewSetup, err error) {
 	_req := struct {
 		ProjectKey string
 	}{

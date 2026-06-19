@@ -1,6 +1,7 @@
 package reviewer
 
 import (
+	"context"
 	"testing"
 
 	"reviewsrv/pkg/db"
@@ -76,6 +77,91 @@ func TestDBProjectManager_List(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "created project should appear in list")
+}
+
+func TestDBProjectManager_ReviewProfiles(t *testing.T) {
+	pm, dbc := newTestProjectManager(t)
+
+	// The generated test.RunnerProfile cleaner deletes via t.Context(), which is
+	// canceled before cleanups run; delete with a background context instead. The
+	// profile FK is cleared first because the project (deleted by its own cleaner)
+	// goes away earlier — subtest cleanups run before this outer-test cleanup.
+	mk := func(title, rn string, status int) *db.RunnerProfile {
+		rp, _ := test.RunnerProfile(t, dbc, &db.RunnerProfile{
+			Title: title, Runner: rn, Token: Ptr("tok-" + title), StatusID: status,
+		})
+		t.Cleanup(func() {
+			_, _ = dbc.ModelContext(context.Background(), &db.RunnerProfile{ID: rp.ID}).WherePK().Delete()
+		})
+		return rp
+	}
+
+	t.Run("panel with judge resolves primary, ordered members, judge", func(t *testing.T) {
+		primary := mk("primary", "claude", db.StatusEnabled)
+		m1 := mk("m1", "codex", db.StatusEnabled)
+		m2 := mk("m2", "opencode", db.StatusEnabled)
+		judge := mk("judge", "claude", db.StatusEnabled)
+
+		pr, cl := test.Project(t, dbc, &db.Project{
+			RunnerProfileID:      Ptr(primary.ID),
+			RunnerProfileIDs:     db.ProjectRunnerProfileIDs{m1.ID, m2.ID},
+			JudgeRunnerProfileID: Ptr(judge.ID),
+			StatusID:             db.StatusEnabled,
+		}, test.WithProjectRelations, test.WithFakeProject)
+		t.Cleanup(cl)
+
+		gotPrimary, panel, gotJudge, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotPrimary)
+		assert.Equal(t, primary.ID, gotPrimary.ID)
+		assert.Equal(t, "tok-primary", *gotPrimary.Token, "real token is returned")
+		require.Len(t, panel, 2)
+		assert.Equal(t, m1.ID, panel[0].ID, "members keep runnerProfileIds order")
+		assert.Equal(t, m2.ID, panel[1].ID)
+		require.NotNil(t, gotJudge)
+		assert.Equal(t, judge.ID, gotJudge.ID)
+	})
+
+	t.Run("no judge → judge nil, no panel (single review)", func(t *testing.T) {
+		primary := mk("primarySingle", "claude", db.StatusEnabled)
+		pr, cl := test.Project(t, dbc, &db.Project{
+			RunnerProfileID: Ptr(primary.ID),
+			StatusID:        db.StatusEnabled,
+		}, test.WithProjectRelations, test.WithFakeProject)
+		t.Cleanup(cl)
+
+		gotPrimary, panel, gotJudge, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotPrimary)
+		assert.Empty(t, panel)
+		assert.Nil(t, gotJudge)
+	})
+
+	t.Run("disabled panel member is skipped", func(t *testing.T) {
+		primary := mk("primaryDis", "claude", db.StatusEnabled)
+		live := mk("live", "codex", db.StatusEnabled)
+		disabled := mk("disabled", "claude", db.StatusDisabled)
+
+		pr, cl := test.Project(t, dbc, &db.Project{
+			RunnerProfileID:  Ptr(primary.ID),
+			RunnerProfileIDs: db.ProjectRunnerProfileIDs{disabled.ID, live.ID},
+			StatusID:         db.StatusEnabled,
+		}, test.WithProjectRelations, test.WithFakeProject)
+		t.Cleanup(cl)
+
+		_, panel, _, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		require.NoError(t, err)
+		require.Len(t, panel, 1, "the disabled member is dropped, not fatal")
+		assert.Equal(t, live.ID, panel[0].ID)
+	})
+
+	t.Run("unknown project key → nil primary", func(t *testing.T) {
+		primary, panel, judge, err := pm.ReviewProfiles(t.Context(), "00000000-0000-0000-0000-000000000000")
+		require.NoError(t, err)
+		assert.Nil(t, primary)
+		assert.Nil(t, panel)
+		assert.Nil(t, judge)
+	})
 }
 
 func TestDBProjectManager_Prompt(t *testing.T) {

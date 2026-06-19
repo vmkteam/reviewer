@@ -11,11 +11,12 @@ import (
 )
 
 var RPC = struct {
-	Service struct{ ReviewConfig, Prompt string }
+	Service struct{ ReviewConfig, Prompt, FusionPrompt string }
 }{
-	Service: struct{ ReviewConfig, Prompt string }{
+	Service: struct{ ReviewConfig, Prompt, FusionPrompt string }{
 		ReviewConfig: "reviewconfig",
 		Prompt:       "prompt",
+		FusionPrompt: "fusionprompt",
 	},
 }
 
@@ -23,8 +24,10 @@ func (Service) SMD() smd.ServiceInfo {
 	return smd.ServiceInfo{
 		Methods: map[string]smd.Service{
 			"ReviewConfig": {
-				Description: `ReviewConfig resolves the runner profile for a project key — the project's pinned
-profile or the default — and returns the run config including the real token.`,
+				Description: `ReviewConfig resolves the multi-review panel for a project key: the primary
+runner (pinned profile or default), the additional panel members
+(runnerProfileIds) and the optional judge (judgeRunnerProfileId). Each config
+includes the real token. A nil judge means single review via the primary.`,
 				Parameters: []smd.JSONSchema{
 					{
 						Name:        "projectKey",
@@ -33,50 +36,74 @@ profile or the default — and returns the run config including the real token.`
 					},
 				},
 				Returns: smd.JSONSchema{
-					Description: `Config`,
+					Description: `ReviewSetup`,
 					Optional:    true,
 					Type:        smd.Object,
-					TypeName:    "Config",
+					TypeName:    "ReviewSetup",
 					Properties: smd.PropertyList{
 						{
-							Name: "runnerProfileId",
-							Type: smd.Integer,
+							Name:     "primary",
+							Optional: true,
+							Ref:      "#/definitions/Config",
+							Type:     smd.Object,
 						},
 						{
-							Name: "title",
-							Type: smd.String,
+							Name: "panel",
+							Type: smd.Array,
+							Items: map[string]string{
+								"$ref": "#/definitions/Config",
+							},
 						},
 						{
-							Name: "runner",
-							Type: smd.String,
-						},
-						{
-							Name: "model",
-							Type: smd.String,
-						},
-						{
-							Name: "effort",
-							Type: smd.String,
-						},
-						{
-							Name: "apiProvider",
-							Type: smd.String,
-						},
-						{
-							Name: "apiBaseURL",
-							Type: smd.String,
-						},
-						{
-							Name: "token",
-							Type: smd.String,
-						},
-						{
-							Name: "params",
-							Ref:  "#/definitions/RunnerProfileParams",
-							Type: smd.Object,
+							Name:     "judge",
+							Optional: true,
+							Ref:      "#/definitions/Config",
+							Type:     smd.Object,
 						},
 					},
 					Definitions: map[string]smd.Definition{
+						"Config": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "runnerProfileId",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+								{
+									Name: "runner",
+									Type: smd.String,
+								},
+								{
+									Name: "model",
+									Type: smd.String,
+								},
+								{
+									Name: "effort",
+									Type: smd.String,
+								},
+								{
+									Name: "apiProvider",
+									Type: smd.String,
+								},
+								{
+									Name: "apiBaseURL",
+									Type: smd.String,
+								},
+								{
+									Name: "token",
+									Type: smd.String,
+								},
+								{
+									Name: "params",
+									Ref:  "#/definitions/RunnerProfileParams",
+									Type: smd.Object,
+								},
+							},
+						},
 						"RunnerProfileParams": {
 							Type: "object",
 							Properties: smd.PropertyList{
@@ -110,6 +137,26 @@ profile or the default — and returns the run config including the real token.`
 				Errors: map[int]string{
 					400: "invalid project key",
 					500: "internal error",
+				},
+			},
+			"FusionPrompt": {
+				Description: `FusionPrompt returns the built-in judge/synthesizer prompt for multi-review.
+The algorithm is project-agnostic, so the same built-in is served for every
+project; the projectKey is validated for a consistent contract with Prompt and
+to leave room for a per-project override later.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "projectKey",
+						Description: `project key (UUID)`,
+						Type:        smd.String,
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `string`,
+					Type:        smd.String,
+				},
+				Errors: map[int]string{
+					400: "invalid project key",
 				},
 			},
 		},
@@ -159,6 +206,25 @@ func (s Service) Invoke(ctx context.Context, method string, params json.RawMessa
 		}
 
 		resp.Set(s.Prompt(ctx, args.ProjectKey))
+
+	case RPC.Service.FusionPrompt:
+		var args = struct {
+			ProjectKey string `json:"projectKey"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"projectKey"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.FusionPrompt(ctx, args.ProjectKey))
 
 	default:
 		resp = zenrpc.NewResponseError(nil, zenrpc.MethodNotFound, "", nil)

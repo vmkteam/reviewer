@@ -159,12 +159,32 @@ func (c *Config) ResolveDefaults() {
 	}
 }
 
-// MemberSpec is one panel member for a local --multi run: a runner and its model.
-// Per-member tokens/providers come from the server in the full flow; --multi is a
-// debug override that relies on ambient credentials.
+// MemberSpec is one panel member. For the --multi local override it is just a
+// runner and its model (ambient credentials). For a server-driven panel it also
+// carries the member's resolved runner profile (Profile) so the member runs with
+// its own token/effort/provider — that's how per-member credentials reach the run.
 type MemberSpec struct {
-	Runner string
-	Model  string
+	Runner  string
+	Model   string
+	Profile *ResolvedProfile
+}
+
+// applyMemberProfile overlays a server-driven member's resolved profile onto a
+// per-member config so it runs with its own credentials and settings and records
+// its own snapshot. No-op for the --multi local path (nil profile), which inherits
+// the base config's ambient credentials. Runner/Model are set by the caller (they
+// also drive the member label), so only the profile-specific fields are applied.
+func applyMemberProfile(mc *Config, p *ResolvedProfile) {
+	if p == nil {
+		return
+	}
+	mc.Token = p.Token
+	mc.Effort = p.Effort
+	mc.APIProvider = p.APIProvider
+	mc.APIBaseURL = p.APIBaseURL
+	mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+	mc.RunnerProfileID = p.RunnerProfileID
+	mc.RunnerProfileTitle = p.Title
 }
 
 // ParseMulti parses the --multi value: a comma-separated list of runner:model

@@ -46,11 +46,62 @@ func (pm *ProjectManager) RunnerProfile(ctx context.Context, projectKey string) 
 	if p == nil {
 		return nil, nil
 	}
+	return pm.resolvePrimaryProfile(ctx, p)
+}
+
+// resolvePrimaryProfile returns a project's primary runner profile: its pinned
+// profile, or the global default when none is pinned.
+func (pm *ProjectManager) resolvePrimaryProfile(ctx context.Context, p *db.Project) (*db.RunnerProfile, error) {
 	if p.RunnerProfileID != nil {
 		return pm.repo.RunnerProfileByID(ctx, *p.RunnerProfileID)
 	}
 	isDefault := true
 	return pm.repo.OneRunnerProfile(ctx, &db.RunnerProfileSearch{IsDefault: &isDefault})
+}
+
+// ReviewProfiles resolves the full multi-review panel for a project key:
+//   - primary: the project's pinned profile (or the global default) — the primary
+//     runner and the promotion target;
+//   - panel: the additional members (runnerProfileIds, resolved by id with order
+//     and duplicates preserved; ids that no longer resolve — disabled/deleted —
+//     are skipped so a stale entry can't abort the run);
+//   - judge: the judge profile (judgeRunnerProfileId), or nil when unset or no
+//     longer resolvable → single review (its presence is the multi-review trigger).
+//
+// Returns a nil primary when the project key is unknown and no default exists
+// (callers treat that as ErrNoRunnerProfile, exactly like RunnerProfile).
+func (pm *ProjectManager) ReviewProfiles(ctx context.Context, projectKey string) (primary *db.RunnerProfile, panel []*db.RunnerProfile, judge *db.RunnerProfile, err error) {
+	p, err := pm.repo.OneProject(ctx, &db.ProjectSearch{ProjectKey: &projectKey})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if p == nil {
+		return nil, nil, nil, nil
+	}
+
+	primary, err = pm.resolvePrimaryProfile(ctx, p)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for _, id := range p.RunnerProfileIDs {
+		rp, rerr := pm.repo.RunnerProfileByID(ctx, id)
+		if rerr != nil {
+			return nil, nil, nil, rerr
+		}
+		if rp != nil {
+			panel = append(panel, rp)
+		}
+	}
+
+	if p.JudgeRunnerProfileID != nil {
+		judge, err = pm.repo.RunnerProfileByID(ctx, *p.JudgeRunnerProfileID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	return primary, panel, judge, nil
 }
 
 // List returns all enabled projects.
