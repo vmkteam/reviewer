@@ -23,7 +23,6 @@ const panelConcurrency = 4
 // staged it. The worktree dir stays alive until panel cleanup so the judge can
 // read review.json + R*.md from it.
 type memberOutput struct {
-	spec    MemberSpec
 	label   string            // provenance/source label (model-based) → members/<label>/
 	dir     string            // member worktree
 	draft   *rest.ReviewDraft // filled review (role set at upload time)
@@ -260,17 +259,13 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 	if err != nil {
 		return nil, fmt.Errorf("read review: %w", err)
 	}
-	draft.Review.ModelInfo = result.ToModelInfo(mc.Model)
-	draft.Review.ModelInfo.Runner = rr.Name()
-	draft.Review.DurationMs = result.DurationMs
-	draft.Review.RunnerProfile = mc.RunnerProfileSnapshot()
-	c.fillMetadata(draft)
+	c.applyRunResult(draft, &mc, rr, result)
 
 	mdFiles, err := FindMDFiles(mc.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("find md files: %w", err)
 	}
-	return &memberOutput{spec: m, label: label, dir: dir, draft: draft, mdFiles: mdFiles}, nil
+	return &memberOutput{label: label, dir: dir, draft: draft, mdFiles: mdFiles}, nil
 }
 
 // runJudge stages each member's outputs into members/<label>/ inside the judge
@@ -314,11 +309,7 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
 			continue
 		}
-		draft.Review.ModelInfo = result.ToModelInfo(jc.Model)
-		draft.Review.ModelInfo.Runner = rr.Name()
-		draft.Review.DurationMs = result.DurationMs
-		draft.Review.RunnerProfile = jc.RunnerProfileSnapshot()
-		c.fillMetadata(draft)
+		c.applyRunResult(draft, &jc, rr, result)
 
 		mdFiles, err := FindMDFiles(jc.Dir)
 		if err != nil {

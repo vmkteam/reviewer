@@ -117,12 +117,7 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 		return fmt.Errorf("read review: %w", err)
 	}
 
-	draft.Review.ModelInfo = result.ToModelInfo(c.cfg.Model)
-	draft.Review.ModelInfo.Runner = c.runner.Name()
-	draft.Review.DurationMs = result.DurationMs
-	draft.Review.RunnerProfile = c.cfg.RunnerProfileSnapshot()
-
-	c.fillMetadata(draft)
+	c.applyRunResult(draft, c.cfg, c.runner, result)
 
 	if isReviewJSONUnfilled(draft) {
 		skipDetected = true
@@ -250,6 +245,17 @@ func (c *Controller) Comment(ctx context.Context) error {
 
 	c.log.InfoContext(ctx, "comment completed", "reviewId", c.cfg.ReviewID)
 	return nil
+}
+
+// applyRunResult records the run's model/runner/timing metadata and the resolved
+// profile snapshot on a freshly-read draft, then fills MR metadata. Shared by the
+// single review, panel members and the judge so all three populate identically.
+func (c *Controller) applyRunResult(draft *rest.ReviewDraft, cfg *Config, rr runner.ReviewRunner, result *runner.ClaudeResult) {
+	draft.Review.ModelInfo = result.ToModelInfo(cfg.Model)
+	draft.Review.ModelInfo.Runner = rr.Name()
+	draft.Review.DurationMs = result.DurationMs
+	draft.Review.RunnerProfile = cfg.RunnerProfileSnapshot()
+	c.fillMetadata(draft)
 }
 
 func (c *Controller) fillMetadata(draft *rest.ReviewDraft) {

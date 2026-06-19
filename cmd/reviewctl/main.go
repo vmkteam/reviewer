@@ -66,6 +66,11 @@ func main() {
 	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
 	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
 	pf.DurationVar(&cfg.Timeout, "timeout", ctl.EnvDuration("REVIEW_TIMEOUT", 30*time.Minute), "per-member/judge run timeout (e.g. 30m, 1h); 0 = no timeout")
+	// --multi/--judge are local debug overrides (ambient creds, bypass the server
+	// panel config). Keep them working but hidden so they don't become a stable CLI
+	// contract — production multi-review is driven by the project's runner profiles.
+	_ = pf.MarkHidden("multi")
+	_ = pf.MarkHidden("judge")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -169,21 +174,13 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 	cfg.RunnerProfileID = p.RunnerProfileID
 	cfg.RunnerProfileTitle = p.Title
 	cfg.Token = p.Token
-	if !fl.Changed("runner") && p.Runner != "" {
-		cfg.Runner = p.Runner
-	}
-	if !fl.Changed("model") && p.Model != "" {
-		cfg.Model = p.Model
-	}
-	if !fl.Changed("effort") && p.Effort != "" {
-		cfg.Effort = p.Effort
-	}
-	if !fl.Changed("api-provider") && p.APIProvider != "" {
-		cfg.APIProvider = p.APIProvider
-	}
-	if !fl.Changed("api-base-url") && p.APIBaseURL != "" {
-		cfg.APIBaseURL = p.APIBaseURL
-	}
+	// Server profile fills each runner field only when the user didn't pass the
+	// flag and the server has a value — explicit flags always win over the profile.
+	serverDefault(fl.Changed, "runner", p.Runner, &cfg.Runner)
+	serverDefault(fl.Changed, "model", p.Model, &cfg.Model)
+	serverDefault(fl.Changed, "effort", p.Effort, &cfg.Effort)
+	serverDefault(fl.Changed, "api-provider", p.APIProvider, &cfg.APIProvider)
+	serverDefault(fl.Changed, "api-base-url", p.APIBaseURL, &cfg.APIBaseURL)
 	if !fl.Changed("allow-dangerous-permissions") {
 		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
 	}
@@ -200,6 +197,15 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", cfg.APIProvider,
 		"panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
 	return nil
+}
+
+// serverDefault applies a server profile string field to *dst when the user left
+// the flag at its default (changed reports false) and the server has a non-empty
+// value, so an explicit flag always wins over the profile.
+func serverDefault(changed func(string) bool, flag, serverVal string, dst *string) {
+	if !changed(flag) && serverVal != "" {
+		*dst = serverVal
+	}
 }
 
 // profileMember wraps a resolved profile as a panel MemberSpec carrying that
