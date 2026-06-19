@@ -119,27 +119,11 @@
             <button @click="localRunVisible = false" class="text-fg-subtle hover:text-fg-secondary text-xl leading-none">&times;</button>
           </div>
 
-          <!-- Tabs -->
-          <div class="flex border-b border-edge mb-4">
-            <button
-              v-for="(script, idx) in localRunScripts"
-              :key="idx"
-              @click="localRunTab = idx"
-              class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
-              :class="localRunTab === idx ? 'border-accent text-accent' : 'border-transparent text-fg-muted hover:text-fg-secondary'"
-            >{{ script.name }}</button>
-          </div>
-
           <div class="flex-1 overflow-hidden relative">
-            <div
-              v-for="(script, idx) in localRunScripts"
-              :key="idx"
-              v-show="localRunTab === idx"
-              class="flex flex-col gap-3 h-full"
-            >
+            <div class="flex flex-col gap-3 h-full">
               <div class="text-xs text-fg-muted font-mono bg-surface-alt px-2 py-1 rounded self-start">bash</div>
               <div class="overflow-auto rounded-lg border border-edge bg-surface-alt flex-1">
-                <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ script.content }}</code></pre>
+                <pre class="p-3 text-xs leading-relaxed whitespace-pre overflow-x-auto"><code>{{ localRunScript }}</code></pre>
               </div>
               <VButton variant="secondary" size="sm" class="self-end" @click="copyLocalRun">{{ localRunCopied ? 'Copied!' : 'Copy' }}</VButton>
             </div>
@@ -201,67 +185,36 @@ const ciCopied = ref<number | null>(null)
 const localRunVisible = ref(false)
 const localRunProject = ref<ProjectSummary | null>(null)
 const localRunCopied = ref(false)
-const localRunTab = ref(0)
 
-const dockerfileContent = `FROM vmkteam/reviewer:latest AS source
+// Base image (Claude Code CLI + settings + HTML template) is built by
+// vmkteam/docker-claude-ci. We only layer the latest reviewctl release on top.
+// Build this, push to your registry, then point the template's `dockerimage` at it.
+const dockerfileContent = `# Claude Code CLI + settings, built by vmkteam/docker-claude-ci.
+FROM vmkteam/claude-ci:latest
 
-FROM node:20-alpine
-RUN apk add --no-cache git bash curl
-RUN npm install -g @anthropic-ai/claude-code
-
-# Copy reviewctl from reviewer image
-COPY --from=source /reviewctl /usr/local/bin/reviewctl
-
-# Claude Code default settings
-RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json <<'EOF'
-{
-  "permissions": {
-    "deny": [
-      "Read(**/.env)",
-      "Bash(sudo:*)",
-      "Bash(su:*)",
-      "Bash(ssh:*)"
-    ]
-  },
-  "language": "Russian",
-  "autoUpdatesChannel": "latest",
-  "gitAttribution": false,
-  "env": {
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "DISABLE_TELEMETRY": 1,
-    "DISABLE_ERROR_REPORTING": 1
-  }
-}
-EOF
+# reviewctl — always the latest release from GitHub.
+RUN set -eux; \\
+    tag="$(curl -fsSL https://api.github.com/repos/vmkteam/reviewer/releases/latest \\
+      | sed -n 's/.*"tag_name": *"\\([^"]*\\)".*/\\1/p')"; \\
+    curl -fsSL "https://github.com/vmkteam/reviewer/releases/download/\${tag}/reviewctl_\${tag#v}_linux_amd64.tar.gz" \\
+      | tar -xz -C /usr/local/bin reviewctl; \\
+    reviewctl version
 
 WORKDIR /workspace`
 
-const localRunScripts = computed(() => {
+const localRunScript = computed(() => {
   const baseURL = window.location.origin
   const key = localRunProject.value?.projectKey ?? 'YOUR_PROJECT_KEY'
-  const env = `export PROJECT_KEY="${key}"
-export REVIEWSRV_URL="${baseURL}"`
-  const tail = `# Full review: prompt → runner → upload → HTML
+  return `export PROJECT_KEY="${key}"
+export REVIEWSRV_URL="${baseURL}"
+
+# Runner & model come from the project's runner profile (configured on the server).
+# Full review: prompt → runner → upload → HTML
 reviewctl review
 
 # Or step-by-step:
 # reviewctl upload    # upload local review.json + R*.md
 # reviewctl comment   # post MR comments only`
-
-  return [
-    {
-      name: 'Claude',
-      content: `${env}\n\n${tail}`,
-    },
-    {
-      name: 'opencode',
-      content: `${env}
-export REVIEW_RUNNER="opencode"
-export REVIEW_MODEL=""  # leave empty to use the model from your opencode config
-
-${tail}`,
-    },
-  ]
 })
 
 async function openCI() {
@@ -276,7 +229,6 @@ async function openCI() {
 function openLocalRun(project: ProjectSummary) {
   localRunProject.value = project
   localRunCopied.value = false
-  localRunTab.value = 0
   localRunVisible.value = true
   nextTick(() => localRunDialogRef.value?.focus())
 }
@@ -288,7 +240,7 @@ function copyToClipboard(text: string, tab: number = 0) {
 }
 
 function copyLocalRun() {
-  navigator.clipboard.writeText(localRunScripts.value[localRunTab.value].content)
+  navigator.clipboard.writeText(localRunScript.value)
   localRunCopied.value = true
   setTimeout(() => { localRunCopied.value = false }, 2000)
 }
