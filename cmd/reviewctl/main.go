@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/ctl"
 	"reviewsrv/pkg/reviewer/direct"
 	"reviewsrv/pkg/reviewer/runner"
@@ -185,6 +186,17 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
 	}
 
+	// Task-tracker access: the URL comes from the server config; the CI env var
+	// wins over the server-stored token (same precedence as the API keys). The
+	// token reaches runners out-of-band — never through the prompt text.
+	if rc.Tracker != nil {
+		cfg.TrackerURL = rc.Tracker.URL
+		cfg.TrackerToken = rc.Tracker.Token
+	}
+	if v := os.Getenv(envTrackerToken); v != "" {
+		cfg.TrackerToken = v
+	}
+
 	// A configured judge turns multi-review on: run the full panel ([primary] +
 	// additional members), then fuse. No judge → cfg.Multi stays empty → single.
 	if rc.Judge != nil {
@@ -235,7 +247,7 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 	// don't race. The direct runner consumes the token directly (buildDirectRunner).
 	switch cfg.Runner {
 	case "", runner.RunnerClaude:
-		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, Log: log}, nil
+		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
 	case runner.RunnerOpenCode:
 		return &runner.ExecOpenCodeRunner{
 			Model:                     cfg.Model,
@@ -243,10 +255,11 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 			SessionID:                 cfg.SessionID,
 			ContinueSession:           cfg.ContinueSession,
 			AllowDangerousPermissions: cfg.AllowDangerousPermissions,
+			TrackerToken:              cfg.TrackerToken,
 			Log:                       log,
 		}, nil
 	case runner.RunnerCodex:
-		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, Log: log}, nil
+		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
 	case runner.RunnerDirect:
 		return buildDirectRunner(cfg, log)
 	default:
@@ -271,22 +284,32 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 	if err != nil {
 		return nil, err
 	}
+	// Tracker access travels as tool config, not prompt text: http_fetch is
+	// scoped to the tracker URL and injects the token itself.
+	var tracker *direct.TrackerConfig
+	if cfg.TrackerURL != "" {
+		tracker = &direct.TrackerConfig{URL: cfg.TrackerURL, Token: cfg.TrackerToken}
+	}
 	return &runner.DirectRunner{
 		Provider: prov,
 		Dir:      cfg.Dir,
 		DiffBase: cfg.TargetBranch,
 		DiffHead: cfg.SourceBranch,
 		Effort:   cfg.Effort,
+		Tracker:  tracker,
 		Log:      log,
 	}, nil
 }
 
-// Env var names that may carry the direct-runner API key.
+// Env var names that may carry the direct-runner API key, plus the task-tracker
+// token override (CI variable wins over the server-stored tracker token; the
+// name aliases the canonical reviewer const referenced by assembled prompts).
 const (
 	envReviewAPIKey    = "REVIEW_API_KEY"
 	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
 	envOpenAIAPIKey    = "OPENAI_API_KEY"
 	envDeepSeekAPIKey  = "DEEPSEEK_API_KEY"
+	envTrackerToken    = reviewer.EnvTrackerToken
 )
 
 // directKeyEnvs reports the env vars that may hold the API key for the given

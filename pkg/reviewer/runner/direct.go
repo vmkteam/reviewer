@@ -35,7 +35,9 @@ type DirectRunner struct {
 	DiffBase string // git_diff default base (target branch)
 	DiffHead string // git_diff default head (source branch)
 	Effort   string
-	Log      *slog.Logger
+	// Tracker enables the tracker-scoped http_fetch tool (see direct.TrackerConfig).
+	Tracker *direct.TrackerConfig
+	Log     *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -63,6 +65,7 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 		DiffBase:       r.DiffBase,
 		DiffHead:       r.DiffHead,
 		PreloadedPaths: preloadedPaths,
+		Tracker:        r.Tracker,
 	})
 
 	// Rebuild the AST index so ast_* tools see the current working tree. No-op if
@@ -144,8 +147,8 @@ func (r *DirectRunner) attachSessionLog(ctx context.Context, opts *direct.Option
 }
 
 // logEvent surfaces a significant direct-loop event to the runner log (tool calls
-// live, per-round token usage at debug). The full transcript still goes to
-// direct-output.jsonl.
+// live, tool errors at warn, per-round token usage at debug). The full transcript
+// still goes to direct-output.jsonl.
 func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
 	if r.Log == nil {
 		return
@@ -153,6 +156,13 @@ func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
 	switch ev.Kind {
 	case "tool_call":
 		r.Log.InfoContext(ctx, "direct tool", "round", ev.Round, "tool", ev.Tool, "args", truncate(string(ev.Args), 200))
+	case "tool_result":
+		// Only failures are surfaced live (a broken tracker or expired token is
+		// otherwise invisible until the transcript is opened); successful results
+		// stay in direct-output.jsonl to keep the CI log readable.
+		if ev.IsError {
+			r.Log.WarnContext(ctx, "direct tool error", "round", ev.Round, "tool", ev.Tool, "err", truncate(ev.Content, 300))
+		}
 	case "round":
 		if ev.Usage != nil {
 			r.Log.DebugContext(ctx, "direct round", "round", ev.Round,

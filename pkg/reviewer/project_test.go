@@ -110,16 +110,17 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(cl)
 
-		gotPrimary, panel, gotJudge, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		setup, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
 		require.NoError(t, err)
-		require.NotNil(t, gotPrimary)
-		assert.Equal(t, primary.ID, gotPrimary.ID)
-		assert.Equal(t, "tok-primary", *gotPrimary.Token, "real token is returned")
-		require.Len(t, panel, 2)
-		assert.Equal(t, m1.ID, panel[0].ID, "members keep runnerProfileIds order")
-		assert.Equal(t, m2.ID, panel[1].ID)
-		require.NotNil(t, gotJudge)
-		assert.Equal(t, judge.ID, gotJudge.ID)
+		require.NotNil(t, setup)
+		require.NotNil(t, setup.Primary)
+		assert.Equal(t, primary.ID, setup.Primary.ID)
+		assert.Equal(t, "tok-primary", *setup.Primary.Token, "real token is returned")
+		require.Len(t, setup.Panel, 2)
+		assert.Equal(t, m1.ID, setup.Panel[0].ID, "members keep runnerProfileIds order")
+		assert.Equal(t, m2.ID, setup.Panel[1].ID)
+		require.NotNil(t, setup.Judge)
+		assert.Equal(t, judge.ID, setup.Judge.ID)
 	})
 
 	t.Run("no judge → judge nil, no panel (single review)", func(t *testing.T) {
@@ -130,11 +131,12 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(cl)
 
-		gotPrimary, panel, gotJudge, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		setup, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
 		require.NoError(t, err)
-		require.NotNil(t, gotPrimary)
-		assert.Empty(t, panel)
-		assert.Nil(t, gotJudge)
+		require.NotNil(t, setup)
+		require.NotNil(t, setup.Primary)
+		assert.Empty(t, setup.Panel)
+		assert.Nil(t, setup.Judge)
 	})
 
 	t.Run("disabled panel member is skipped", func(t *testing.T) {
@@ -149,18 +151,17 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(cl)
 
-		_, panel, _, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
+		setup, err := pm.ReviewProfiles(t.Context(), pr.ProjectKey)
 		require.NoError(t, err)
-		require.Len(t, panel, 1, "the disabled member is dropped, not fatal")
-		assert.Equal(t, live.ID, panel[0].ID)
+		require.NotNil(t, setup)
+		require.Len(t, setup.Panel, 1, "the disabled member is dropped, not fatal")
+		assert.Equal(t, live.ID, setup.Panel[0].ID)
 	})
 
-	t.Run("unknown project key → nil primary", func(t *testing.T) {
-		primary, panel, judge, err := pm.ReviewProfiles(t.Context(), "00000000-0000-0000-0000-000000000000")
+	t.Run("unknown project key → nil setup", func(t *testing.T) {
+		setup, err := pm.ReviewProfiles(t.Context(), "00000000-0000-0000-0000-000000000000")
 		require.NoError(t, err)
-		assert.Nil(t, primary)
-		assert.Nil(t, panel)
-		assert.Nil(t, judge)
+		assert.Nil(t, setup)
 	})
 }
 
@@ -185,7 +186,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(clPr)
 
-		result, err := pm.Prompt(t.Context(), pr.ProjectKey)
+		result, err := pm.Prompt(t.Context(), pr.ProjectKey, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result)
 		assert.Contains(t, result, "Common instructions")
@@ -195,7 +196,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		assert.Contains(t, result, "Tests review")
 	})
 
-	t.Run("with task tracker token substitution", func(t *testing.T) {
+	t.Run("with task tracker token kept out of the prompt", func(t *testing.T) {
 		prompt, clPrompt := test.Prompt(t, dbc, &db.Prompt{
 			Title:    "Prompt with TT",
 			Common:   "Common",
@@ -219,10 +220,21 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(clPr)
 
-		result, err := pm.Prompt(t.Context(), pr.ProjectKey)
+		result, err := pm.Prompt(t.Context(), pr.ProjectKey, true)
 		require.NoError(t, err)
-		assert.Contains(t, result, "secret-token-123")
+		// The real secret never enters the prompt: {{TOKEN}} renders as the env
+		// reference reviewctl exports to runner processes.
+		assert.NotContains(t, result, "secret-token-123")
+		assert.Contains(t, result, "$REVIEW_TRACKER_TOKEN")
 		assert.NotContains(t, result, "{{TOKEN}}")
+
+		// Legacy clients (tokenEnv=false) keep the historical real-token
+		// substitution so pre-update CI images stay functional.
+		legacy, err := pm.Prompt(t.Context(), pr.ProjectKey, false)
+		require.NoError(t, err)
+		assert.Contains(t, legacy, "secret-token-123")
+		assert.NotContains(t, legacy, "{{TOKEN}}")
+		assert.NotContains(t, legacy, "$REVIEW_TRACKER_TOKEN")
 	})
 
 	t.Run("with task tracker URL substitution", func(t *testing.T) {
@@ -250,16 +262,17 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(clPr)
 
-		result, err := pm.Prompt(t.Context(), pr.ProjectKey)
+		result, err := pm.Prompt(t.Context(), pr.ProjectKey, true)
 		require.NoError(t, err)
 		assert.Contains(t, result, "https://youtrack.example.com")
 		assert.NotContains(t, result, "{{URL}}")
-		assert.Contains(t, result, "token-456")
+		assert.NotContains(t, result, "token-456")
+		assert.Contains(t, result, "$REVIEW_TRACKER_TOKEN")
 		assert.NotContains(t, result, "{{TOKEN}}")
 	})
 
 	t.Run("project not found returns empty", func(t *testing.T) {
-		result, err := pm.Prompt(t.Context(), "00000000-0000-0000-0000-000000000000")
+		result, err := pm.Prompt(t.Context(), "00000000-0000-0000-0000-000000000000", true)
 		require.NoError(t, err)
 		assert.Empty(t, result)
 	})

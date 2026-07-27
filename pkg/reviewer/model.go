@@ -144,6 +144,21 @@ func NewTaskTracker(in *db.TaskTracker) *TaskTracker {
 	}
 }
 
+type RunnerProfile struct {
+	db.RunnerProfile
+}
+
+// NewRunnerProfile converts a db.RunnerProfile to the domain model, returning nil for nil input.
+func NewRunnerProfile(in *db.RunnerProfile) *RunnerProfile {
+	if in == nil {
+		return nil
+	}
+
+	return &RunnerProfile{
+		RunnerProfile: *in,
+	}
+}
+
 type Prompt struct {
 	db.Prompt
 }

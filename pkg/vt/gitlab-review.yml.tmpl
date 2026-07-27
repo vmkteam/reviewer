@@ -48,6 +48,8 @@ pipeline-ok:
 # (ANTHROPIC_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY). reviewctl fails fast if no
 # credential is available from either the profile or the environment.
 # Optional: REVIEWSRV_PUBLIC_URL — browser-facing URL for MR comment links when it differs from REVIEWSRV_URL (e.g. internal vs public DNS).
+# Optional: REVIEW_TRACKER_TOKEN — task-tracker API token override; wins over the token stored
+# with the project's task tracker on the server (the token itself never appears in the prompt).
 $[[ inputs.job_name ]]:
   image: $[[ inputs.dockerimage ]]
   stage: $[[ inputs.stage ]]

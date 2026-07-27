@@ -56,13 +56,19 @@ type Config struct {
 }
 
 type ReviewSetup struct {
-	Judge   *Config  `json:"judge,omitempty"`
-	Panel   []Config `json:"panel"`
-	Primary *Config  `json:"primary,omitempty"`
+	Judge   *Config        `json:"judge,omitempty"`
+	Panel   []Config       `json:"panel"`
+	Primary *Config        `json:"primary,omitempty"`
+	Tracker *TrackerConfig `json:"tracker,omitempty"`
 }
 
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+}
+
+type TrackerConfig struct {
+	Token string `json:"token"`
+	Url   string `json:"url"`
 }
 
 type svcReviewctl struct {
@@ -107,12 +113,17 @@ var (
 	ErrReviewctlPrompt500 = zenrpc.NewError(500, fmt.Errorf("internal error"))
 )
 
-// Prompt assembles and returns the review prompt for a project key.
-func (c *svcReviewctl) Prompt(ctx context.Context, projectKey string) (res string, err error) {
+// Prompt assembles and returns the review prompt for a project key. New
+// reviewctl clients pass tokenEnv=true and get the tracker section referencing
+// the $REVIEW_TRACKER_TOKEN env var (the secret travels out-of-band via
+// ReviewConfig). Legacy clients omit the flag and keep the historical prompt
+// with the real tracker token substituted in, so old CI images stay working.
+func (c *svcReviewctl) Prompt(ctx context.Context, projectKey string, tokenEnv *bool) (res string, err error) {
 	_req := struct {
 		ProjectKey string
+		TokenEnv   *bool
 	}{
-		ProjectKey: projectKey,
+		ProjectKey: projectKey, TokenEnv: tokenEnv,
 	}
 
 	err = c.client.call(ctx, "reviewctl.Prompt", _req, &res)

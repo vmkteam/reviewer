@@ -34,7 +34,9 @@ type ExecOpenCodeRunner struct {
 	// disables interactive permission prompts. Required for unattended CI runs
 	// but should stay off when the reviewer config trusts the working tree less.
 	AllowDangerousPermissions bool
-	Log                       *slog.Logger
+	// TrackerToken is injected as REVIEW_TRACKER_TOKEN (env wins; see ExecClaudeRunner).
+	TrackerToken string
+	Log          *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -73,9 +75,10 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 // Run executes `opencode run --format json` and parses the streamed events.
 func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
-	// opencode reads its own stored provider credentials, so no token is injected.
+	// opencode reads its own stored provider credentials, so no API token is
+	// injected — only the tracker token the prompt references.
 	// Surface significant events (tool calls, per-step usage) live as opencode streams.
-	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, nil, func(line []byte) { r.logEvent(ctx, line) })
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, credEnv(envTrackerToken, r.TrackerToken), func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 

@@ -16,22 +16,25 @@ type fixField struct {
 	Body  string
 }
 
+// SafeUntrustedBody neutralises injected closing tags so untrusted content
+// cannot escape its <untrusted-data> wrapper: a zero-width space between the
+// name and '>' breaks the literal match while keeping the visual output
+// identical. The single definition shared by the markdown templates and the
+// direct runner's http_fetch tool.
+func SafeUntrustedBody(s string) string {
+	return strings.ReplaceAll(s, "</untrusted-data>", "</untrusted-data\u200b>")
+}
+
 // markdownTemplateFuncs returns the shared FuncMap used by issue-list markdown
-// templates (fix prompts, project instructions). Lives here so the security-
-// sensitive safeBody helper has exactly one definition.
+// templates (fix prompts, project instructions).
 func markdownTemplateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"inc":   func(i int) int { return i + 1 },
-		"upper": strings.ToUpper,
-		"deref": derefString,
-		"trim":  strings.TrimSpace,
-		"field": func(label, body string) fixField { return fixField{Label: label, Body: body} },
-		// neutralise injected closing tags so attacker cannot escape <untrusted-data>.
-		// zero-width space between the name and '>' breaks the literal match while
-		// keeping the visual output identical.
-		"safeBody": func(s string) string {
-			return strings.ReplaceAll(s, "</untrusted-data>", "</untrusted-data\u200b>")
-		},
+		"inc":      func(i int) int { return i + 1 },
+		"upper":    strings.ToUpper,
+		"deref":    derefString,
+		"trim":     strings.TrimSpace,
+		"field":    func(label, body string) fixField { return fixField{Label: label, Body: body} },
+		"safeBody": SafeUntrustedBody,
 	}
 }
 

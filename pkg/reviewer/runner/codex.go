@@ -35,7 +35,11 @@ type ExecCodexRunner struct {
 	// Token is the runner-profile API key injected into the subprocess as
 	// OPENAI_API_KEY when that env var is not already set (env wins).
 	Token string
-	Log   *slog.Logger
+	// TrackerToken is injected as REVIEW_TRACKER_TOKEN (env wins; see
+	// ExecClaudeRunner). Codex's sandbox blocks network today, so it only
+	// matters if that changes.
+	TrackerToken string
+	Log          *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -85,7 +89,8 @@ func (r *ExecCodexRunner) buildArgs() []string {
 func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface significant events (tool commands, failures) live as codex streams.
-	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, credEnv(envOpenAIAPIKey, r.Token), func(line []byte) { r.logEvent(ctx, line) })
+	env := append(credEnv(envOpenAIAPIKey, r.Token), credEnv(envTrackerToken, r.TrackerToken)...)
+	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 

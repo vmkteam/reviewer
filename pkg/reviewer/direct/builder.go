@@ -11,6 +11,8 @@ type ReviewToolsConfig struct {
 	// files); read-dedup is seeded with them so the model is not re-served their
 	// content.
 	PreloadedPaths []string
+	// Tracker enables the tracker-scoped http_fetch tool; nil leaves it unregistered.
+	Tracker *TrackerConfig
 }
 
 // NewReviewRegistry builds the narrow review tool set: read_file, read_files,
@@ -27,6 +29,13 @@ func NewReviewRegistry(cfg ReviewToolsConfig) *Registry {
 	// the model stays on grep/read (graceful degradation).
 	if astIndexAvailable() {
 		registerAstTools(reg, cfg.Dir, cfg.DiffBase)
+	}
+	// Tracker-scoped HTTP GET — only when the project has a task tracker; the
+	// tool injects authorization itself so the token never enters the prompt.
+	if cfg.Tracker != nil {
+		if def, h, ok := httpFetchTool(*cfg.Tracker); ok {
+			reg.Register(def, h)
+		}
 	}
 	// Review output: streamed in small pieces (set_group ×5, add_issues) and
 	// finalized by submit_review — a monolithic payload overflows small models'

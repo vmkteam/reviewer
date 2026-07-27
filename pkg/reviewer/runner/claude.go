@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/reviewer"
 )
 
 const claudeResultType = "result"
@@ -266,7 +267,11 @@ type ExecClaudeRunner struct {
 	// ANTHROPIC_API_KEY when that env var is not already set (env wins). Passing it
 	// per-process keeps concurrent panel members from racing on the global env.
 	Token string
-	Log   *slog.Logger
+	// TrackerToken is the task-tracker token injected as REVIEW_TRACKER_TOKEN
+	// (env wins) — the prompt's tracker section references it instead of the
+	// real secret, so curl-based fetch instructions keep working.
+	TrackerToken string
+	Log          *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -315,7 +320,8 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface tool calls live as claude streams its NDJSON events.
-	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, credEnv(envAnthropicAPIKey, r.Token), func(line []byte) { r.logEvent(ctx, line) })
+	env := append(credEnv(envAnthropicAPIKey, r.Token), credEnv(envTrackerToken, r.TrackerToken)...)
+	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -502,10 +508,14 @@ func (w *lineWriter) flush() {
 // focused on argv and result parsing. When onLine is non-nil it receives each
 // stdout line as it streams, so a runner can surface significant events live
 // (e.g. tool calls from a JSONL agent stream) instead of only after completion.
-// Credential env var names CLI runners read their API key from.
+// Credential env var names CLI runners read their API key from, plus the
+// task-tracker token. envTrackerToken aliases the canonical reviewer const so
+// the $REVIEW_TRACKER_TOKEN reference in assembled prompts and the env injected
+// here can never drift.
 const (
 	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
 	envOpenAIAPIKey    = "OPENAI_API_KEY"
+	envTrackerToken    = reviewer.EnvTrackerToken
 )
 
 // credEnv returns the single credential env entry (VAR=token) to inject into a

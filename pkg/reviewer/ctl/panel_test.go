@@ -135,6 +135,22 @@ func runGit(t *testing.T, dir string, args ...string) {
 	require.NoErrorf(t, err, "git %v: %s", args, out)
 }
 
+func TestMemberConfigInheritsTracker(t *testing.T) {
+	c := NewController(&Config{
+		Runner:       "claude",
+		TrackerURL:   "https://yt.example.com",
+		TrackerToken: "tracker-tok",
+	}, nil, slog.Default())
+
+	mc := c.memberConfig("/tmp/wt", MemberSpec{Runner: "codex", Model: "m", Profile: &ResolvedProfile{Token: "profile-tok"}})
+
+	// Tracker access is project-wide: the profile overlay must not touch it.
+	assert.Equal(t, "https://yt.example.com", mc.TrackerURL)
+	assert.Equal(t, "tracker-tok", mc.TrackerToken)
+	assert.Equal(t, "profile-tok", mc.Token, "profile credentials still overlaid")
+	assert.Equal(t, "codex", mc.Runner)
+}
+
 func TestMemberLabel(t *testing.T) {
 	assert.Equal(t, "1-codex-gpt-5.5", memberLabel(0, MemberSpec{Runner: "codex", Model: "gpt-5.5"}))
 	// duplicates stay distinct by index

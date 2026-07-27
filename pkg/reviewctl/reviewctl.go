@@ -46,18 +46,29 @@ type Config struct {
 	Params          RunnerProfileParams `json:"params"`
 }
 
+// TrackerConfig is the project task-tracker access config: the base URL that
+// scopes the direct runner's http_fetch tool and the auth token reviewctl hands
+// to runners out-of-band (http_fetch header / $REVIEW_TRACKER_TOKEN env), so
+// the token never appears in the assembled prompt. CI-internal path only.
+type TrackerConfig struct {
+	URL   string `json:"url"`
+	Token string `json:"token"`
+}
+
 // ReviewSetup is the resolved multi-review panel returned to reviewctl: the
 // primary runner, the additional panel members and the optional judge. The full
 // run set is [Primary] + Panel; a non-nil Judge is the multi-review trigger (nil →
 // single review via Primary, today's flow). Every Config carries its real token
 // (CI-internal path), so this must never be exposed on the public RPC.
+// Tracker is the project's task-tracker access config (nil = none configured).
 type ReviewSetup struct {
-	Primary *Config   `json:"primary"`
-	Panel   []*Config `json:"panel"`
-	Judge   *Config   `json:"judge"`
+	Primary *Config        `json:"primary"`
+	Panel   []*Config      `json:"panel"`
+	Judge   *Config        `json:"judge"`
+	Tracker *TrackerConfig `json:"tracker"`
 }
 
-func newConfig(rp *db.RunnerProfile) *Config {
+func newConfig(rp *reviewer.RunnerProfile) *Config {
 	return &Config{
 		RunnerProfileID: rp.ID,
 		Title:           rp.Title,
@@ -93,37 +104,45 @@ func (s Service) ReviewConfig(ctx context.Context, projectKey string) (*ReviewSe
 		return nil, ErrInvalidProjectKey
 	}
 
-	primary, panel, judge, err := s.pm.ReviewProfiles(ctx, projectKey)
+	rs, err := s.pm.ReviewProfiles(ctx, projectKey)
 	if err != nil {
 		return nil, newInternalError(err)
 	}
-	if primary == nil {
+	if rs == nil || rs.Primary == nil {
 		return nil, ErrNoRunnerProfile
 	}
 
-	setup := &ReviewSetup{Primary: newConfig(primary)}
-	for _, rp := range panel {
+	setup := &ReviewSetup{Primary: newConfig(rs.Primary)}
+	for _, rp := range rs.Panel {
 		setup.Panel = append(setup.Panel, newConfig(rp))
 	}
-	if judge != nil {
-		setup.Judge = newConfig(judge)
+	if rs.Judge != nil {
+		setup.Judge = newConfig(rs.Judge)
+	}
+	if rs.Tracker != nil {
+		setup.Tracker = &TrackerConfig{URL: rs.Tracker.URL, Token: derefString(rs.Tracker.AuthToken)}
 	}
 
 	return setup, nil
 }
 
-// Prompt assembles and returns the review prompt for a project key.
+// Prompt assembles and returns the review prompt for a project key. New
+// reviewctl clients pass tokenEnv=true and get the tracker section referencing
+// the $REVIEW_TRACKER_TOKEN env var (the secret travels out-of-band via
+// ReviewConfig). Legacy clients omit the flag and keep the historical prompt
+// with the real tracker token substituted in, so old CI images stay working.
 //
 //zenrpc:projectKey project key (UUID)
+//zenrpc:tokenEnv=false substitute the $REVIEW_TRACKER_TOKEN env reference instead of the real tracker token
 //zenrpc:return string
 //zenrpc:400 invalid project key
 //zenrpc:500 internal error
-func (s Service) Prompt(ctx context.Context, projectKey string) (string, error) {
+func (s Service) Prompt(ctx context.Context, projectKey string, tokenEnv *bool) (string, error) {
 	if _, err := uuid.Parse(projectKey); err != nil {
 		return "", ErrInvalidProjectKey
 	}
 
-	prompt, err := s.pm.Prompt(ctx, projectKey)
+	prompt, err := s.pm.Prompt(ctx, projectKey, tokenEnv != nil && *tokenEnv)
 	if err != nil {
 		return "", newInternalError(err)
 	}

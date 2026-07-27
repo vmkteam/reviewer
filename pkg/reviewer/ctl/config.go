@@ -53,6 +53,14 @@ type Config struct {
 	RunnerProfileID    int
 	RunnerProfileTitle string
 
+	// Task-tracker access (fetched with the review config; $REVIEW_TRACKER_TOKEN
+	// takes priority over the server token). The direct runner scopes its
+	// http_fetch tool to TrackerURL; CLI runners get the token exported as
+	// REVIEW_TRACKER_TOKEN so prompt curl instructions can reference it. The
+	// token never appears in the prompt itself.
+	TrackerURL   string
+	TrackerToken string
+
 	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
 	// runners that support it (currently opencode). Defaults to true to match
 	// previous behaviour — unattended CI runs need it to avoid permission

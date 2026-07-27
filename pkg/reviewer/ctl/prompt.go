@@ -67,13 +67,24 @@ type ResolvedProfile struct {
 	Params          RunnerProfileParams `json:"params"`
 }
 
+// TrackerConfig is the project task-tracker access config from the server: the
+// base URL that scopes the direct runner's http_fetch tool and the auth token
+// handed to runners out-of-band (the $REVIEW_TRACKER_TOKEN env var still takes
+// priority on the client).
+type TrackerConfig struct {
+	URL   string `json:"url"`
+	Token string `json:"token"`
+}
+
 // ReviewConfig is the resolved multi-review panel returned by the reviewctl RPC:
 // the primary runner, the additional panel members and the optional judge. The
 // full run set is [Primary] + Panel; a nil Judge means single review via Primary.
+// Tracker is the project's task-tracker access config (nil = none configured).
 type ReviewConfig struct {
 	Primary *ResolvedProfile
 	Panel   []*ResolvedProfile
 	Judge   *ResolvedProfile
+	Tracker *TrackerConfig
 }
 
 // client builds a generated reviewctl client pointed at serverURL. The endpoint
@@ -117,6 +128,9 @@ func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey st
 	for i := range setup.Panel {
 		rc.Panel = append(rc.Panel, newResolvedProfile(&setup.Panel[i]))
 	}
+	if setup.Tracker != nil {
+		rc.Tracker = &TrackerConfig{URL: setup.Tracker.Url, Token: setup.Tracker.Token}
+	}
 
 	judging := rc.Judge != nil
 	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey,
@@ -136,9 +150,13 @@ func (c *PromptClient) FetchFusionPrompt(ctx context.Context, serverURL, project
 }
 
 // FetchPrompt fetches the assembled prompt for the given project key over the
-// internal reviewctl RPC.
+// internal reviewctl RPC. tokenEnv=true asks for the tracker section with the
+// $REVIEW_TRACKER_TOKEN env reference (this client exports the var to runners);
+// an older server ignores the unknown flag and returns the legacy prompt with
+// the real token — still functional, just not yet secret-free.
 func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey string) (string, error) {
-	prompt, err := c.client(serverURL).Reviewctl.Prompt(ctx, projectKey)
+	tokenEnv := true
+	prompt, err := c.client(serverURL).Reviewctl.Prompt(ctx, projectKey, &tokenEnv)
 	if err != nil {
 		return "", err
 	}

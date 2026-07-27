@@ -60,6 +60,12 @@ includes the real token. A nil judge means single review via the primary.`,
 							Ref:      "#/definitions/Config",
 							Type:     smd.Object,
 						},
+						{
+							Name:     "tracker",
+							Optional: true,
+							Ref:      "#/definitions/TrackerConfig",
+							Type:     smd.Object,
+						},
 					},
 					Definitions: map[string]smd.Definition{
 						"Config": {
@@ -113,6 +119,19 @@ includes the real token. A nil judge means single review via the primary.`,
 								},
 							},
 						},
+						"TrackerConfig": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "url",
+									Type: smd.String,
+								},
+								{
+									Name: "token",
+									Type: smd.String,
+								},
+							},
+						},
 					},
 				},
 				Errors: map[int]string{
@@ -122,12 +141,22 @@ includes the real token. A nil judge means single review via the primary.`,
 				},
 			},
 			"Prompt": {
-				Description: `Prompt assembles and returns the review prompt for a project key.`,
+				Description: `Prompt assembles and returns the review prompt for a project key. New
+reviewctl clients pass tokenEnv=true and get the tracker section referencing
+the $REVIEW_TRACKER_TOKEN env var (the secret travels out-of-band via
+ReviewConfig). Legacy clients omit the flag and keep the historical prompt
+with the real tracker token substituted in, so old CI images stay working.`,
 				Parameters: []smd.JSONSchema{
 					{
 						Name:        "projectKey",
 						Description: `project key (UUID)`,
 						Type:        smd.String,
+					},
+					{
+						Name:        "tokenEnv",
+						Optional:    true,
+						Description: `substitute the $REVIEW_TRACKER_TOKEN env reference instead of the real tracker token`,
+						Type:        smd.Boolean,
 					},
 				},
 				Returns: smd.JSONSchema{
@@ -191,10 +220,11 @@ func (s Service) Invoke(ctx context.Context, method string, params json.RawMessa
 	case RPC.Service.Prompt:
 		var args = struct {
 			ProjectKey string `json:"projectKey"`
+			TokenEnv   *bool  `json:"tokenEnv"`
 		}{}
 
 		if zenrpc.IsArray(params) {
-			if params, err = zenrpc.ConvertToObject([]string{"projectKey"}, params); err != nil {
+			if params, err = zenrpc.ConvertToObject([]string{"projectKey", "tokenEnv"}, params); err != nil {
 				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
 			}
 		}
@@ -205,7 +235,13 @@ func (s Service) Invoke(ctx context.Context, method string, params json.RawMessa
 			}
 		}
 
-		resp.Set(s.Prompt(ctx, args.ProjectKey))
+		//zenrpc:tokenEnv=false substitute the $REVIEW_TRACKER_TOKEN env reference instead of the real tracker token
+		if args.TokenEnv == nil {
+			var v bool = false
+			args.TokenEnv = &v
+		}
+
+		resp.Set(s.Prompt(ctx, args.ProjectKey, args.TokenEnv))
 
 	case RPC.Service.FusionPrompt:
 		var args = struct {

@@ -29,10 +29,11 @@ Reference table for soft-delete across all entities.
 |---|-------|------|-------------|
 | 1 | taskTrackerId | int4, PK, identity | |
 | 2 | title | varchar(255) | Tracker name (e.g. "Jira", "YouTrack") |
-| 3 | authToken | varchar(255) | API token |
-| 4 | fetchPrompt | text | Prompt to extract task ID from branch/MR via API |
+| 3 | authToken | varchar(255) | API token; handed to runners out-of-band (http_fetch header / $REVIEW_TRACKER_TOKEN env), never substituted into the prompt |
+| 4 | fetchPrompt | text | Prompt describing the tracker API: how to extract task IDs and which endpoints to GET. Placeholders: {{URL}} → url, {{TOKEN}} → the literal $REVIEW_TRACKER_TOKEN |
 | 5 | createdAt | timestamptz | |
 | 6 | statusId | int4, FK → statuses | Soft-delete |
+| 7 | url | varchar(255) | Tracker base URL; also scopes the direct runner's http_fetch tool |
 
 ## 3. Slack Channel
 
