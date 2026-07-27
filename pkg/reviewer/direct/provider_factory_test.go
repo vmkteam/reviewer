@@ -8,8 +8,10 @@ import (
 
 func TestPricingFor(t *testing.T) {
 	require.Equal(t, Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}, pricingFor("claude-opus-4-8"))
-	require.Equal(t, Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}, pricingFor("claude-fable-5"))
+	require.Equal(t, Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}, pricingFor("claude-opus-5"))
+	require.Equal(t, Pricing{InputPerMTok: 10, OutputPerMTok: 50, CacheReadPerMTok: 1, CacheWritePerMTok: 12.5}, pricingFor("claude-fable-5"))
 	require.InEpsilon(t, 3.0, pricingFor("claude-sonnet-4-6").InputPerMTok, 1e-9)
+	require.InEpsilon(t, 3.0, pricingFor("claude-sonnet-5").InputPerMTok, 1e-9)
 	require.InEpsilon(t, 1.0, pricingFor("claude-haiku-4-5").InputPerMTok, 1e-9)
 	require.InEpsilon(t, 0.435, pricingFor("deepseek-v4-pro").InputPerMTok, 1e-9)
 	require.InEpsilon(t, 0.003625, pricingFor("deepseek-v4-pro").CacheReadPerMTok, 1e-9)

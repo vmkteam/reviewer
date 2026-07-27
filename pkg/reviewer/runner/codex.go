@@ -326,6 +326,10 @@ var codexModelPrices = map[string]codexTokenPrice{
 	"gpt-5.1-codex-max": {1.25, 0.125, 10.00},
 	"gpt-5.1-codex":     {1.25, 0.125, 10.00},
 	"gpt-5-codex":       {1.25, 0.125, 10.00},
+	"gpt-5.6":           {5.00, 0.50, 30.00}, // bare alias routes to Sol
+	"gpt-5.6-sol":       {5.00, 0.50, 30.00},
+	"gpt-5.6-terra":     {2.50, 0.25, 15.00},
+	"gpt-5.6-luna":      {1.00, 0.10, 6.00},
 	"gpt-5.5":           {5.00, 0.50, 30.00},
 	"gpt-5.5-pro":       {30.00, 30.00, 180.00},
 	"gpt-5.4":           {2.50, 0.25, 15.00},

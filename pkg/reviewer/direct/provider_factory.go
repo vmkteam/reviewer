@@ -72,7 +72,9 @@ func NewProvider(cfg ProviderConfig) (LLMProvider, error) {
 // ProviderConfig.Pricing to override.
 func pricingFor(model string) Pricing {
 	switch {
-	case strings.HasPrefix(model, "claude-opus"), strings.HasPrefix(model, "claude-fable"):
+	case strings.HasPrefix(model, "claude-fable"):
+		return Pricing{InputPerMTok: 10, OutputPerMTok: 50, CacheReadPerMTok: 1, CacheWritePerMTok: 12.5}
+	case strings.HasPrefix(model, "claude-opus"):
 		return Pricing{InputPerMTok: 5, OutputPerMTok: 25, CacheReadPerMTok: 0.5, CacheWritePerMTok: 6.25}
 	case strings.HasPrefix(model, "claude-sonnet"):
 		return Pricing{InputPerMTok: 3, OutputPerMTok: 15, CacheReadPerMTok: 0.3, CacheWritePerMTok: 3.75}

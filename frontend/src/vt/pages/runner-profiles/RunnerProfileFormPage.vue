@@ -116,18 +116,18 @@ const providers = ['anthropic', 'deepseek', 'openai', 'openai-compat']
 
 // Runner-dependent model suggestions for the datalist (free text still allowed).
 // Keep in sync with ResolveDefaults and the price tables in codex.go /
-// provider_factory.go. As of 2026-06.
+// provider_factory.go. As of 2026-07.
 const MODEL_SUGGESTIONS: Record<string, string[]> = {
-  claude: ['opus', 'sonnet', 'haiku', 'claude-opus-4-8', 'claude-fable-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  codex: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex'],
-  opencode: ['anthropic/claude-opus-4-8', 'openai/gpt-5.5', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash'],
+  claude: ['opus', 'sonnet', 'haiku', 'claude-opus-5', 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  codex: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex'],
+  opencode: ['anthropic/claude-opus-5', 'anthropic/claude-opus-4-8', 'openai/gpt-5.6-sol', 'openai/gpt-5.5', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash'],
 }
 // For the direct runner, suggestions depend on the selected API provider.
 // deepseek-chat/reasoner are intentionally omitted — they retire 2026-07-24.
 const DIRECT_MODEL_SUGGESTIONS: Record<string, string[]> = {
-  anthropic: ['claude-opus-4-8', 'claude-fable-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  anthropic: ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
   deepseek: ['deepseek-v4-pro', 'deepseek-v4-flash'],
-  openai: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+  openai: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
   'openai-compat': [],
 }
 // Default API base URL per direct provider, shown as the input placeholder.
