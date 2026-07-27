@@ -106,11 +106,13 @@ func NewSlackChannel(in *db.SlackChannel) *SlackChannel {
 	}
 
 	slackChannel := &SlackChannel{
-		ID:         in.ID,
-		Title:      in.Title,
-		Channel:    in.Channel,
-		WebhookURL: in.WebhookURL,
-		StatusID:   in.StatusID,
+		ID:               in.ID,
+		Title:            in.Title,
+		Channel:          in.Channel,
+		WebhookURL:       nil, // never expose the raw webhook URL to the admin API
+		WebhookURLMasked: maskSecret(&in.WebhookURL),
+		HasWebhookURL:    in.WebhookURL != "",
+		StatusID:         in.StatusID,
 
 		Status: NewStatus(in.StatusID),
 	}
@@ -124,10 +126,9 @@ func NewSlackChannelSummary(in *db.SlackChannel) *SlackChannelSummary {
 	}
 
 	return &SlackChannelSummary{
-		ID:         in.ID,
-		Title:      in.Title,
-		Channel:    in.Channel,
-		WebhookURL: in.WebhookURL,
+		ID:      in.ID,
+		Title:   in.Title,
+		Channel: in.Channel,
 
 		Status: NewStatus(in.StatusID),
 	}
@@ -142,7 +143,9 @@ func NewTaskTracker(in *db.TaskTracker) *TaskTracker {
 		ID:          in.ID,
 		Title:       in.Title,
 		URL:         in.URL,
-		AuthToken:   in.AuthToken,
+		AuthToken:   nil, // never expose the raw token to the admin API
+		TokenMasked: maskSecret(in.AuthToken),
+		HasToken:    in.AuthToken != nil && *in.AuthToken != "",
 		FetchPrompt: in.FetchPrompt,
 		StatusID:    in.StatusID,
 
@@ -161,7 +164,6 @@ func NewTaskTrackerSummary(in *db.TaskTracker) *TaskTrackerSummary {
 		ID:          in.ID,
 		Title:       in.Title,
 		URL:         in.URL,
-		AuthToken:   in.AuthToken,
 		FetchPrompt: in.FetchPrompt,
 
 		Status: NewStatus(in.StatusID),

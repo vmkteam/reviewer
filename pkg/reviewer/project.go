@@ -186,7 +186,10 @@ func (pm *ProjectManager) createPrompt(ctx context.Context, pr *Project, tokenEn
 			// instructions keep working until the CI image is updated.
 			fp = strings.ReplaceAll(fp, "{{TOKEN}}", *pr.TaskTracker.AuthToken)
 		}
-		fp = strings.ReplaceAll(fp, "{{URL}}", pr.TaskTracker.URL)
+		// Trackers are often saved with a trailing slash while templates write
+		// "{{URL}}/api/..." — the doubled slash makes YouTrack serve its SPA HTML
+		// instead of the API response, so normalise before substitution.
+		fp = strings.ReplaceAll(fp, "{{URL}}", strings.TrimSuffix(pr.TaskTracker.URL, "/"))
 		data.FetchPrompt = fp
 	}
 

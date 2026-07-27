@@ -2,6 +2,8 @@
 package vt
 
 import (
+	"strings"
+
 	"reviewsrv/pkg/db"
 )
 
@@ -185,11 +187,13 @@ type PromptSummary struct {
 }
 
 type SlackChannel struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title" validate:"required,max=255"`
-	Channel    string `json:"channel" validate:"required,max=255"`
-	WebhookURL string `json:"webhookURL" validate:"required,max=1024"`
-	StatusID   int    `json:"statusId" validate:"required,status"`
+	ID               int     `json:"id"`
+	Title            string  `json:"title" validate:"required,max=255"`
+	Channel          string  `json:"channel" validate:"required,max=255"`
+	WebhookURL       *string `json:"webhookURL,omitempty" validate:"omitempty,max=1024"` // write-only: nil on read, set-or-keep on write
+	WebhookURLMasked string  `json:"webhookURLMasked"`                                   // read-only masked display
+	HasWebhookURL    bool    `json:"hasWebhookURL"`                                      // read-only
+	StatusID         int     `json:"statusId" validate:"required,status"`
 
 	Status *Status `json:"status"`
 }
@@ -200,23 +204,24 @@ func (sc *SlackChannel) ToDB() *db.SlackChannel {
 	}
 
 	slackChannel := &db.SlackChannel{
-		ID:         sc.ID,
-		Title:      sc.Title,
-		Channel:    sc.Channel,
-		WebhookURL: sc.WebhookURL,
-		StatusID:   sc.StatusID,
+		ID:       sc.ID,
+		Title:    sc.Title,
+		Channel:  sc.Channel,
+		StatusID: sc.StatusID,
+	}
+	if sc.WebhookURL != nil {
+		slackChannel.WebhookURL = *sc.WebhookURL
 	}
 
 	return slackChannel
 }
 
 type SlackChannelSearch struct {
-	ID         *int    `json:"id"`
-	Title      *string `json:"title"`
-	Channel    *string `json:"channel"`
-	WebhookURL *string `json:"webhookURL"`
-	StatusID   *int    `json:"statusId"`
-	IDs        []int   `json:"ids"`
+	ID       *int    `json:"id"`
+	Title    *string `json:"title"`
+	Channel  *string `json:"channel"`
+	StatusID *int    `json:"statusId"`
+	IDs      []int   `json:"ids"`
 }
 
 func (scs *SlackChannelSearch) ToDB() *db.SlackChannelSearch {
@@ -225,20 +230,18 @@ func (scs *SlackChannelSearch) ToDB() *db.SlackChannelSearch {
 	}
 
 	return &db.SlackChannelSearch{
-		ID:              scs.ID,
-		TitleILike:      scs.Title,
-		ChannelILike:    scs.Channel,
-		WebhookURLILike: scs.WebhookURL,
-		StatusID:        scs.StatusID,
-		IDs:             scs.IDs,
+		ID:           scs.ID,
+		TitleILike:   scs.Title,
+		ChannelILike: scs.Channel,
+		StatusID:     scs.StatusID,
+		IDs:          scs.IDs,
 	}
 }
 
 type SlackChannelSummary struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title"`
-	Channel    string `json:"channel"`
-	WebhookURL string `json:"webhookURL"`
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	Channel string `json:"channel"`
 
 	Status *Status `json:"status"`
 }
@@ -247,7 +250,9 @@ type TaskTracker struct {
 	ID          int     `json:"id"`
 	Title       string  `json:"title" validate:"required,max=255"`
 	URL         string  `json:"url" validate:"required,max=255"`
-	AuthToken   *string `json:"authToken" validate:"omitempty,max=255"`
+	AuthToken   *string `json:"authToken,omitempty" validate:"omitempty,max=255"` // write-only: nil on read, set-or-keep on write
+	TokenMasked string  `json:"tokenMasked"`                                      // read-only masked display
+	HasToken    bool    `json:"hasToken"`                                         // read-only
 	FetchPrompt string  `json:"fetchPrompt" validate:"required"`
 	StatusID    int     `json:"statusId" validate:"required,status"`
 
@@ -260,9 +265,11 @@ func (tt *TaskTracker) ToDB() *db.TaskTracker {
 	}
 
 	taskTracker := &db.TaskTracker{
-		ID:          tt.ID,
-		Title:       tt.Title,
-		URL:         tt.URL,
+		ID:    tt.ID,
+		Title: tt.Title,
+		// Stored without a trailing slash: consumers join it with /api/... paths,
+		// and a doubled slash makes SPA trackers (YouTrack) serve HTML with 200.
+		URL:         strings.TrimSuffix(tt.URL, "/"),
 		AuthToken:   tt.AuthToken,
 		FetchPrompt: tt.FetchPrompt,
 		StatusID:    tt.StatusID,
@@ -275,7 +282,6 @@ type TaskTrackerSearch struct {
 	ID          *int    `json:"id"`
 	Title       *string `json:"title"`
 	URL         *string `json:"url"`
-	AuthToken   *string `json:"authToken"`
 	FetchPrompt *string `json:"fetchPrompt"`
 	StatusID    *int    `json:"statusId"`
 	IDs         []int   `json:"ids"`
@@ -290,7 +296,6 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 		ID:               tts.ID,
 		TitleILike:       tts.Title,
 		URL:              tts.URL,
-		AuthTokenILike:   tts.AuthToken,
 		FetchPromptILike: tts.FetchPrompt,
 		StatusID:         tts.StatusID,
 		IDs:              tts.IDs,
@@ -298,11 +303,10 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 }
 
 type TaskTrackerSummary struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"title"`
-	URL         string  `json:"url"`
-	AuthToken   *string `json:"authToken"`
-	FetchPrompt string  `json:"fetchPrompt"`
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	FetchPrompt string `json:"fetchPrompt"`
 
 	Status *Status `json:"status"`
 }

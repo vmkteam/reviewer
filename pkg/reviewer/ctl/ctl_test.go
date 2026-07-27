@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -243,4 +245,63 @@ func TestController_Comment(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, commentPosted, "MR comment was not posted")
+}
+
+func TestFillMetadataClearsPlaceholdersAndFillsFromGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "feature/x"},
+		{"config", "user.email", "dev@example.com"},
+		{"config", "user.name", "Dev Author"},
+		{"commit", "-q", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+
+	c := NewController(&Config{Dir: dir}, nil, slog.Default())
+	draft := &rest.ReviewDraft{}
+	draft.Review.ExternalID = PlaceholderExternalID
+	draft.Review.Author = PlaceholderAuthor
+	draft.Review.SourceBranch = PlaceholderSourceBranch
+	draft.Review.TargetBranch = PlaceholderTargetBranch
+	draft.Review.CommitHash = PlaceholderCommitHash
+	draft.Review.Title = PlaceholderTitle
+
+	c.fillMetadata(context.Background(), draft)
+
+	// Placeholders cleared; author/branch/commit recovered from git; fields with
+	// no local source stay empty rather than leaking literal placeholders.
+	require.Equal(t, "Dev Author", draft.Review.Author)
+	require.Equal(t, "feature/x", draft.Review.SourceBranch)
+	require.Equal(t, gitMeta(context.Background(), dir, "rev-parse", "HEAD"), draft.Review.CommitHash)
+	require.NotEmpty(t, draft.Review.CommitHash)
+	require.Empty(t, draft.Review.TargetBranch)
+	require.Empty(t, draft.Review.Title)
+	require.Empty(t, draft.Review.ExternalID)
+
+	// The second Title placeholder variant is cleared too.
+	d2 := &rest.ReviewDraft{}
+	d2.Review.Title = PlaceholderMRTitle
+	c.fillMetadata(context.Background(), d2)
+	require.Empty(t, d2.Review.Title)
+}
+
+func TestWriteReviewJSONRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	draft := &rest.ReviewDraft{}
+	draft.Review.Description = "done"
+	draft.Review.ModelInfo.Model = "claude-opus-5"
+	draft.Review.ModelInfo.CostUsd = 1.5
+	draft.Review.DurationMs = 4200
+
+	require.NoError(t, WriteReviewJSON(dir, draft))
+	got, _ := ReadReviewJSON(dir) // validation outcome is irrelevant here — the metadata must round-trip
+	require.NotNil(t, got)
+	require.Equal(t, "claude-opus-5", got.Review.ModelInfo.Model)
+	require.InEpsilon(t, 1.5, got.Review.ModelInfo.CostUsd, 1e-9)
+	require.Equal(t, 4200, got.Review.DurationMs)
 }

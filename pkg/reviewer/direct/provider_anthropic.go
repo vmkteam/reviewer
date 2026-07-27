@@ -12,9 +12,12 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// defaultAnthropicMaxTokens caps each response. Per-round output (thinking +
-// tool calls) is modest; keep under the non-streaming HTTP-timeout ceiling.
-const defaultAnthropicMaxTokens = 16000
+// defaultAnthropicMaxTokens caps each response. Adaptive thinking counts
+// against this same cap, so it must fit a long thinking phase plus a large tool
+// payload (e.g. an add_issues batch) — 16k proved too small at xhigh effort and
+// truncated tool calls mid-JSON. Streaming below means no HTTP-timeout ceiling;
+// current Opus/Sonnet models allow up to 128k output.
+const defaultAnthropicMaxTokens = 64000
 
 // AnthropicConfig configures the native Anthropic provider.
 type AnthropicConfig struct {

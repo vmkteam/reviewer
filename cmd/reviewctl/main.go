@@ -204,10 +204,14 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 		cfg.Judge = profileMember(rc.Judge)
 	}
 
+	provider := "" // provider applies to the direct runner only; blank elsewhere
+	if cfg.Runner == runner.RunnerDirect {
+		provider = cfg.APIProvider
+	}
 	log.InfoContext(cmd.Context(), "applied runner profile",
 		"profileId", p.RunnerProfileID, "title", p.Title,
-		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", cfg.APIProvider,
-		"panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort,
+		"provider", provider, "panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
 	return nil
 }
 
@@ -291,13 +295,14 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 		tracker = &direct.TrackerConfig{URL: cfg.TrackerURL, Token: cfg.TrackerToken}
 	}
 	return &runner.DirectRunner{
-		Provider: prov,
-		Dir:      cfg.Dir,
-		DiffBase: cfg.TargetBranch,
-		DiffHead: cfg.SourceBranch,
-		Effort:   cfg.Effort,
-		Tracker:  tracker,
-		Log:      log,
+		Provider:  prov,
+		Dir:       cfg.Dir,
+		DiffBase:  cfg.TargetBranch,
+		DiffHead:  cfg.SourceBranch,
+		Effort:    cfg.Effort,
+		CompactAt: direct.DefaultCompactAt(cfg.APIProvider),
+		Tracker:   tracker,
+		Log:       log,
 	}, nil
 }
 

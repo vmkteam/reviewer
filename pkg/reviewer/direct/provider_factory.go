@@ -33,6 +33,19 @@ func IsValidProvider(name string) bool {
 	return validProviders[strings.ToLower(name)]
 }
 
+// DefaultCompactAt returns the history-compaction threshold suited to a
+// provider's context window. Anthropic's 1M-token models defer compaction
+// nearly to the end of a review — compacting mid-run rewrites the whole prompt
+// cache; the 128k-class OpenAI-compatible backends keep the Options default
+// (returned 0 means "use DefaultOptions"). Lives next to NewProvider so
+// provider-capability knowledge stays in one place.
+func DefaultCompactAt(provider string) int {
+	if strings.EqualFold(provider, ProviderAnthropic) {
+		return CompactAtLargeContext
+	}
+	return 0
+}
+
 // ProviderConfig selects and configures an LLM backend.
 type ProviderConfig struct {
 	Provider    string // "deepseek" (default) | "openai" | "anthropic"

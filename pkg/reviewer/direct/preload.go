@@ -80,7 +80,7 @@ func changedFiles(ctx context.Context, root, base, head string) ([]string, error
 		return nil, err
 	}
 	names := splitLines(out)
-	if ut, uerr := runGit(ctx, root, false, withExcludes("ls-files", "--others", "--exclude-standard")...); uerr == nil {
+	if ut, uerr := runGit(ctx, root, false, withUntrackedExcludes("ls-files", "--others", "--exclude-standard")...); uerr == nil {
 		names = append(names, splitLines(ut)...)
 	}
 	return dedupeStrings(names), nil

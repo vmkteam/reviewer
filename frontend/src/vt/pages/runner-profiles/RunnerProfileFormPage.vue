@@ -59,10 +59,9 @@
       </template>
 
       <FormField label="Token" :error="fieldError('token')">
-        <VInput v-model="tokenInput" type="password" autocomplete="new-password" :placeholder="entity.hasToken ? 'Saved — leave blank to keep' : 'Optional API key (env vars take priority)'" />
+        <SecretInput v-model="tokenInput" placeholder="Optional API key (env vars take priority)" :saved-masked="entity.hasToken ? entity.tokenMasked : ''" />
         <p class="mt-1 text-xs text-fg-subtle">
           Optional fallback API key, used only when the matching env var is absent.
-          <span v-if="entity.hasToken" class="font-mono">Saved: {{ entity.tokenMasked }}</span>
         </p>
       </FormField>
 
@@ -100,6 +99,7 @@ import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import VInput from '../../components/VInput.vue'
+import SecretInput from '../../components/SecretInput.vue'
 import VSelect from '../../components/VSelect.vue'
 import ComboInput from '../../components/ComboInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'

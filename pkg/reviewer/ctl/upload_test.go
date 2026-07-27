@@ -269,7 +269,7 @@ func TestCleanReviewArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	// Review outputs that must be wiped before the next run.
 	artifacts := []string{
-		"review.json", "direct-output.jsonl", "claude-output.json",
+		"review.json", "review.html", "direct-output.jsonl", "claude-output.json",
 		"opencode-output.jsonl", "R1.foo.ru.md", "R5.bar.md",
 	}
 	// Source/doc files that must survive (no R1..R5 prefix, or not an artifact).

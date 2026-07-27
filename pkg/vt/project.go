@@ -473,7 +473,7 @@ func (s SlackChannelService) dbSort(ops *ViewOps) db.OpFunc {
 	}
 
 	switch ops.SortColumn {
-	case db.Columns.SlackChannel.ID, db.Columns.SlackChannel.Title, db.Columns.SlackChannel.Channel, db.Columns.SlackChannel.WebhookURL, db.Columns.SlackChannel.StatusID:
+	case db.Columns.SlackChannel.ID, db.Columns.SlackChannel.Title, db.Columns.SlackChannel.Channel, db.Columns.SlackChannel.StatusID:
 		v = db.WithSort(db.NewSortField(ops.SortColumn, ops.SortDesc))
 	}
 
@@ -563,7 +563,8 @@ func (s SlackChannelService) Add(ctx context.Context, slackChannel SlackChannel)
 //zenrpc:400 Validation Error
 //zenrpc:404 Not Found
 func (s SlackChannelService) Update(ctx context.Context, slackChannel SlackChannel) (bool, error) {
-	if _, err := s.byID(ctx, slackChannel.ID); err != nil {
+	existing, err := s.byID(ctx, slackChannel.ID)
+	if err != nil {
 		return false, err
 	}
 
@@ -571,7 +572,15 @@ func (s SlackChannelService) Update(ctx context.Context, slackChannel SlackChann
 		return false, ve.Error()
 	}
 
-	ok, err := s.projectRepo.UpdateSlackChannel(ctx, slackChannel.ToDB())
+	sc := slackChannel.ToDB()
+	// WebhookURL is write-only with set-or-keep semantics: a nil or blank URL in
+	// the request means "leave the stored URL unchanged" (the admin API never
+	// returns it, so a stale client echoing the empty field must not erase it).
+	if slackChannel.WebhookURL == nil || *slackChannel.WebhookURL == "" {
+		sc.WebhookURL = existing.WebhookURL
+	}
+
+	ok, err := s.projectRepo.UpdateSlackChannel(ctx, sc)
 	if err != nil {
 		return false, InternalError(err)
 	}
@@ -620,7 +629,6 @@ func (s SlackChannelService) Validate(ctx context.Context, slackChannel SlackCha
 }
 
 func (s SlackChannelService) isValid(ctx context.Context, slackChannel SlackChannel, isUpdate bool) Validator {
-	_ = isUpdate
 	var v Validator
 
 	if v.CheckBasic(ctx, slackChannel); v.HasInternalError() {
@@ -628,6 +636,11 @@ func (s SlackChannelService) isValid(ctx context.Context, slackChannel SlackChan
 	}
 
 	// custom validation starts here
+	// WebhookURL is write-only: required on create, optional (keep) on update.
+	if !isUpdate && (slackChannel.WebhookURL == nil || *slackChannel.WebhookURL == "") {
+		v.Append("webhookURL", FieldErrorRequired)
+	}
+
 	return v
 }
 
@@ -651,7 +664,7 @@ func (s TaskTrackerService) dbSort(ops *ViewOps) db.OpFunc {
 	}
 
 	switch ops.SortColumn {
-	case db.Columns.TaskTracker.ID, db.Columns.TaskTracker.Title, db.Columns.TaskTracker.URL, db.Columns.TaskTracker.AuthToken, db.Columns.TaskTracker.FetchPrompt, db.Columns.TaskTracker.StatusID:
+	case db.Columns.TaskTracker.ID, db.Columns.TaskTracker.Title, db.Columns.TaskTracker.URL, db.Columns.TaskTracker.FetchPrompt, db.Columns.TaskTracker.StatusID:
 		v = db.WithSort(db.NewSortField(ops.SortColumn, ops.SortDesc))
 	}
 
@@ -741,7 +754,8 @@ func (s TaskTrackerService) Add(ctx context.Context, taskTracker TaskTracker) (*
 //zenrpc:400 Validation Error
 //zenrpc:404 Not Found
 func (s TaskTrackerService) Update(ctx context.Context, taskTracker TaskTracker) (bool, error) {
-	if _, err := s.byID(ctx, taskTracker.ID); err != nil {
+	existing, err := s.byID(ctx, taskTracker.ID)
+	if err != nil {
 		return false, err
 	}
 
@@ -749,7 +763,15 @@ func (s TaskTrackerService) Update(ctx context.Context, taskTracker TaskTracker)
 		return false, ve.Error()
 	}
 
-	ok, err := s.projectRepo.UpdateTaskTracker(ctx, taskTracker.ToDB())
+	tt := taskTracker.ToDB()
+	// AuthToken is write-only with set-or-keep semantics: a nil or blank token in
+	// the request means "leave the stored token unchanged" (the admin API never
+	// returns it, so a stale client echoing the empty field must not erase it).
+	if taskTracker.AuthToken == nil || *taskTracker.AuthToken == "" {
+		tt.AuthToken = existing.AuthToken
+	}
+
+	ok, err := s.projectRepo.UpdateTaskTracker(ctx, tt)
 	if err != nil {
 		return false, InternalError(err)
 	}

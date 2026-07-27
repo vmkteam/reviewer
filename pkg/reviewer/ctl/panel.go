@@ -239,8 +239,21 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 
 // produceMember reviews a single panel member in its worktree and returns the
 // filled draft + R*.md paths (not yet uploaded; the worktree stays alive).
-func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (*memberOutput, error) {
+// Any failure — including an untouched-skeleton "empty review" — ships the
+// member's artifacts to the debug ring buffer before panel cleanup wipes the
+// worktree, which is otherwise the only place the runner transcript exists.
+func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (out *memberOutput, err error) {
 	mc := c.memberConfig(dir, m)
+	defer func() {
+		if err == nil {
+			return
+		}
+		// Detached context: a member timeout is precisely a failure this bundle
+		// should explain, and by then ctx is already cancelled.
+		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		c.uploadDebugBundle(upCtx, &mc, err)
+	}()
 
 	rr, err := c.runnerFactory(&mc)
 	if err != nil {
@@ -259,7 +272,13 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 	if err != nil {
 		return nil, fmt.Errorf("read review: %w", err)
 	}
-	c.applyRunResult(draft, &mc, rr, result)
+	c.applyRunResult(ctx, draft, &mc, rr, result)
+	// A skeleton passes Validate, so an "exit 0, review.json untouched" run
+	// would otherwise sail into the panel as a legitimate zero-findings member
+	// and dilute the fusion.
+	if isReviewJSONUnfilled(draft) {
+		return nil, errors.New("empty review: runner finished without filling review.json (no issues, no group summaries)")
+	}
 
 	mdFiles, err := FindMDFiles(mc.Dir)
 	if err != nil {
@@ -309,7 +328,12 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
 			continue
 		}
-		c.applyRunResult(draft, &jc, rr, result)
+		if isReviewJSONUnfilled(draft) {
+			lastErr = errors.New("judge produced an empty review")
+			c.log.WarnContext(ctx, "judge review empty, retrying", "attempt", attempt)
+			continue
+		}
+		c.applyRunResult(ctx, draft, &jc, rr, result)
 
 		mdFiles, err := FindMDFiles(jc.Dir)
 		if err != nil {

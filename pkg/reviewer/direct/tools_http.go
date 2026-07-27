@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -40,6 +41,9 @@ func httpFetchTool(cfg TrackerConfig) (ToolDef, Handler, bool) {
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
 		return ToolDef{}, nil, false
 	}
+	// Tracker URLs are often stored with a trailing slash; keep the base path
+	// clean so the example below doesn't teach the model "https://host//api/...".
+	base.Path, base.RawPath = strings.TrimSuffix(base.Path, "/"), ""
 
 	def := ToolDef{
 		Name: "http_fetch",
@@ -82,6 +86,7 @@ func httpFetchTool(cfg TrackerConfig) (ToolDef, Handler, bool) {
 		if err != nil {
 			return "", fmt.Errorf("bad url: %w", err)
 		}
+		normalizeFetchPath(target)
 		if !sameOrigin(base, target) || !underPathPrefix(base.Path, target.Path) {
 			return "", fmt.Errorf("url must stay within the task tracker %s", base.String())
 		}
@@ -145,6 +150,21 @@ func trackerAuthHeader(token string) string {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(token))
 	}
 	return "Bearer " + token
+}
+
+// normalizeFetchPath cleans the URL path in place BEFORE the scope check, so
+// the checked path is the sent path. Models concatenate a trailing-slash base
+// with "/api/..." producing "//api/..." — YouTrack answers such paths with its
+// SPA HTML instead of the API response. path.Clean also resolves ".."
+// segments, which would otherwise carry the Authorization header past the
+// path-prefix scope.
+func normalizeFetchPath(u *url.URL) {
+	if u.Path == "" {
+		return
+	}
+	if p := path.Clean(u.Path); p != u.Path {
+		u.Path, u.RawPath = p, ""
+	}
 }
 
 // sameOrigin reports whether u shares base's scheme, host and effective port.

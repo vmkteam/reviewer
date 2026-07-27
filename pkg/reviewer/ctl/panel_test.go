@@ -4,28 +4,47 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// fakeRunner is a ReviewRunner that leaves the on-disk review.json skeleton as-is
-// (so ReadReviewJSON sees a valid empty review) or fails when err is set.
+// fakeRunner is a ReviewRunner that fills the on-disk review.json with one
+// issue (when dir is set), leaves the skeleton untouched (dir empty — an
+// "empty review" runner), or fails outright when err is set.
 type fakeRunner struct {
 	name string
+	dir  string
 	err  error
 }
 
 func (f *fakeRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.dir != "" {
+		draft, err := ReadReviewJSON(f.dir)
+		if err != nil {
+			return nil, err
+		}
+		draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{
+			LocalID: "C1", Severity: "low", Title: "t", FileType: "code",
+		})
+		if err := WriteReviewJSON(f.dir, draft); err != nil {
+			return nil, err
+		}
 	}
 	return &runner.ClaudeResult{}, nil
 }
@@ -90,29 +109,93 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 }
 
 func TestRunMembers_ToleratesFailures(t *testing.T) {
-	c := &Controller{
-		cfg: &Config{
-			Multi: []MemberSpec{
-				{Runner: runner.RunnerClaude, Model: "ok-a"},
-				{Runner: runner.RunnerClaude, Model: "boom"},
-				{Runner: runner.RunnerClaude, Model: "ok-b"},
-			},
+	// Failed members must ship their artifacts as a debug bundle BEFORE panel
+	// cleanup wipes the worktree (its only copy) — count the uploads.
+	var bundles atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v1/upload/debug/") {
+			bundles.Add(1)
+		}
+		_, _ = w.Write([]byte(`{"id":"x","url":"/v1/debug/storage/x/"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewController(&Config{
+		URL: srv.URL, Key: "proj-key",
+		Multi: []MemberSpec{
+			{Runner: runner.RunnerClaude, Model: "ok-a"},
+			{Runner: runner.RunnerClaude, Model: "boom"},
+			{Runner: runner.RunnerClaude, Model: "empty"},
+			{Runner: runner.RunnerClaude, Model: "ok-b"},
 		},
-		log: slog.Default(),
-		runnerFactory: func(mc *Config) (runner.ReviewRunner, error) {
-			if mc.Model == "boom" {
-				return &fakeRunner{name: runner.RunnerClaude, err: errors.New("kaboom")}, nil
-			}
+	}, nil, slog.Default())
+	c.runnerFactory = func(mc *Config) (runner.ReviewRunner, error) {
+		switch mc.Model {
+		case "boom":
+			return &fakeRunner{name: runner.RunnerClaude, err: errors.New("kaboom")}, nil
+		case "empty": // exits cleanly but never touches review.json
 			return &fakeRunner{name: runner.RunnerClaude}, nil
-		},
+		default:
+			return &fakeRunner{name: runner.RunnerClaude, dir: mc.Dir}, nil
+		}
 	}
-	dirs := []string{t.TempDir(), t.TempDir(), t.TempDir()}
-	labels := []string{"ok-a", "boom", "ok-b"}
+	dirs := []string{t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()}
+	labels := []string{"ok-a", "boom", "empty", "ok-b"}
 
 	out := c.runMembers(t.Context(), dirs, labels, "prompt")
-	require.Len(t, out, 2, "the failing member is tolerated, the rest succeed")
+	require.Len(t, out, 2, "the erroring and the empty-review members are both excluded")
 	assert.Equal(t, "ok-a", out[0].label, "successful members keep panel order")
 	assert.Equal(t, "ok-b", out[1].label)
+	assert.EqualValues(t, 2, bundles.Load(), "boom and empty members must each upload a debug bundle")
+}
+
+// judgeRunner leaves the skeleton untouched on the first run (an "empty
+// review" judge flap) and fills review.json on the second.
+type judgeRunner struct {
+	dir  string
+	runs int
+}
+
+func (j *judgeRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
+	j.runs++
+	if j.runs == 1 {
+		return &runner.ClaudeResult{}, nil
+	}
+	draft, err := ReadReviewJSON(j.dir)
+	if err != nil {
+		return nil, err
+	}
+	draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{LocalID: "F1", Severity: "low", Title: "fused", FileType: "code"})
+	if err := WriteReviewJSON(j.dir, draft); err != nil {
+		return nil, err
+	}
+	return &runner.ClaudeResult{}, nil
+}
+func (j *judgeRunner) Name() string      { return runner.RunnerClaude }
+func (j *judgeRunner) SetSession(string) {}
+
+func TestRunJudge_EmptyFirstAttemptRetries(t *testing.T) {
+	// A member worktree with its produced review, to be staged for the judge.
+	mdir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(mdir, "review.json"), []byte(`{"issues":[]}`), 0o600))
+	mdPath := filepath.Join(mdir, "R1.m.ai.md")
+	require.NoError(t, os.WriteFile(mdPath, []byte("body"), 0o600))
+	outputs := []*memberOutput{{label: "opus", dir: mdir, mdFiles: map[string]string{"architecture": mdPath}}}
+
+	judgeDir := t.TempDir()
+	jr := &judgeRunner{dir: judgeDir}
+	c := NewController(&Config{Judge: &MemberSpec{Runner: runner.RunnerClaude}}, nil, slog.Default())
+	c.runnerFactory = func(*Config) (runner.ReviewRunner, error) { return jr, nil }
+
+	fusion, err := c.runJudge(t.Context(), judgeDir, "fuse the members", outputs)
+	require.NoError(t, err)
+	require.Equal(t, 2, jr.runs, "an empty judge review must be retried, not uploaded")
+	require.Len(t, fusion.draft.Issues, 1)
+
+	// Members staged where the fusion prompt expects them, survived the retry's
+	// artifact cleanup (CleanReviewArtifacts only touches the dir root).
+	assert.FileExists(t, filepath.Join(judgeDir, "members", "opus", "review.json"))
+	assert.FileExists(t, filepath.Join(judgeDir, "members", "opus", "R1.m.ai.md"))
 }
 
 func TestWithTimeout(t *testing.T) {

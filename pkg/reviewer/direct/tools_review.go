@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,6 +43,7 @@ const (
 // builders and handlers don't repeat the same literal three or more times.
 const (
 	toolSubmitReview = "submit_review"
+	toolAddIssues    = "add_issues"
 
 	fSummary     = "summary"
 	fIsAccepted  = "isAccepted"
@@ -157,7 +159,7 @@ func setGroupTool(b *reviewBuilder) (ToolDef, Handler) {
 // addIssuesTool appends a batch of issues — called one or more times, small.
 func addIssuesTool(b *reviewBuilder) (ToolDef, Handler) {
 	def := ToolDef{
-		Name: "add_issues",
+		Name: toolAddIssues,
 		Description: "Append a batch of issues to the review. Call one or more times; keep batches small to avoid output truncation. " +
 			"Every ### finding in a group's markdown must have a matching issue.",
 		Schema: objSchema(map[string]any{
@@ -170,6 +172,11 @@ func addIssuesTool(b *reviewBuilder) (ToolDef, Handler) {
 		}
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return "", fmt.Errorf("add_issues: bad arguments: %w", err)
+		}
+		// Empty input is what a max_tokens-truncated tool call degrades to; a
+		// silent "added 0" success would hide the loss from the model.
+		if len(a.Issues) == 0 {
+			return "", errors.New("add_issues: empty issues array — if you sent a batch, it was likely cut off by the output-token limit; re-send with fewer issues per call")
 		}
 		for i, iss := range a.Issues {
 			if !reviewer.IsValidSeverity(iss.Severity) {

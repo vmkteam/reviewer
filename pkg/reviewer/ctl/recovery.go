@@ -9,10 +9,11 @@ import (
 	"reviewsrv/pkg/reviewer/runner"
 )
 
-// isReviewJSONUnfilled detects the "model skipped Step 2" failure mode:
-// runner produced MD files but never edited review.json, so the skeleton is
-// uploaded as-is. Heuristic: all files[].summary blank AND no issues — even
-// a clean MR should yield non-empty summaries.
+// isReviewJSONUnfilled detects a runner that never edited review.json — the
+// skeleton would be uploaded as-is. Heuristic: all files[].summary blank AND
+// no issues; even a clean MR should yield non-empty summaries. Single-review
+// mode reacts with the Step 2 retry below; the panel treats such a member (or
+// judge attempt) as failed.
 func isReviewJSONUnfilled(draft *rest.ReviewDraft) bool {
 	if draft == nil {
 		return false
@@ -42,7 +43,7 @@ func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDra
 		d2.Review.ModelInfo.Add(retryRes.ToModelInfo(c.cfg.Model))
 		d2.Review.DurationMs += retryRes.DurationMs
 	}
-	c.fillMetadata(d2)
+	c.fillMetadata(ctx, d2)
 
 	if isReviewJSONUnfilled(d2) {
 		c.log.WarnContext(ctx, "Step 2 retry did not fill review.json")

@@ -421,11 +421,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -450,10 +445,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "channel",
-									Type: smd.String,
-								},
-								{
-									Name: "webhookURL",
 									Type: smd.String,
 								},
 								{
@@ -698,11 +689,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -727,10 +713,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "channel",
-									Type: smd.String,
-								},
-								{
-									Name: "webhookURL",
 									Type: smd.String,
 								},
 								{
@@ -970,11 +952,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -999,10 +976,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "channel",
-										Type: smd.String,
-									},
-									{
-										Name: "webhookURL",
 										Type: smd.String,
 									},
 									{
@@ -1235,11 +1208,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -1264,10 +1232,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								},
 								{
 									Name: "channel",
-									Type: smd.String,
-								},
-								{
-									Name: "webhookURL",
 									Type: smd.String,
 								},
 								{
@@ -1506,11 +1470,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -1535,10 +1494,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "channel",
-										Type: smd.String,
-									},
-									{
-										Name: "webhookURL",
 										Type: smd.String,
 									},
 									{
@@ -1834,11 +1789,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -1863,10 +1813,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									},
 									{
 										Name: "channel",
-										Type: smd.String,
-									},
-									{
-										Name: "webhookURL",
 										Type: smd.String,
 									},
 									{
@@ -2998,11 +2944,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "webhookURL",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
 								Name:     "statusId",
 								Optional: true,
 								Type:     smd.Integer,
@@ -3047,11 +2988,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "channel",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
-								Name:     "webhookURL",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -3123,10 +3059,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "webhookURL",
-									Type: smd.String,
-								},
-								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -3185,8 +3117,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "webhookURL",
-							Type: smd.String,
+							Name:        "webhookURL",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "webhookURLMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasWebhookURL",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "statusId",
@@ -3246,8 +3190,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -3300,8 +3256,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "webhookURL",
-							Type: smd.String,
+							Name:        "webhookURL",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "webhookURLMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasWebhookURL",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "statusId",
@@ -3360,8 +3328,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -3447,8 +3427,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -3711,11 +3703,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
 								Name:     "fetchPrompt",
 								Optional: true,
 								Type:     smd.String,
@@ -3765,11 +3752,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "url",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
-								Name:     "authToken",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -3846,11 +3828,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -3913,9 +3890,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name:     "authToken",
-							Optional: true,
-							Type:     smd.String,
+							Name:        "authToken",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "fetchPrompt",
@@ -3979,9 +3967,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",
@@ -4038,9 +4037,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name:     "authToken",
-							Optional: true,
-							Type:     smd.String,
+							Name:        "authToken",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "fetchPrompt",
@@ -4103,9 +4113,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",
@@ -4195,9 +4216,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",

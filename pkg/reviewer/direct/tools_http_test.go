@@ -229,3 +229,46 @@ func TestTrackerAuthHeader(t *testing.T) {
 	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("me@corp.io:tok"))
 	assert.Equal(t, want, trackerAuthHeader("me@corp.io:tok"))
 }
+
+func TestHTTPFetchCollapsesDoubleSlash(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Trailing-slash base + model concatenating "/api/..." → "//api/...":
+	// YouTrack serves SPA HTML for such paths, so the tool must normalise.
+	def, h, ok := httpFetchTool(TrackerConfig{URL: srv.URL + "/"})
+	require.True(t, ok)
+	require.NotContains(t, fmt.Sprint(def.Schema), "//api", "tool example must not teach the double slash")
+
+	out, err := call(t, h, fmt.Sprintf(`{"url":%q}`, srv.URL+"//api/issues/PLF-1490"))
+	require.NoError(t, err)
+	assert.Equal(t, "/api/issues/PLF-1490", gotPath)
+	assert.Contains(t, out, `{"ok":true}`)
+}
+
+func TestHTTPFetchResolvesDotSegmentsBeforeScopeCheck(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Path-prefix scope must see the RESOLVED path: "/jira/../admin" escapes
+	// the /jira prefix and would carry the Authorization header with it.
+	_, h, ok := httpFetchTool(TrackerConfig{URL: srv.URL + "/jira", Token: "secret"})
+	require.True(t, ok)
+
+	_, err := call(t, h, fmt.Sprintf(`{"url":%q}`, srv.URL+"/jira/../admin"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must stay within the task tracker")
+
+	// A dot-segment path that stays inside the prefix still works.
+	out, err := call(t, h, fmt.Sprintf(`{"url":%q}`, srv.URL+"/jira/x/../api/issues"))
+	require.NoError(t, err)
+	assert.Contains(t, out, `{"ok":true}`)
+}

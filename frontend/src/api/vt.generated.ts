@@ -248,7 +248,9 @@ export interface ISlackChannel {
   id: number,
   title: string,
   channel: string,
-  webhookURL: string,
+  webhookURL?: string, // write-only: nil on read, set-or-keep on write
+  webhookURLMasked: string, // read-only masked display
+  hasWebhookURL: boolean, // read-only
   statusId: number,
   status?: IStatus
 }
@@ -257,7 +259,6 @@ export interface ISlackChannelSearch {
   id?: number,
   title?: string,
   channel?: string,
-  webhookURL?: string,
   statusId?: number,
   ids: Array<number>
 }
@@ -266,7 +267,6 @@ export interface ISlackChannelSummary {
   id: number,
   title: string,
   channel: string,
-  webhookURL: string,
   status?: IStatus
 }
 
@@ -309,7 +309,9 @@ export interface ITaskTracker {
   id: number,
   title: string,
   url: string,
-  authToken?: string,
+  authToken?: string, // write-only: nil on read, set-or-keep on write
+  tokenMasked: string, // read-only masked display
+  hasToken: boolean, // read-only
   fetchPrompt: string,
   statusId: number,
   status?: IStatus
@@ -319,7 +321,6 @@ export interface ITaskTrackerSearch {
   id?: number,
   title?: string,
   url?: string,
-  authToken?: string,
   fetchPrompt?: string,
   statusId?: number,
   ids: Array<number>
@@ -329,7 +330,6 @@ export interface ITaskTrackerSummary {
   id: number,
   title: string,
   url: string,
-  authToken?: string,
   fetchPrompt: string,
   status?: IStatus
 }
@@ -756,7 +756,9 @@ export class SlackChannel implements ISlackChannel {
   id: number = 0;
   title: string = null;
   channel: string = null;
-  webhookURL: string = null;
+  webhookURL?: string = null;
+  webhookURLMasked: string = null;
+  hasWebhookURL: boolean = false;
   statusId: number = 0;
   status?: IStatus = null;
 }
@@ -767,7 +769,6 @@ export class SlackChannelSearch implements ISlackChannelSearch {
   id?: number = 0;
   title?: string = "";
   channel?: string = "";
-  webhookURL?: string = "";
   statusId?: number = 0;
   ids: Array<number> = [0];
 }
@@ -778,7 +779,6 @@ export class SlackChannelSummary implements ISlackChannelSummary {
   id: number = 0;
   title: string = null;
   channel: string = null;
-  webhookURL: string = null;
   status?: IStatus = null;
 }
 
@@ -840,6 +840,8 @@ export class TaskTracker implements ITaskTracker {
   title: string = null;
   url: string = null;
   authToken?: string = null;
+  tokenMasked: string = null;
+  hasToken: boolean = false;
   fetchPrompt: string = null;
   statusId: number = 0;
   status?: IStatus = null;
@@ -851,7 +853,6 @@ export class TaskTrackerSearch implements ITaskTrackerSearch {
   id?: number = 0;
   title?: string = "";
   url?: string = "";
-  authToken?: string = "";
   fetchPrompt?: string = "";
   statusId?: number = 0;
   ids: Array<number> = [0];
@@ -863,7 +864,6 @@ export class TaskTrackerSummary implements ITaskTrackerSummary {
   id: number = 0;
   title: string = null;
   url: string = null;
-  authToken?: string = null;
   fetchPrompt: string = null;
   status?: IStatus = null;
 }

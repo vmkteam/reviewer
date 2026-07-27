@@ -22,7 +22,7 @@
       </FormField>
 
       <FormField label="Webhook URL" :error="fieldError('webhookURL')">
-        <VInput v-model="entity.webhookURL" type="text" placeholder="https://hooks.slack.com/..." />
+        <SecretInput v-model="webhookInput" placeholder="https://hooks.slack.com/..." :saved-masked="entity.hasWebhookURL ? entity.webhookURLMasked : ''" />
       </FormField>
 
       <FormField label="Status" :error="fieldError('statusId')">
@@ -52,6 +52,7 @@ import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import VInput from '../../components/VInput.vue'
+import SecretInput from '../../components/SecretInput.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
 
@@ -61,14 +62,19 @@ const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<SlackChannel>(vtApi.slackchannel, 'slackChannel', () => ({
-  id: 0, title: '', channel: '', webhookURL: '', statusId: 1,
+  id: 0, title: '', channel: '', statusId: 1, webhookURLMasked: '', hasWebhookURL: false,
 }))
+
+// Webhook URL is write-only: bind a separate input so an untouched field stays "keep".
+const webhookInput = ref('')
 
 onMounted(() => {
   if (props.id) load(parseInt(props.id))
 })
 
 async function handleSave() {
+  // Empty input means "keep existing" (update); required on add is enforced server-side.
+  entity.webhookURL = webhookInput.value ? webhookInput.value : undefined
   if (await save()) router.push('/slack-channels')
 }
 

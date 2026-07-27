@@ -12,10 +12,47 @@ import (
 // errMaxRounds is returned when the loop exhausts MaxRounds without a submit.
 var errMaxRounds = errors.New("direct: max rounds reached without submit_review")
 
+// errTruncatedRounds aborts the loop when several rounds in a row are cut by the
+// output-token cap — each such round burns the full max_tokens budget without
+// making progress, so grinding on to MaxRounds only wastes money.
+var errTruncatedRounds = errors.New("direct: consecutive rounds truncated by the output-token limit")
+
+// maxConsecutiveTruncated is how many truncated rounds in a row abort the run.
+const maxConsecutiveTruncated = 3
+
 // nudgeSubmit is injected once if the model stops producing tool calls before
 // submitting the review.
 const nudgeSubmit = "You have not called submit_review yet. " +
 	"Finish the review now by calling the submit_review tool with the full review.json content and the R1..R5 markdown bodies."
+
+// noticeTruncated tells the model its last turn was cut by the output-token
+// cap, so tool calls may have arrived with empty or partial arguments.
+const noticeTruncated = "NOTE: your previous response was cut off by the output-token limit, " +
+	"so any tool call in it may have been received with empty or partial arguments. " +
+	"Re-issue the affected tool calls with smaller payloads (e.g. fewer issues per add_issues batch)."
+
+// Provider stop reasons meaning the response was cut by the output-token cap.
+const (
+	stopMaxTokens = "max_tokens" // Anthropic stop_reason
+	stopLength    = "length"     // OpenAI finish_reason
+)
+
+// IsTruncated reports whether a provider stop reason means the response was cut
+// by the output-token cap.
+func IsTruncated(stopReason string) bool {
+	return stopReason == stopMaxTokens || stopReason == stopLength
+}
+
+// noteTruncated folds the truncation notice into the last tool result, so the
+// model learns its turn was cut without an extra user message (which would put
+// two consecutive user turns in the history — the Anthropic API rejects that).
+func noteTruncated(results []ToolResult) {
+	if len(results) == 0 {
+		return
+	}
+	last := &results[len(results)-1]
+	last.Content = strings.TrimSpace(last.Content + "\n\n" + noticeTruncated)
+}
 
 // Result is the outcome of a direct run, mapped to ClaudeResult by the ctl adapter.
 type Result struct {
@@ -40,6 +77,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 	var total Usage
 	var apiMs int // cumulative provider Complete time (vs total wall-clock)
 	nudged := false
+	truncatedRounds := 0 // consecutive rounds cut by the output-token cap
 
 	// Record the kickoff input (system contract + user task with the preloaded
 	// diff/files) so the transcript is a full input/output log, not just the
@@ -69,7 +107,25 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		emitRound(opts.OnEvent, round, resp)
 		msgs = append(msgs, Message{Role: RoleAssistant, Text: resp.Text, ToolCalls: resp.ToolCalls, Raw: resp.Raw})
 
+		// A truncated round burned the whole max_tokens budget (thinking + partial
+		// output); tell the model so it retries smaller, and bail out after a few
+		// in a row — repeating the same over-budget turn never converges. The
+		// abort happens AFTER dispatching whatever tool calls did arrive, so a
+		// submit_review or issue batch that survived the cut is not thrown away.
+		truncated := IsTruncated(resp.StopReason)
+		truncatedRounds = countTruncated(truncatedRounds, truncated)
+		abort := truncatedRounds >= maxConsecutiveTruncated
+
 		if len(resp.ToolCalls) == 0 {
+			if truncated && !reg.Submitted() {
+				if abort {
+					return finish(round+1, "error", false), fmt.Errorf("round %d: %w", round, errTruncatedRounds)
+				}
+				// Cut off mid-text before any tool call: ask for a retry rather than
+				// treating it as a deliberate bare turn.
+				msgs = append(msgs, Message{Role: RoleUser, Text: noticeTruncated})
+				continue
+			}
 			// Model produced only text. If it hasn't submitted, nudge once; on a
 			// second bare turn, give up cleanly.
 			if !reg.Submitted() && !nudged {
@@ -81,20 +137,54 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		}
 
 		results := dispatchParallel(ctx, reg, resp.ToolCalls)
-		for _, tr := range results {
-			opts.OnEvent.emit(Event{Round: round, Kind: "tool_result", Tool: tr.Name, Content: clipN(tr.Content, logContentClip), IsError: tr.IsError})
+		if truncated {
+			noteTruncated(results)
 		}
+		emitToolResults(opts.OnEvent, round, results)
 		msgs = append(msgs, Message{Role: RoleTool, ToolResults: results})
 
 		if reg.Submitted() {
 			return finish(round+1, "submitted", true), nil
 		}
-		if opts.CompactAt > 0 && estimateTokens(msgs) > opts.CompactAt {
-			msgs = compactMessages(msgs, opts.KeepTail)
+		if abort {
+			return finish(round+1, "error", false), fmt.Errorf("round %d: %w", round, errTruncatedRounds)
 		}
+		msgs = maybeCompact(msgs, opts, round)
 	}
 
 	return finish(opts.MaxRounds, "max_rounds", reg.Submitted()), errMaxRounds
+}
+
+// emitToolResults records each tool result in the transcript, clipped to keep
+// the log readable.
+func emitToolResults(s Sink, round int, results []ToolResult) {
+	for _, tr := range results {
+		s.emit(Event{Round: round, Kind: "tool_result", Tool: tr.Name, Content: clipN(tr.Content, logContentClip), IsError: tr.IsError})
+	}
+}
+
+// countTruncated advances the consecutive-truncated-rounds counter: any whole
+// (non-truncated) round resets it.
+func countTruncated(prev int, truncated bool) int {
+	if !truncated {
+		return 0
+	}
+	return prev + 1
+}
+
+// maybeCompact prunes the history once it crosses the compaction threshold,
+// recording a transcript event: compaction rewrites the provider prompt cache,
+// so a sudden cost jump must be traceable to its round.
+func maybeCompact(msgs []Message, opts Options, round int) []Message {
+	if opts.CompactAt <= 0 || estimateTokens(msgs) <= opts.CompactAt {
+		return msgs
+	}
+	before := len(msgs)
+	out := compactMessages(msgs, opts.KeepTail)
+	if len(out) < before {
+		opts.OnEvent.emit(Event{Round: round, Kind: "compact", Text: fmt.Sprintf("compacted history: %d -> %d messages", before, len(out))})
+	}
+	return out
 }
 
 // emitRound records the model's text, requested tool calls and per-round usage.
@@ -205,15 +295,28 @@ func compactMessages(msgs []Message, keepTail int) []Message {
 	if dropped <= 0 {
 		return msgs
 	}
-	// Fold the compaction marker into the head (kept) message rather than
-	// inserting a separate one — a standalone marker after the head user turn
-	// would put two consecutive user messages in the history, which the Anthropic
-	// API rejects (roles must alternate).
-	head := msgs[0] // keepHead == 1
-	head.Text = strings.TrimSpace(head.Text +
-		fmt.Sprintf("\n\n[compacted: %d earlier messages omitted to fit context]", dropped))
+	marker := fmt.Sprintf("[compacted: %d earlier messages omitted to fit context]", dropped)
 	out := make([]Message, 0, 1+(len(msgs)-cut))
-	out = append(out, head)
+	out = append(out, msgs[0]) // keepHead == 1
 	out = append(out, msgs[cut:]...)
+	// Place the marker inside the tail, keeping the head byte-identical: mutating
+	// the head changes the first bytes after system+tools and invalidates the
+	// provider prompt cache for the ENTIRE history, while the tail is re-written
+	// anyway (its positions shifted). A standalone marker message would also
+	// break the user/assistant alternation the Anthropic API requires, so it is
+	// folded into the first tool-result of the tail instead.
+	for i := 1; i < len(out); i++ {
+		if out[i].Role == RoleTool && len(out[i].ToolResults) > 0 {
+			trs := append([]ToolResult(nil), out[i].ToolResults...) // keep msgs' backing array intact
+			trs[0].Content = marker + "\n\n" + trs[0].Content
+			out[i].ToolResults = trs
+			return out
+		}
+	}
+	// Tail has no tool message (text-only turns) — fall back to folding the
+	// marker into the head; correctness beats cache preservation here.
+	head := out[0]
+	head.Text = strings.TrimSpace(head.Text + "\n\n" + marker)
+	out[0] = head
 	return out
 }

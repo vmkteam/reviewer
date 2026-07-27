@@ -146,9 +146,10 @@ func (s RunnerProfileService) Update(ctx context.Context, runnerProfile RunnerPr
 	}
 
 	rp := runnerProfile.ToDB()
-	// Token is write-only with set-or-keep semantics: a nil token in the request
-	// means "leave the stored token unchanged" (the admin API never returns it).
-	if runnerProfile.Token == nil {
+	// Token is write-only with set-or-keep semantics: a nil or blank token in
+	// the request means "leave the stored token unchanged" (the admin API never
+	// returns it, so a stale client echoing the empty field must not erase it).
+	if runnerProfile.Token == nil || *runnerProfile.Token == "" {
 		rp.Token = existing.Token
 	}
 

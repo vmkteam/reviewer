@@ -35,6 +35,11 @@ type DirectRunner struct {
 	DiffBase string // git_diff default base (target branch)
 	DiffHead string // git_diff default head (source branch)
 	Effort   string
+	// CompactAt overrides the loop's compaction threshold (estimated tokens);
+	// zero keeps the direct package default. Set to direct.CompactAtLargeContext
+	// for 1M-context providers so mid-run compaction (a full cache re-write)
+	// doesn't fire on reviews that comfortably fit the window.
+	CompactAt int
 	// Tracker enables the tracker-scoped http_fetch tool (see direct.TrackerConfig).
 	Tracker *direct.TrackerConfig
 	Log     *slog.Logger
@@ -55,14 +60,25 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
 
+	// Local runs carry no CI branch metadata; without a base the preload and the
+	// git_diff defaults degrade to "working tree vs HEAD" — an empty diff on a
+	// committed branch, and the model reviews the wrong thing. Detect the
+	// integration branch from git instead.
+	diffBase := r.DiffBase
+	if diffBase == "" {
+		if diffBase = direct.DetectBaseRef(ctx, r.Dir); diffBase != "" && r.Log != nil {
+			r.Log.InfoContext(ctx, "diff base not configured, detected from git", "base", diffBase)
+		}
+	}
+
 	// Pre-load the diff and the full content of changed files into the kickoff so
 	// the model reviews from them instead of fanning out one read_file per turn.
 	// The pre-loaded paths seed read-dedup so the model isn't re-served them.
-	preloadBlock, preloadedPaths := direct.PreloadContext(ctx, r.Dir, r.DiffBase, r.DiffHead)
+	preloadBlock, preloadedPaths := direct.PreloadContext(ctx, r.Dir, diffBase, r.DiffHead)
 
 	reg := direct.NewReviewRegistry(direct.ReviewToolsConfig{
 		Dir:            r.Dir,
-		DiffBase:       r.DiffBase,
+		DiffBase:       diffBase,
 		DiffHead:       r.DiffHead,
 		PreloadedPaths: preloadedPaths,
 		Tracker:        r.Tracker,
@@ -78,6 +94,9 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 
 	opts := direct.DefaultOptions()
 	opts.Effort = r.Effort
+	if r.CompactAt > 0 {
+		opts.CompactAt = r.CompactAt
+	}
 
 	// Stream the session transcript to <dir>/direct-output.jsonl for later
 	// analysis (mirrors claude-output.json / opencode-output.jsonl). Best-effort:
@@ -164,6 +183,12 @@ func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
 			r.Log.WarnContext(ctx, "direct tool error", "round", ev.Round, "tool", ev.Tool, "err", truncate(ev.Content, 300))
 		}
 	case "round":
+		// A truncated round means the model burned the whole output budget and
+		// its tool calls may have arrived empty — surface it live, not just in
+		// the transcript.
+		if direct.IsTruncated(ev.StopReason) {
+			r.Log.WarnContext(ctx, "direct output truncated by token limit", "round", ev.Round, "stopReason", ev.StopReason)
+		}
 		if ev.Usage != nil {
 			r.Log.DebugContext(ctx, "direct round", "round", ev.Round,
 				"inputTokens", ev.Usage.InputTokens, "outputTokens", ev.Usage.OutputTokens,

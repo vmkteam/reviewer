@@ -55,6 +55,14 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 		"--format", "json",
 	}
 
+	// cmd.Dir alone is not enough: opencode resolves its project root through
+	// git, and in a `git worktree` that walk lands in the MAIN repository — the
+	// agent then reads and writes review artifacts there instead of the panel
+	// worktree. --dir pins the project root explicitly.
+	if r.Dir != "" {
+		args = append(args, "--dir", r.Dir)
+	}
+
 	if r.AllowDangerousPermissions {
 		args = append(args, "--dangerously-skip-permissions")
 	}
