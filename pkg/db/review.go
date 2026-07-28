@@ -32,7 +32,7 @@ func NewReviewRepo(db orm.DB) ReviewRepo {
 		join: map[string][]string{
 			Tables.Issue.Name:      {TableColumns, Columns.Issue.ReviewFile, Columns.Issue.Review, Columns.Issue.User},
 			Tables.ReviewFile.Name: {TableColumns, Columns.ReviewFile.Review},
-			Tables.Review.Name:     {TableColumns, Columns.Review.Project, Columns.Review.Prompt},
+			Tables.Review.Name:     {TableColumns, Columns.Review.Project, Columns.Review.Prompt, Columns.Review.ParentReview},
 		},
 	}
 }

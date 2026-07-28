@@ -2,6 +2,7 @@ package rest
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -16,18 +17,28 @@ type ReviewDraft struct {
 
 // ReviewDraftMeta is the per-review metadata block.
 type ReviewDraftMeta struct {
-	ExternalID    string             `json:"externalId"`
-	Title         string             `json:"title"`
-	Description   string             `json:"description"`
-	CommitHash    string             `json:"commitHash"`
-	SourceBranch  string             `json:"sourceBranch"`
-	TargetBranch  string             `json:"targetBranch"`
-	Author        string             `json:"author"`
-	CreatedAt     time.Time          `json:"createdAt"`
-	DurationMs    int                `json:"durationMs"`
-	EffortMinutes int                `json:"effortMinutes"`
-	AiSlopScore   float32            `json:"aiSlopScore"`
-	ModelInfo     db.ReviewModelInfo `json:"modelInfo"`
+	ExternalID    string                 `json:"externalId"`
+	Title         string                 `json:"title"`
+	Description   string                 `json:"description"`
+	CommitHash    string                 `json:"commitHash"`
+	SourceBranch  string                 `json:"sourceBranch"`
+	TargetBranch  string                 `json:"targetBranch"`
+	Author        string                 `json:"author"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	DurationMs    int                    `json:"durationMs"`
+	EffortMinutes int                    `json:"effortMinutes"`
+	AiSlopScore   float32                `json:"aiSlopScore"`
+	ModelInfo     db.ReviewModelInfo     `json:"modelInfo"`
+	RunnerProfile db.ReviewRunnerProfile `json:"runnerProfile"`
+
+	// ReviewRole is single | member | fusion (reviews.reviewRole). Empty is
+	// treated as single. Members of a multi-review panel upload with "member".
+	ReviewRole string `json:"reviewRole,omitempty"`
+
+	// MemberReviewIDs are the panel member review ids a fusion upload links as
+	// its children (their parentReviewId is set to this review). Not a Review
+	// column — consumed by the upload handler.
+	MemberReviewIDs []int `json:"memberReviewIds,omitempty"`
 }
 
 // ReviewDraftFile is one of the five review groups (architecture, code, …).
@@ -49,12 +60,33 @@ type ReviewDraftIssue struct {
 	IssueType    string `json:"issueType"`
 	FileType     string `json:"fileType"`
 	SuggestedFix string `json:"suggestedFix"`
+	// Sources is the per-issue provenance on a fusion review — the panel member
+	// model labels that flagged it (e.g. ["gpt-5.5","deepseek-v4-pro"], "judge"
+	// for a verified net-new). Empty for single/member reviews.
+	Sources []string `json:"sources,omitempty"`
 }
 
-// Validate checks that all reviewType and fileType values are valid.
-// Errors include the offending index and value so the failure points at the
-// specific element, not just the field name.
+// Validate checks that all reviewType and fileType values are valid, plus the
+// multi-review fields (reviewRole, memberReviewIds, issue sources). Errors include
+// the offending index and value so the failure points at the specific element,
+// not just the field name.
 func (rd ReviewDraft) Validate() error {
+	// reviewRole is optional (empty maps to single); when set it must be a known
+	// role. memberReviewIds only make sense on a fusion that links its panel.
+	if rd.Review.ReviewRole != "" && !reviewer.IsValidReviewRole(rd.Review.ReviewRole) {
+		return fmt.Errorf("invalid reviewRole: %q", rd.Review.ReviewRole)
+	}
+	if len(rd.Review.MemberReviewIDs) > 0 {
+		if rd.Review.ReviewRole != reviewer.ReviewRoleFusion {
+			return fmt.Errorf("memberReviewIds require reviewRole=%q, got %q", reviewer.ReviewRoleFusion, rd.Review.ReviewRole)
+		}
+		for i, id := range rd.Review.MemberReviewIDs {
+			if id <= 0 {
+				return fmt.Errorf("invalid memberReviewId at memberReviewIds[%d]: %d", i, id)
+			}
+		}
+	}
+
 	for i, f := range rd.Files {
 		if !reviewer.IsValidReviewType(f.ReviewType) {
 			return fmt.Errorf("invalid reviewType at files[%d]: %q", i, f.ReviewType)
@@ -67,12 +99,25 @@ func (rd ReviewDraft) Validate() error {
 		if !reviewer.IsValidSeverity(iss.Severity) {
 			return fmt.Errorf("invalid severity at issues[%d] (localId=%s): %q", i, iss.LocalID, iss.Severity)
 		}
+		for j, src := range iss.Sources {
+			if strings.TrimSpace(src) == "" {
+				return fmt.Errorf("empty source at issues[%d].sources[%d] (localId=%s)", i, j, iss.LocalID)
+			}
+		}
 	}
 	return nil
 }
 
 // ToModel converts ReviewDraft to reviewer.Review with nested ReviewFiles and Issues.
 func (rd ReviewDraft) ToModel() reviewer.Review {
+	// reviews.reviewRole has a DB default of 'single', but db.Review.ReviewRole is
+	// use_zero — an empty string would be written verbatim, overriding the default.
+	// Map empty to single explicitly so single uploads keep the canonical role.
+	role := rd.Review.ReviewRole
+	if role == "" {
+		role = reviewer.ReviewRoleSingle
+	}
+
 	rv := reviewer.Review{
 		Review: db.Review{
 			Title:         rd.Review.Title,
@@ -87,6 +132,8 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 			EffortMinutes: ptrInt(rd.Review.EffortMinutes),
 			AiSlopScore:   ptrFloat32(rd.Review.AiSlopScore),
 			ModelInfo:     rd.Review.ModelInfo,
+			RunnerProfile: rd.Review.RunnerProfile,
+			ReviewRole:    role,
 		},
 	}
 
@@ -103,6 +150,7 @@ func (rd ReviewDraft) ToModel() reviewer.Review {
 				File:         iss.File,
 				Lines:        iss.Lines,
 				SuggestedFix: ptrString(iss.SuggestedFix),
+				Sources:      db.IssueSources(iss.Sources),
 			},
 		})
 	}

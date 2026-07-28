@@ -218,9 +218,32 @@ projectKey — readonly, генерируется на бэкенде.
 | Поле | Тип | Обязательное | Валидация |
 |------|-----|-------------|-----------|
 | title | input text | да | max 255 |
-| authToken | input text | да | max 255 |
+| url | input text | да | max 255 |
+| authToken | input text | нет | max 255 |
 | fetchPrompt | textarea | да | — |
 | statusId | radio (Опубликован / Не опубликован) | да | — |
+
+Плейсхолдеры в `fetchPrompt`: `{{URL}}` → url трекера; `{{TOKEN}}` → литерал `$REVIEW_TRACKER_TOKEN`
+(легаси-reviewctl без поддержки `tokenEnv` получает промпт со старой подстановкой настоящего токена —
+обратная совместимость до обновления CI-образа).
+Настоящий `authToken` в промпт не подставляется: CLI-раннеры получают его как env-переменную
+`REVIEW_TRACKER_TOKEN` (CI-переменная с тем же именем имеет приоритет над значением из БД),
+а direct-раннер ходит в трекер тулом `http_fetch`, ограниченным origin'ом `url` — Authorization
+он добавляет сам (токен вида `email@domain:secret` → Basic для Jira Cloud, иначе Bearer:
+YouTrack/GitHub/GitLab/Jira PAT).
+
+Пример `fetchPrompt` (YouTrack, работает у всех раннеров):
+
+```
+Извлеки ID задач (формат PROJ-123) из имени ветки и сообщений коммитов.
+Текст задачи: GET {{URL}}/api/issues/<ID>?fields=idReadable,summary,description
+Комментарии:  GET {{URL}}/api/issues/<ID>/comments?fields=text,author(login)
+Если доступен тул http_fetch — используй его (авторизация добавляется автоматически).
+Иначе выполняй запросы через: curl -sf -H "Authorization: Bearer $REVIEW_TRACKER_TOKEN" "<url>"
+```
+
+Для GitHub: `GET {{URL}}/repos/<owner>/<repo>/issues/<number>`; для Jira:
+`GET {{URL}}/rest/api/2/issue/<ID>` (Jira Cloud: `authToken` в форме `email@domain:apitoken`).
 
 #### Slack Channel
 

@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	StatusFilter        = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusDisabled}, SearchType: SearchTypeArray}
+	StatusFilter        = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusDisabled}, SearchType: SearchTypeArray} //nolint:goconst // pg column name reused across filters
 	StatusEnabledFilter = Filter{Field: "statusId", Value: []int{StatusEnabled}, SearchType: SearchTypeArray}
 	IssueStatusFilter   = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusValid, StatusFalsePositive, StatusIgnored}, SearchType: SearchTypeArray}
 )

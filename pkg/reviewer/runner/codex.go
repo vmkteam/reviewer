@@ -32,7 +32,14 @@ type ExecCodexRunner struct {
 	Dir             string
 	SessionID       string // if set, resumes the thread via `exec resume <id>`
 	ContinueSession bool   // codex has no auto-continue; kept for interface symmetry
-	Log             *slog.Logger
+	// Token is the runner-profile API key injected into the subprocess as
+	// OPENAI_API_KEY when that env var is not already set (env wins).
+	Token string
+	// TrackerToken is injected as REVIEW_TRACKER_TOKEN (env wins; see
+	// ExecClaudeRunner). Codex's sandbox blocks network today, so it only
+	// matters if that changes.
+	TrackerToken string
+	Log          *slog.Logger
 }
 
 // Name implements ReviewRunner.
@@ -82,7 +89,8 @@ func (r *ExecCodexRunner) buildArgs() []string {
 func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface significant events (tool commands, failures) live as codex streams.
-	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, func(line []byte) { r.logEvent(ctx, line) })
+	env := append(credEnv(envOpenAIAPIKey, r.Token), credEnv(envTrackerToken, r.TrackerToken)...)
+	out := runExec(ctx, r.Log, RunnerCodex, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -323,6 +331,10 @@ var codexModelPrices = map[string]codexTokenPrice{
 	"gpt-5.1-codex-max": {1.25, 0.125, 10.00},
 	"gpt-5.1-codex":     {1.25, 0.125, 10.00},
 	"gpt-5-codex":       {1.25, 0.125, 10.00},
+	"gpt-5.6":           {5.00, 0.50, 30.00}, // bare alias routes to Sol
+	"gpt-5.6-sol":       {5.00, 0.50, 30.00},
+	"gpt-5.6-terra":     {2.50, 0.25, 15.00},
+	"gpt-5.6-luna":      {1.00, 0.10, 6.00},
 	"gpt-5.5":           {5.00, 0.50, 30.00},
 	"gpt-5.5-pro":       {30.00, 30.00, 180.00},
 	"gpt-5.4":           {2.50, 0.25, 15.00},

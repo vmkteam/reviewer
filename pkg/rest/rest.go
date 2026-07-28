@@ -67,8 +67,11 @@ func (h *Handler) CreateReview(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	// A fusion upload carries memberReviewIds; the review and the child links are
+	// persisted in one transaction so a bad/foreign member id rolls the fusion back
+	// instead of leaving it with half-linked members. Empty for single/member uploads.
 	model := draft.ToModel()
-	rv, err := h.rm.CreateReview(c.Request().Context(), project, &model)
+	rv, err := h.rm.CreateReviewWithMembers(c.Request().Context(), project, &model, draft.Review.MemberReviewIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -190,19 +193,4 @@ func (h *Handler) ProjectInstructionsMarkdown(c echo.Context) error {
 	}
 
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", []byte(md))
-}
-
-// GetPrompt returns the assembled review prompt for the given project.
-func (h *Handler) GetPrompt(c echo.Context) error {
-	project, err := h.projectByKey(c)
-	if err != nil {
-		return err
-	}
-
-	prompt, err := h.pm.Prompt(c.Request().Context(), project.ProjectKey)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return c.String(http.StatusOK, prompt)
 }

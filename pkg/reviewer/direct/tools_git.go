@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"reviewsrv/pkg/reviewer"
 )
 
 const (
@@ -25,21 +27,65 @@ const (
 	gitDiffCmd = "diff"
 )
 
+// artifactExcludes hides the reviewer's own working-dir artifacts (the skeleton,
+// runner session logs, rendered bodies) from every diff/untracked scan — they are
+// never part of the change under review, but a local run leaves them lying around
+// and they would otherwise be presented to the model as the diff itself. Derived
+// from the canonical set in the reviewer package (shared with the fs-walk skips
+// and ctl's cleaner) so a new artifact is added once.
+var artifactExcludes = func() []string {
+	out := make([]string, 0, len(reviewer.ReviewArtifactFiles)+2)
+	for _, n := range reviewer.ReviewArtifactFiles {
+		out = append(out, ":(exclude)"+n)
+	}
+	// glob magic keeps * from crossing "/" (default pathspec fnmatch does), so
+	// only ROOT-level *.ai.md are hidden — the judge's staged members/<label>/
+	// copies must stay visible. The fixed names above are root-anchored already.
+	return append(out, ":(exclude)"+reviewer.ReviewArtifactHTML, ":(exclude,glob)*"+reviewer.ReviewArtifactMDSuffix)
+}()
+
 // pathspec returns the trailing git pathspec: scoped to a single path when one is
 // given, otherwise the whole tree minus vendored/generated trees (which would
-// otherwise swamp the review diff).
+// otherwise swamp the review diff) and the reviewer's own artifacts.
 func pathspec(path string) []string {
 	if strings.TrimSpace(path) != "" {
 		return []string{"--", path}
 	}
-	return []string{"--", ".",
+	return append([]string{"--", ".",
 		":(exclude)vendor", ":(exclude)node_modules",
-		":(exclude)frontend/dist", ":(exclude)frontend/dist-vt"}
+		":(exclude)frontend/dist", ":(exclude)frontend/dist-vt"},
+		artifactExcludes...)
 }
 
 // withExcludes appends the whole-tree pathspec (vendored/generated trees excluded).
 func withExcludes(args ...string) []string {
 	return append(args, pathspec("")...)
+}
+
+// withUntrackedExcludes is withExcludes plus local agent state (.claude) — when
+// untracked it is the developer's own tooling context, not reviewable work.
+// Committed .claude changes still show up in ranged diffs.
+func withUntrackedExcludes(args ...string) []string {
+	return append(withExcludes(args...), ":(exclude).claude")
+}
+
+// DetectBaseRef guesses the review base for a local run with no CI metadata:
+// the remote's default branch (origin/HEAD), then common integration branches
+// that exist in the repo. Without a base, the preload and git_diff defaults
+// degrade to "working tree vs HEAD" — an empty diff on a committed branch, so
+// the model never sees the actual MR. Returns "" when nothing matches.
+func DetectBaseRef(ctx context.Context, root string) string {
+	if out, err := runGit(ctx, root, false, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		if s := strings.TrimSpace(out); s != "" {
+			return s
+		}
+	}
+	for _, ref := range []string{"origin/devel", "origin/main", "origin/master"} {
+		if _, err := runGit(ctx, root, false, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
+			return ref
+		}
+	}
+	return ""
 }
 
 // validPath guards the git_diff path argument: relative, no traversal, not an
@@ -149,7 +195,7 @@ func gitDiff(ctx context.Context, root, base, head, path string) (string, error)
 
 	// Untracked listing is best-effort: on failure the tracked diff is still
 	// useful, so discard the error and inline whatever (if anything) we got.
-	untracked, _ := runGit(ctx, root, false, withExcludes("ls-files", "--others", "--exclude-standard")...)
+	untracked, _ := runGit(ctx, root, false, withUntrackedExcludes("ls-files", "--others", "--exclude-standard")...)
 	n := 0
 	for _, f := range strings.Split(strings.TrimSpace(untracked), "\n") {
 		if f == "" {

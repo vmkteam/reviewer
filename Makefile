@@ -8,7 +8,7 @@ ifeq ($(RACE),1)
 	GOFLAGS+=-race
 endif
 
-LINT_VERSION := v2.8.0
+LINT_VERSION := v2.12.2
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -76,6 +76,7 @@ run:
 generate:
 	@go generate ./pkg/rpc
 	@go generate ./pkg/vt
+	@go generate ./pkg/reviewctl
 
 test:
 	@echo "Running tests"
@@ -121,6 +122,10 @@ mfd-vt-template: --check-ns type-script-client
 type-script-client: generate
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client=rpc > frontend/src/api/factory.generated.ts
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client=vt > frontend/src/api/vt.generated.ts
+
+go-client: generate
+	@mkdir -p pkg/reviewer/ctl/reviewctlclient
+	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -go_client=reviewctlclient > pkg/reviewer/ctl/reviewctlclient/client.generated.go
 
 --check-ns:
 ifeq ($(NS),"NONE")

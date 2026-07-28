@@ -51,3 +51,28 @@ func WriteReviewSkeleton(dir string, cfg *Config) error {
 	}
 	return nil
 }
+
+// clearPlaceholders blanks CI skeleton placeholders (%AUTHOR% …) that a local
+// run leaves unsubstituted, so literal placeholders never reach the server and
+// the cfg/git fallbacks in fillMetadata get a chance to fill the fields. Kept
+// next to WriteReviewSkeleton: this table must mirror the placeholder set the
+// skeleton writes above.
+func clearPlaceholders(draft *rest.ReviewDraft) {
+	fields := []struct {
+		v  *string
+		ph string
+	}{
+		{&draft.Review.ExternalID, PlaceholderExternalID},
+		{&draft.Review.Author, PlaceholderAuthor},
+		{&draft.Review.SourceBranch, PlaceholderSourceBranch},
+		{&draft.Review.TargetBranch, PlaceholderTargetBranch},
+		{&draft.Review.CommitHash, PlaceholderCommitHash},
+		{&draft.Review.Title, PlaceholderTitle},
+		{&draft.Review.Title, PlaceholderMRTitle},
+	}
+	for _, f := range fields {
+		if *f.v == f.ph {
+			*f.v = ""
+		}
+	}
+}

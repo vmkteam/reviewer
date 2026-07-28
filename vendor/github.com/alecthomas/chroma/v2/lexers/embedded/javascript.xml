@@ -6,6 +6,7 @@
     <filename>*.js</filename>
     <filename>*.jsm</filename>
     <filename>*.mjs</filename>
+    <filename>*.cjs</filename>
     <mime_type>application/javascript</mime_type>
     <mime_type>application/x-javascript</mime_type>
     <mime_type>text/x-javascript</mime_type>
@@ -132,7 +133,7 @@
         <token type="KeywordDeclaration"/>
         <push state="slashstartsregex"/>
       </rule>
-      <rule pattern="(abstract|async|await|boolean|byte|char|class|const|debugger|double|enum|export|extends|final|float|goto|implements|import|int|interface|long|native|package|private|protected|public|short|static|super|synchronized|throws|transient|volatile)\b">
+      <rule pattern="(abstract|async|await|boolean|byte|char|class|const|debugger|double|enum|export|extends|final|float|goto|implements|import|int|interface|long|native|package|private|protected|public|short|static|super|synchronized|throws|transient|using|volatile)\b">
         <token type="KeywordReserved"/>
       </rule>
       <rule pattern="(true|false|null|NaN|Infinity|undefined)\b">

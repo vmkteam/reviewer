@@ -1,7 +1,11 @@
 package chroma
 
 import (
+	"encoding/xml"
 	"fmt"
+	"io"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -14,6 +18,24 @@ const (
 	Yes
 	No
 )
+
+// Mode indicates whether a style is intended for a light or dark background.
+type Mode uint8
+
+// Mode values.
+const (
+	Light Mode = iota
+	Dark
+)
+
+func (m Mode) String() string {
+	switch m {
+	case Dark:
+		return "dark"
+	default:
+		return "light"
+	}
+}
 
 func (t Trilean) String() string {
 	switch t {
@@ -28,12 +50,14 @@ func (t Trilean) String() string {
 
 // Prefix returns s with "no" as a prefix if Trilean is no.
 func (t Trilean) Prefix(s string) string {
-	if t == Yes {
+	switch t {
+	case Yes:
 		return s
-	} else if t == No {
+	case No:
 		return "no" + s
+	default:
+		return ""
 	}
-	return ""
 }
 
 // A StyleEntry in the Style map.
@@ -47,6 +71,10 @@ type StyleEntry struct {
 	Italic    Trilean
 	Underline Trilean
 	NoInherit bool
+}
+
+func (s StyleEntry) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
 }
 
 func (s StyleEntry) String() string {
@@ -104,11 +132,10 @@ func (s StyleEntry) Sub(e StyleEntry) StyleEntry {
 // Ancestors should be provided from oldest to newest.
 func (s StyleEntry) Inherit(ancestors ...StyleEntry) StyleEntry {
 	out := s
-	for i := len(ancestors) - 1; i >= 0; i-- {
+	for _, ancestor := range slices.Backward(ancestors) {
 		if out.NoInherit {
 			return out
 		}
-		ancestor := ancestors[i]
 		if !out.Colour.IsSet() {
 			out.Colour = ancestor.Colour
 		}
@@ -140,26 +167,34 @@ func (s StyleEntry) IsZero() bool {
 //
 // Once built, a Style is immutable.
 type StyleBuilder struct {
-	entries map[TokenType]string
-	name    string
-	parent  *Style
+	entries     map[TokenType]string
+	name        string
+	counterpart string
+	parent      *Style
 }
 
 func NewStyleBuilder(name string) *StyleBuilder {
 	return &StyleBuilder{name: name, entries: map[TokenType]string{}}
 }
 
+// Counterpart sets the lowercase name of the opposite-mode style.
+func (s *StyleBuilder) Counterpart(name string) *StyleBuilder {
+	s.counterpart = strings.ToLower(name)
+	return s
+}
+
 func (s *StyleBuilder) AddAll(entries StyleEntries) *StyleBuilder {
-	for ttype, entry := range entries {
-		s.entries[ttype] = entry
-	}
+	maps.Copy(s.entries, entries)
 	return s
 }
 
 func (s *StyleBuilder) Get(ttype TokenType) StyleEntry {
-	// This is less than ideal, but it's the price for having to check errors on each Add().
+	// This is less than ideal, but it's the price for not having to check errors on each Add().
 	entry, _ := ParseStyleEntry(s.entries[ttype])
-	return entry.Inherit(s.parent.Get(ttype))
+	if s.parent != nil {
+		entry = entry.Inherit(s.parent.Get(ttype))
+	}
+	return entry
 }
 
 // Add an entry to the Style map.
@@ -175,11 +210,35 @@ func (s *StyleBuilder) AddEntry(ttype TokenType, entry StyleEntry) *StyleBuilder
 	return s
 }
 
+// Transform passes each style entry currently defined in the builder to the supplied
+// function and saves the returned value. This can be used to adjust a style's colours;
+// see Colour's ClampBrightness function, for example.
+func (s *StyleBuilder) Transform(transform func(StyleEntry) StyleEntry) *StyleBuilder {
+	types := make(map[TokenType]struct{})
+	for tt := range s.entries {
+		types[tt] = struct{}{}
+	}
+	if s.parent != nil {
+		for _, tt := range s.parent.Types() {
+			types[tt] = struct{}{}
+		}
+	}
+	for tt := range types {
+		s.AddEntry(tt, transform(s.Get(tt)))
+	}
+	return s
+}
+
 func (s *StyleBuilder) Build() (*Style, error) {
+	counterpart := s.counterpart
+	if counterpart == "" && s.parent != nil {
+		counterpart = s.parent.Counterpart
+	}
 	style := &Style{
-		Name:    s.name,
-		entries: map[TokenType]StyleEntry{},
-		parent:  s.parent,
+		Name:        s.name,
+		Counterpart: counterpart,
+		entries:     map[TokenType]StyleEntry{},
+		parent:      s.parent,
 	}
 	for ttype, descriptor := range s.entries {
 		entry, err := ParseStyleEntry(descriptor)
@@ -193,6 +252,22 @@ func (s *StyleBuilder) Build() (*Style, error) {
 
 // StyleEntries mapping TokenType to colour definition.
 type StyleEntries map[TokenType]string
+
+// NewXMLStyle parses an XML style definition.
+func NewXMLStyle(r io.Reader) (*Style, error) {
+	dec := xml.NewDecoder(r)
+	style := &Style{}
+	return style, dec.Decode(style)
+}
+
+// MustNewXMLStyle is like NewXMLStyle but panics on error.
+func MustNewXMLStyle(r io.Reader) *Style {
+	style, err := NewXMLStyle(r)
+	if err != nil {
+		panic(err)
+	}
+	return style
+}
 
 // NewStyle creates a new style definition.
 func NewStyle(name string, entries StyleEntries) (*Style, error) {
@@ -212,9 +287,112 @@ func MustNewStyle(name string, entries StyleEntries) *Style {
 //
 // See http://pygments.org/docs/styles/ for details. Semantics are intended to be identical.
 type Style struct {
-	Name    string
-	entries map[TokenType]StyleEntry
-	parent  *Style
+	Name string
+	// Counterpart is the lowercase name of the style intended as this style's
+	// opposite-mode pair (eg. "github-dark" for "github"). Resolved via
+	// styles.GetForMode. May be empty.
+	Counterpart string
+	entries     map[TokenType]StyleEntry
+	parent      *Style
+}
+
+// Mode returns Light or Dark based on the brightness of the Background entry's
+// background colour. Styles with an unset Background default to Light.
+func (s *Style) Mode() Mode {
+	bg := s.get(Background).Background
+	if bg.IsSet() && bg.Brightness() < 0.5 {
+		return Dark
+	}
+	return Light
+}
+
+func (s *Style) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if s.parent != nil {
+		return fmt.Errorf("cannot marshal style with parent")
+	}
+	start.Name = xml.Name{Local: "style"}
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "name"}, Value: s.Name}}
+	if s.Counterpart != "" {
+		start.Attr = append(start.Attr, xml.Attr{Name: xml.Name{Local: "counterpart"}, Value: s.Counterpart})
+	}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	sorted := make([]TokenType, 0, len(s.entries))
+	for ttype := range s.entries {
+		sorted = append(sorted, ttype)
+	}
+	slices.Sort(sorted)
+	for _, ttype := range sorted {
+		entry := s.entries[ttype]
+		el := xml.StartElement{Name: xml.Name{Local: "entry"}}
+		el.Attr = []xml.Attr{
+			{Name: xml.Name{Local: "type"}, Value: ttype.String()},
+			{Name: xml.Name{Local: "style"}, Value: entry.String()},
+		}
+		if err := e.EncodeToken(el); err != nil {
+			return err
+		}
+		if err := e.EncodeToken(xml.EndElement{Name: el.Name}); err != nil {
+			return err
+		}
+	}
+	return e.EncodeToken(xml.EndElement{Name: start.Name})
+}
+
+func (s *Style) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "name":
+			s.Name = attr.Value
+		case "counterpart":
+			s.Counterpart = strings.ToLower(attr.Value)
+		default:
+			return fmt.Errorf("unexpected attribute %s", attr.Name.Local)
+		}
+	}
+	if s.Name == "" {
+		return fmt.Errorf("missing style name attribute")
+	}
+	s.entries = map[TokenType]StyleEntry{}
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return err
+		}
+		switch el := tok.(type) {
+		case xml.StartElement:
+			if el.Name.Local != "entry" {
+				return fmt.Errorf("unexpected element %s", el.Name.Local)
+			}
+			var ttype TokenType
+			var entry StyleEntry
+			for _, attr := range el.Attr {
+				switch attr.Name.Local {
+				case "type":
+					ttype, err = TokenTypeString(attr.Value)
+					if err != nil {
+						return err
+					}
+
+				case "style":
+					entry, err = ParseStyleEntry(attr.Value)
+					if err != nil {
+						return err
+					}
+
+				default:
+					return fmt.Errorf("unexpected attribute %s", attr.Name.Local)
+				}
+			}
+			s.entries[ttype] = entry
+
+		case xml.EndElement:
+			if el.Name.Local == start.Name.Local {
+				return nil
+			}
+		}
+	}
 }
 
 // Types that are styled.
@@ -297,11 +475,19 @@ func (s *Style) synthesisable(ttype TokenType) bool {
 	return ttype == LineHighlight || ttype == LineNumbers || ttype == LineNumbersTable
 }
 
+// MustParseStyleEntry parses a Pygments style entry or panics.
+func MustParseStyleEntry(entry string) StyleEntry {
+	out, err := ParseStyleEntry(entry)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
 // ParseStyleEntry parses a Pygments style entry.
 func ParseStyleEntry(entry string) (StyleEntry, error) { // nolint: gocyclo
 	out := StyleEntry{}
-	parts := strings.Fields(entry)
-	for _, part := range parts {
+	for part := range strings.FieldsSeq(entry) {
 		switch {
 		case part == "italic":
 			out.Italic = Yes

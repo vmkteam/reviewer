@@ -1,7 +1,26 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/buger/jsonparser)](https://goreportcard.com/report/github.com/buger/jsonparser) ![License](https://img.shields.io/dub/l/vibe-d.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/buger/jsonparser)](https://goreportcard.com/report/github.com/buger/jsonparser) [![Audit](https://img.shields.io/badge/ReqProof-L3%20Assurance-success)](https://reqproof.com) ![License](https://img.shields.io/dub/l/vibe-d.svg)
 # Alternative JSON parser for Go (10x times faster standard library)
 
 It does not require you to know the structure of the payload (eg. create structs), and allows accessing fields by providing the path to them. It is up to **10 times faster** than standard `encoding/json` package (depending on payload size and usage), **allocates no memory**. See benchmarks below.
+
+---
+
+## 🔒 Formally Verified — the first Go library proven to L3 assurance by [ReqProof](https://reqproof.com)
+
+jsonparser is the **reference case study** for [ReqProof](https://reqproof.com) — a git-native requirements-engineering and formal-verification platform. Every public API is traced to a formal requirement, every requirement is tested with **100% Modified Condition/Decision Coverage (MC/DC)**, and the entire parser is fuzzed by a custom **structure-aware JSON fuzzer** ([github.com/probelabs/json-fuzz](https://github.com/probelabs/json-fuzz)) that generates grammar-valid mutations at 250,000 inputs/second.
+
+| Metric | Value |
+|---|---|
+| Requirements traced | 118 (7 stakeholder + 111 system) |
+| Proof audit | **0 errors, 0 warnings** (L3 strict) |
+| Code-level MC/DC | **100% decisions, 100% conditions** |
+| Requirement-side MC/DC | **377/377 witness rows covered** |
+| Fuzz executions | 16M+ (structure-aware + path-mutation + encoding/json differential) |
+| Bugs found & fixed by the proof review | 7 (4 panics, 2 data-corruption, 1 encoding bug) |
+
+The proof review caught bugs that years of community use, OSS-Fuzz, and standard fuzzing had missed — including a panic class across 8 unchecked-dereference sites, a silent data-loss bug in `Set`, and a malformed-output bug in `Delete`. [Read the full root-cause analysis →](docs/proof-gap-root-cause.md)
+
+---
 
 ## Rationale
 Originally I made this for a project that relies on a lot of 3rd party APIs that can be unpredictable and complex.
@@ -336,6 +355,25 @@ https://github.com/buger/jsonparser/blob/master/benchmark/benchmark_large_payloa
 `jsonparser` now is a winner, but do not forget that it is way more lightweight parser than `ffson` or `easyjson`, and they have to parser all the data, while `jsonparser` parse only what you need. All `ffjson`, `easysjon` and `jsonparser` have their own parsing code, and does not depend on `encoding/json` or `interface{}`, thats one of the reasons why they are so fast. `easyjson` also use a bit of `unsafe` package to reduce memory consuption (in theory it can lead to some unexpected GC issue, but i did not tested enough)
 
 Also last benchmark did not included `EachKey` test, because in this particular case we need to read lot of Array values, and using `ArrayEach` is more efficient. 
+
+## Formal Verification
+
+<!-- Documents: SYS-REQ-001, SYS-REQ-016, SYS-REQ-017, SYS-REQ-018, SYS-REQ-019, SYS-REQ-020, SYS-REQ-021, SYS-REQ-022, SYS-REQ-023, SYS-REQ-024, SYS-REQ-025, SYS-REQ-026, SYS-REQ-027 -->
+
+This project uses [ReqProof](https://reqproof.com) for formal requirements verification, achieving:
+
+- **92 formally specified requirements** covering all public API behavior including edge cases, malformed input, boundary values, and error propagation
+- **100% MC/DC coverage** (Modified Condition/Decision Coverage) — every boolean decision in the code is independently proven exercised
+- **Kind2 model checking** — mathematical proof that the specification is realizable and consistent
+- **Z3 SMT proofs** — data-level properties verified for all possible inputs, not just test samples
+
+ReqProof found **2 real bugs** during the verification process ([see PR #281](https://github.com/buger/jsonparser/pull/281)):
+1. `Delete` panic on truncated JSON input — bounds check missing after internal sentinel value
+2. `ArrayEach` callback silently swallowing parse errors — the callback's `err` parameter was always nil
+
+It also identified and safely removed **7 dead code blocks** that MC/DC analysis proved unreachable from any input.
+
+The verification runs on every PR via [probelabs/proof-action](https://github.com/probelabs/proof-action).
 
 ## Questions and support
 

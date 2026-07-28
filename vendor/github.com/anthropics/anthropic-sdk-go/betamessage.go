@@ -48,12 +48,15 @@ func NewBetaMessageService(opts ...option.RequestOption) (r BetaMessageService) 
 // conversations.
 //
 // Learn more about the Messages API in our
-// [user guide](https://docs.claude.com/en/docs/initial-setup)
+// [user guide](https://platform.claude.com/docs/en/get-started)
 //
 // Note: If you choose to set a timeout for this request, we recommend 10 minutes.
 func (r *BetaMessageService) New(ctx context.Context, params BetaMessageNewParams, opts ...option.RequestOption) (res *BetaMessage, err error) {
 	for _, v := range params.Betas {
 		opts = append(opts, option.WithHeaderAdd("anthropic-beta", fmt.Sprintf("%v", v)))
+	}
+	if !param.IsOmitted(params.UserProfileID) {
+		opts = append(opts, option.WithHeader("anthropic-user-profile-id", fmt.Sprintf("%v", params.UserProfileID.Value)))
 	}
 	opts = slices.Concat(r.Options, opts)
 	warnIfThinkingEnabled(params.Model, params.Thinking.OfEnabled != nil)
@@ -86,7 +89,7 @@ func (r *BetaMessageService) New(ctx context.Context, params BetaMessageNewParam
 // conversations.
 //
 // Learn more about the Messages API in our
-// [user guide](https://docs.claude.com/en/docs/initial-setup)
+// [user guide](https://platform.claude.com/docs/en/get-started)
 //
 // Note: If you choose to set a timeout for this request, we recommend 10 minutes.
 func (r *BetaMessageService) NewStreaming(ctx context.Context, params BetaMessageNewParams, opts ...option.RequestOption) (stream *ssestream.Stream[BetaRawMessageStreamEventUnion]) {
@@ -96,6 +99,9 @@ func (r *BetaMessageService) NewStreaming(ctx context.Context, params BetaMessag
 	)
 	for _, v := range params.Betas {
 		opts = append(opts, option.WithHeaderAdd("anthropic-beta", fmt.Sprintf("%v", v)))
+	}
+	if !param.IsOmitted(params.UserProfileID) {
+		opts = append(opts, option.WithHeader("anthropic-user-profile-id", fmt.Sprintf("%v", params.UserProfileID.Value)))
 	}
 	opts = slices.Concat(r.Options, opts)
 	warnIfThinkingEnabled(params.Model, params.Thinking.OfEnabled != nil)
@@ -111,10 +117,13 @@ func (r *BetaMessageService) NewStreaming(ctx context.Context, params BetaMessag
 // including tools, images, and documents, without creating it.
 //
 // Learn more about token counting in our
-// [user guide](https://docs.claude.com/en/docs/build-with-claude/token-counting)
+// [user guide](https://platform.claude.com/docs/en/build-with-claude/token-counting)
 func (r *BetaMessageService) CountTokens(ctx context.Context, params BetaMessageCountTokensParams, opts ...option.RequestOption) (res *BetaMessageTokensCount, err error) {
 	for _, v := range params.Betas {
 		opts = append(opts, option.WithHeaderAdd("anthropic-beta", fmt.Sprintf("%v", v)))
+	}
+	if !param.IsOmitted(params.UserProfileID) {
+		opts = append(opts, option.WithHeader("anthropic-user-profile-id", fmt.Sprintf("%v", params.UserProfileID.Value)))
 	}
 	opts = slices.Concat(r.Options, opts)
 	path := "v1/messages/count_tokens?beta=true"
@@ -266,7 +275,8 @@ type BetaAdvisorTool20260301Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -925,7 +935,9 @@ type BetaCacheControlEphemeralParam struct {
 	// - `5m`: 5 minutes
 	// - `1h`: 1 hour
 	//
-	// Defaults to `5m`.
+	// Defaults to `5m`. See
+	// [prompt caching pricing](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+	// for details.
 	//
 	// Any of "5m", "1h".
 	TTL  BetaCacheControlEphemeralTTL `json:"ttl,omitzero"`
@@ -948,7 +960,9 @@ func (r *BetaCacheControlEphemeralParam) UnmarshalJSON(data []byte) error {
 // - `5m`: 5 minutes
 // - `1h`: 1 hour
 //
-// Defaults to `5m`.
+// Defaults to `5m`. See
+// [prompt caching pricing](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+// for details.
 type BetaCacheControlEphemeralTTL string
 
 const (
@@ -1869,7 +1883,8 @@ type BetaCodeExecutionTool20250522Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -1900,7 +1915,8 @@ type BetaCodeExecutionTool20250825Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -1934,7 +1950,8 @@ type BetaCodeExecutionTool20260120Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -1955,6 +1972,40 @@ func (r BetaCodeExecutionTool20260120Param) MarshalJSON() (data []byte, err erro
 	return param.MarshalObject(r, (*shadow)(&r))
 }
 func (r *BetaCodeExecutionTool20260120Param) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Code execution tool with REPL state persistence.
+//
+// The properties Name, Type are required.
+type BetaCodeExecutionTool20260521Param struct {
+	// If true, tool will not be included in initial system prompt. Only loaded when
+	// returned via tool_reference from tool search.
+	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
+	// When true, guarantees schema validation on tool names and inputs
+	Strict param.Opt[bool] `json:"strict,omitzero"`
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
+	AllowedCallers []string `json:"allowed_callers,omitzero"`
+	// Create a cache control breakpoint at this content block.
+	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
+	// Name of the tool.
+	//
+	// This is how the tool will be called by the model and in `tool_use` blocks.
+	//
+	// This field can be elided, and will marshal its zero value as "code_execution".
+	Name constant.CodeExecution `json:"name" default:"code_execution"`
+	// This field can be elided, and will marshal its zero value as
+	// "code_execution_20260521".
+	Type constant.CodeExecution20260521 `json:"type" default:"code_execution_20260521"`
+	paramObj
+}
+
+func (r BetaCodeExecutionTool20260521Param) MarshalJSON() (data []byte, err error) {
+	type shadow BetaCodeExecutionTool20260521Param
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaCodeExecutionTool20260521Param) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
@@ -2472,8 +2523,10 @@ type BetaContentBlockUnion struct {
 	// This field is from variant [BetaFallbackBlock].
 	From BetaFallbackInfo `json:"from"`
 	// This field is from variant [BetaFallbackBlock].
-	To   BetaFallbackInfo `json:"to"`
-	JSON struct {
+	To BetaFallbackInfo `json:"to"`
+	// This field is from variant [BetaFallbackBlock].
+	Trigger BetaFallbackRefusalTrigger `json:"trigger"`
+	JSON    struct {
 		Citations        respjson.Field
 		Text             respjson.Field
 		Type             respjson.Field
@@ -2492,6 +2545,7 @@ type BetaContentBlockUnion struct {
 		EncryptedContent respjson.Field
 		From             respjson.Field
 		To               respjson.Field
+		Trigger          respjson.Field
 		raw              string
 	} `json:"-"`
 }
@@ -3046,10 +3100,40 @@ func NewBetaContainerUploadBlock(fileID string) BetaContentBlockParamUnion {
 	return BetaContentBlockParamUnion{OfContainerUpload: &containerUpload}
 }
 
-func NewBetaMidConvSystemBlock(content []BetaTextBlockParam) BetaContentBlockParamUnion {
+func NewBetaMidConvSystemBlock(content []BetaMidConversationSystemBlockParamContentUnion) BetaContentBlockParamUnion {
 	var midConvSystem BetaMidConversationSystemBlockParam
 	midConvSystem.Content = content
 	return BetaContentBlockParamUnion{OfMidConvSystem: &midConvSystem}
+}
+
+func NewBetaToolAdditionBlock[
+	T BetaToolChangeToolReferenceParam | BetaToolChangeMCPToolReferenceParam | BetaToolChangeMCPToolsetReferenceParam,
+](tool T) BetaContentBlockParamUnion {
+	var toolAddition BetaRequestToolAdditionBlockParam
+	switch v := any(tool).(type) {
+	case BetaToolChangeToolReferenceParam:
+		toolAddition.Tool.OfToolReference = &v
+	case BetaToolChangeMCPToolReferenceParam:
+		toolAddition.Tool.OfMCPToolReference = &v
+	case BetaToolChangeMCPToolsetReferenceParam:
+		toolAddition.Tool.OfMCPToolsetReference = &v
+	}
+	return BetaContentBlockParamUnion{OfToolAddition: &toolAddition}
+}
+
+func NewBetaToolRemovalBlock[
+	T BetaToolChangeToolReferenceParam | BetaToolChangeMCPToolReferenceParam | BetaToolChangeMCPToolsetReferenceParam,
+](tool T) BetaContentBlockParamUnion {
+	var toolRemoval BetaRequestToolRemovalBlockParam
+	switch v := any(tool).(type) {
+	case BetaToolChangeToolReferenceParam:
+		toolRemoval.Tool.OfToolReference = &v
+	case BetaToolChangeMCPToolReferenceParam:
+		toolRemoval.Tool.OfMCPToolReference = &v
+	case BetaToolChangeMCPToolsetReferenceParam:
+		toolRemoval.Tool.OfMCPToolsetReference = &v
+	}
+	return BetaContentBlockParamUnion{OfToolRemoval: &toolRemoval}
 }
 
 func NewBetaFallbackBlock(from BetaFallbackInfoParam, to BetaFallbackInfoParam) BetaContentBlockParamUnion {
@@ -3084,6 +3168,8 @@ type BetaContentBlockParamUnion struct {
 	OfContainerUpload                   *BetaContainerUploadBlockParam                   `json:",omitzero,inline"`
 	OfCompaction                        *BetaCompactionBlockParam                        `json:",omitzero,inline"`
 	OfMidConvSystem                     *BetaMidConversationSystemBlockParam             `json:",omitzero,inline"`
+	OfToolAddition                      *BetaRequestToolAdditionBlockParam               `json:",omitzero,inline"`
+	OfToolRemoval                       *BetaRequestToolRemovalBlockParam                `json:",omitzero,inline"`
 	OfFallback                          *BetaFallbackBlockParam                          `json:",omitzero,inline"`
 	paramUnion
 }
@@ -3110,6 +3196,8 @@ func (u BetaContentBlockParamUnion) MarshalJSON() ([]byte, error) {
 		u.OfContainerUpload,
 		u.OfCompaction,
 		u.OfMidConvSystem,
+		u.OfToolAddition,
+		u.OfToolRemoval,
 		u.OfFallback)
 }
 func (u *BetaContentBlockParamUnion) UnmarshalJSON(data []byte) error {
@@ -3159,6 +3247,10 @@ func (u *BetaContentBlockParamUnion) asAny() any {
 		return u.OfCompaction
 	} else if !param.IsOmitted(u.OfMidConvSystem) {
 		return u.OfMidConvSystem
+	} else if !param.IsOmitted(u.OfToolAddition) {
+		return u.OfToolAddition
+	} else if !param.IsOmitted(u.OfToolRemoval) {
+		return u.OfToolRemoval
 	} else if !param.IsOmitted(u.OfFallback) {
 		return u.OfFallback
 	}
@@ -3246,6 +3338,14 @@ func (u BetaContentBlockParamUnion) GetTo() *BetaFallbackInfoParam {
 }
 
 // Returns a pointer to the underlying variant's property, if present.
+func (u BetaContentBlockParamUnion) GetTrigger() *any {
+	if vt := u.OfFallback; vt != nil {
+		return &vt.Trigger
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
 func (u BetaContentBlockParamUnion) GetType() *string {
 	if vt := u.OfText; vt != nil {
 		return (*string)(&vt.Type)
@@ -3288,6 +3388,10 @@ func (u BetaContentBlockParamUnion) GetType() *string {
 	} else if vt := u.OfCompaction; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfMidConvSystem; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfToolAddition; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfToolRemoval; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfFallback; vt != nil {
 		return (*string)(&vt.Type)
@@ -3402,6 +3506,10 @@ func (u BetaContentBlockParamUnion) GetCacheControl() *BetaCacheControlEphemeral
 	} else if vt := u.OfCompaction; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfMidConvSystem; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfToolAddition; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfToolRemoval; vt != nil {
 		return &vt.CacheControl
 	}
 	return nil
@@ -3592,7 +3700,8 @@ func (u BetaContentBlockParamUnion) GetContent() (res betaContentBlockParamUnion
 // [*BetaTextEditorCodeExecutionCreateResultBlockParam],
 // [*BetaTextEditorCodeExecutionStrReplaceResultBlockParam],
 // [*BetaToolSearchToolResultErrorParam],
-// [*BetaToolSearchToolSearchResultBlockParam], [*string]
+// [*BetaToolSearchToolSearchResultBlockParam], [*string],
+// [\*[]BetaMidConversationSystemBlockParamContentUnion]
 type betaContentBlockParamUnionContent struct{ any }
 
 // Use the following switch statement to get the type of the union:
@@ -3618,6 +3727,7 @@ type betaContentBlockParamUnionContent struct{ any }
 //	case *anthropic.BetaToolSearchToolResultErrorParam:
 //	case *anthropic.BetaToolSearchToolSearchResultBlockParam:
 //	case *string:
+//	case *[]anthropic.BetaMidConversationSystemBlockParamContentUnion:
 //	default:
 //	    fmt.Errorf("not present")
 //	}
@@ -3973,6 +4083,67 @@ func (u betaContentBlockParamUnionCaller) GetToolID() *string {
 	return nil
 }
 
+// Returns a subunion which exports methods to access subproperties
+//
+// Or use AsAny() to get the underlying value
+func (u BetaContentBlockParamUnion) GetTool() (res betaContentBlockParamUnionTool) {
+	if vt := u.OfToolAddition; vt != nil {
+		res.any = vt.Tool.asAny()
+	} else if vt := u.OfToolRemoval; vt != nil {
+		res.any = vt.Tool.asAny()
+	}
+	return
+}
+
+// Can have the runtime types [*BetaToolChangeToolReferenceParam],
+// [*BetaToolChangeMCPToolReferenceParam],
+// [*BetaToolChangeMCPToolsetReferenceParam]
+type betaContentBlockParamUnionTool struct{ any }
+
+// Use the following switch statement to get the type of the union:
+//
+//	switch u.AsAny().(type) {
+//	case *anthropic.BetaToolChangeToolReferenceParam:
+//	case *anthropic.BetaToolChangeMCPToolReferenceParam:
+//	case *anthropic.BetaToolChangeMCPToolsetReferenceParam:
+//	default:
+//	    fmt.Errorf("not present")
+//	}
+func (u betaContentBlockParamUnionTool) AsAny() any { return u.any }
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaContentBlockParamUnionTool) GetName() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetName()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetName()
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaContentBlockParamUnionTool) GetType() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetType()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetType()
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaContentBlockParamUnionTool) GetServerName() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetServerName()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetServerName()
+	}
+	return nil
+}
+
 func init() {
 	apijson.RegisterUnion[BetaContentBlockParamUnion](
 		"type",
@@ -3997,6 +4168,8 @@ func init() {
 		apijson.Discriminator[BetaContainerUploadBlockParam]("container_upload"),
 		apijson.Discriminator[BetaCompactionBlockParam]("compaction"),
 		apijson.Discriminator[BetaMidConversationSystemBlockParam]("mid_conv_system"),
+		apijson.Discriminator[BetaRequestToolAdditionBlockParam]("tool_addition"),
+		apijson.Discriminator[BetaRequestToolRemovalBlockParam]("tool_removal"),
 		apijson.Discriminator[BetaFallbackBlockParam]("fallback"),
 	)
 }
@@ -4626,10 +4799,10 @@ func (r *BetaEncryptedCodeExecutionResultBlockParam) UnmarshalJSON(data []byte) 
 // Marks the point in `content` where one model's output gives way to the next.
 //
 // One block appears per hop where a preceding model actually ran this turn and
-// declined. A turn routed directly by the sticky decision has no such boundary and
-// carries no block — the signal for whether a fallback model served the response
-// is the presence of a `fallback_message` entry in `usage.iterations`, not this
-// block.
+// declined. A turn where no preceding model ran and declined has no such boundary
+// and carries no block — the signal for whether a fallback model served the
+// response is the presence of a `fallback_message` entry in `usage.iterations`,
+// not this block.
 //
 // The block is treated like a server-tool content block for streaming: it arrives
 // via the standard `content_block_start` / `content_block_stop` pair and carries
@@ -4642,12 +4815,15 @@ type BetaFallbackBlock struct {
 	From BetaFallbackInfo `json:"from" api:"required"`
 	// The fallback model producing the content that follows this block. Its `model` is
 	// always the canonical id.
-	To   BetaFallbackInfo  `json:"to" api:"required"`
-	Type constant.Fallback `json:"type" default:"fallback"`
+	To BetaFallbackInfo `json:"to" api:"required"`
+	// What caused the `from` model to hand over at this hop.
+	Trigger BetaFallbackRefusalTrigger `json:"trigger" api:"required"`
+	Type    constant.Fallback          `json:"type" default:"fallback"`
 	// JSON contains metadata for fields, check presence with [respjson.Field.Valid].
 	JSON struct {
 		From        respjson.Field
 		To          respjson.Field
+		Trigger     respjson.Field
 		Type        respjson.Field
 		ExtraFields map[string]respjson.Field
 		raw         string
@@ -4662,19 +4838,16 @@ func (r *BetaFallbackBlock) UnmarshalJSON(data []byte) error {
 
 // A `fallback` block echoed back from a prior response.
 //
-// Accepted in `messages[].content` and never rendered into the prompt, not
-// validated against the request's `fallbacks` chain or top-level `model`, and
-// stripped before the sticky-routing cache key is computed.
+// Accepted in `messages[].content` and not rendered into the prompt; not validated
+// against the request's `fallbacks` chain or top-level `model`.
 //
-// Callers should echo the assistant turn verbatim — block included. The block's
-// position is load-bearing for thinking verification: the thinking runs on either
-// side of a fallback hop carry independently-rooted verification hash chains, and
-// this block is the only record of where one chain ends and the next begins. When
-// thinking runs flank the boundary, omitting the block merges the runs into one
-// contiguous span whose hashes cannot verify (the request is rejected), and moving
-// it into the middle of a single run splits that run's chain and is likewise
-// rejected; between non-thinking blocks the block's placement has no verification
-// effect.
+// Echo the assistant turn back verbatim, including this block in its original
+// position. The block marks the boundary between content produced before and after
+// a fallback hop, and the server relies on that boundary to validate the turn:
+// when thinking runs flank the boundary, omitting the block merges them into one
+// span the server cannot validate (the request is rejected), and moving it into
+// the middle of a single run is likewise rejected; between non-thinking blocks the
+// block's placement has no validation effect.
 //
 // The properties From, To, Type are required.
 type BetaFallbackBlockParam struct {
@@ -4682,6 +4855,9 @@ type BetaFallbackBlockParam struct {
 	From BetaFallbackInfoParam `json:"from,omitzero" api:"required"`
 	// Identifies one hop of a fallback transition.
 	To BetaFallbackInfoParam `json:"to,omitzero" api:"required"`
+	// The response block's `trigger`, echoed verbatim. Accepted and ignored by the
+	// server; any object or `null` is allowed.
+	Trigger any `json:"trigger,omitzero"`
 	// This field can be elided, and will marshal its zero value as "fallback".
 	Type constant.Fallback `json:"type" default:"fallback"`
 	paramObj
@@ -4692,6 +4868,219 @@ func (r BetaFallbackBlockParam) MarshalJSON() (data []byte, err error) {
 	return param.MarshalObject(r, (*shadow)(&r))
 }
 func (r *BetaFallbackBlockParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// No reprice was applied; `reason` says why.
+type BetaFallbackCreditNotApplied struct {
+	// Why the reprice was not applied.
+	//
+	// A closed enum; additions to the redemption-check vocabulary arrive as deliberate
+	// schema updates.
+	//
+	// Any of "body_mismatch", "continuation_excluded", "continuation_only", "expired",
+	// "invalid_target_model", "not_enabled", "reprice_unavailable",
+	// "temporarily_unavailable", "variant_fields_present", "wrong_organization",
+	// "wrong_platform", "wrong_workspace".
+	Reason BetaFallbackCreditNotAppliedReason `json:"reason" api:"required"`
+	Type   constant.NotApplied                `json:"type" default:"not_applied"`
+	// Request fields to remove before retrying, so the retry can redeem this token.
+	//
+	// Present exactly when `reason` is `variant_fields_present` — never null, never an
+	// empty array; absent otherwise. Fields are named only from your own request, and
+	// only after the sealed variant hash matched. A served best-effort retry has
+	// already been billed at normal price; nothing redeems retroactively, but a
+	// corrected re-send inside the token's five-minute window can still redeem.
+	RemoveToRedeem []string `json:"remove_to_redeem" api:"nullable"`
+	// JSON contains metadata for fields, check presence with [respjson.Field.Valid].
+	JSON struct {
+		Reason         respjson.Field
+		Type           respjson.Field
+		RemoveToRedeem respjson.Field
+		ExtraFields    map[string]respjson.Field
+		raw            string
+	} `json:"-"`
+}
+
+// Returns the unmodified JSON received from the API
+func (r BetaFallbackCreditNotApplied) RawJSON() string { return r.JSON.raw }
+func (r *BetaFallbackCreditNotApplied) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Why the reprice was not applied.
+//
+// A closed enum; additions to the redemption-check vocabulary arrive as deliberate
+// schema updates.
+type BetaFallbackCreditNotAppliedReason string
+
+const (
+	BetaFallbackCreditNotAppliedReasonBodyMismatch           BetaFallbackCreditNotAppliedReason = "body_mismatch"
+	BetaFallbackCreditNotAppliedReasonContinuationExcluded   BetaFallbackCreditNotAppliedReason = "continuation_excluded"
+	BetaFallbackCreditNotAppliedReasonContinuationOnly       BetaFallbackCreditNotAppliedReason = "continuation_only"
+	BetaFallbackCreditNotAppliedReasonExpired                BetaFallbackCreditNotAppliedReason = "expired"
+	BetaFallbackCreditNotAppliedReasonInvalidTargetModel     BetaFallbackCreditNotAppliedReason = "invalid_target_model"
+	BetaFallbackCreditNotAppliedReasonNotEnabled             BetaFallbackCreditNotAppliedReason = "not_enabled"
+	BetaFallbackCreditNotAppliedReasonRepriceUnavailable     BetaFallbackCreditNotAppliedReason = "reprice_unavailable"
+	BetaFallbackCreditNotAppliedReasonTemporarilyUnavailable BetaFallbackCreditNotAppliedReason = "temporarily_unavailable"
+	BetaFallbackCreditNotAppliedReasonVariantFieldsPresent   BetaFallbackCreditNotAppliedReason = "variant_fields_present"
+	BetaFallbackCreditNotAppliedReasonWrongOrganization      BetaFallbackCreditNotAppliedReason = "wrong_organization"
+	BetaFallbackCreditNotAppliedReasonWrongPlatform          BetaFallbackCreditNotAppliedReason = "wrong_platform"
+	BetaFallbackCreditNotAppliedReasonWrongWorkspace         BetaFallbackCreditNotAppliedReason = "wrong_workspace"
+)
+
+// The reprice was applied: the retry is billed as if the conversation had been on
+// the retry model all along.
+type BetaFallbackCreditRedeemed struct {
+	Type constant.Redeemed `json:"type" default:"redeemed"`
+	// JSON contains metadata for fields, check presence with [respjson.Field.Valid].
+	JSON struct {
+		Type        respjson.Field
+		ExtraFields map[string]respjson.Field
+		raw         string
+	} `json:"-"`
+}
+
+// Returns the unmodified JSON received from the API
+func (r BetaFallbackCreditRedeemed) RawJSON() string { return r.JSON.raw }
+func (r *BetaFallbackCreditRedeemed) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Object form of `fallback_credit_token`: the token plus a redemption mode.
+//
+// Requires `anthropic-beta: fallback-credit-2026-07-01`; without that header the
+// field accepts the bare string only. The bare string and the mode-less object are
+// equivalent (both select `strict`), so wrapping an existing token changes nothing
+// by itself.
+//
+// The property Token is required.
+type BetaFallbackCreditTokenParam struct {
+	// The opaque `fallback_credit_token` from a prior refusal's `stop_details` — the
+	// same string the bare-string form carries.
+	Token string `json:"token" api:"required"`
+	// How a failing token affects the retry. `strict` (the default, and the
+	// bare-string behavior): a failing redemption is a 400 and the retry is not
+	// served. `best_effort`: the retry is served either way — a token-layer failure no
+	// longer rejects the request; the retry proceeds at normal price and the outcome
+	// is reported on the response's `usage.fallback_credit`. Two failures stay hard in
+	// both modes: a malformed token, and combining `fallback_credit_token` with
+	// `fallbacks`.
+	//
+	// Any of "strict", "best_effort".
+	Mode BetaFallbackCreditTokenParamMode `json:"mode,omitzero"`
+	paramObj
+}
+
+func (r BetaFallbackCreditTokenParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaFallbackCreditTokenParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaFallbackCreditTokenParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// How a failing token affects the retry. `strict` (the default, and the
+// bare-string behavior): a failing redemption is a 400 and the retry is not
+// served. `best_effort`: the retry is served either way — a token-layer failure no
+// longer rejects the request; the retry proceeds at normal price and the outcome
+// is reported on the response's `usage.fallback_credit`. Two failures stay hard in
+// both modes: a malformed token, and combining `fallback_credit_token` with
+// `fallbacks`.
+type BetaFallbackCreditTokenParamMode string
+
+const (
+	BetaFallbackCreditTokenParamModeStrict     BetaFallbackCreditTokenParamMode = "strict"
+	BetaFallbackCreditTokenParamModeBestEffort BetaFallbackCreditTokenParamMode = "best_effort"
+)
+
+// Outcome of the `fallback_credit_token` presented on this request.
+type BetaFallbackCreditUsage struct {
+	// Whether the fallback-credit reprice was applied to this response's billing.
+	//
+	// A union discriminated on `type`. `redeemed`: the retry is billed as if the
+	// conversation had been on the retry model all along — including when the
+	// resulting shift is zero because there was nothing to move. `not_applied`: no
+	// reprice was applied; the arm's `reason` says why.
+	Status BetaFallbackCreditUsageStatusUnion `json:"status" api:"required"`
+	// JSON contains metadata for fields, check presence with [respjson.Field.Valid].
+	JSON struct {
+		Status      respjson.Field
+		ExtraFields map[string]respjson.Field
+		raw         string
+	} `json:"-"`
+}
+
+// Returns the unmodified JSON received from the API
+func (r BetaFallbackCreditUsage) RawJSON() string { return r.JSON.raw }
+func (r *BetaFallbackCreditUsage) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// BetaFallbackCreditUsageStatusUnion contains all possible properties and values
+// from [BetaFallbackCreditRedeemed], [BetaFallbackCreditNotApplied].
+//
+// Use the [BetaFallbackCreditUsageStatusUnion.AsAny] method to switch on the
+// variant.
+//
+// Use the methods beginning with 'As' to cast the union to one of its variants.
+type BetaFallbackCreditUsageStatusUnion struct {
+	// Any of "redeemed", "not_applied".
+	Type string `json:"type"`
+	// This field is from variant [BetaFallbackCreditNotApplied].
+	Reason BetaFallbackCreditNotAppliedReason `json:"reason"`
+	// This field is from variant [BetaFallbackCreditNotApplied].
+	RemoveToRedeem []string `json:"remove_to_redeem"`
+	JSON           struct {
+		Type           respjson.Field
+		Reason         respjson.Field
+		RemoveToRedeem respjson.Field
+		raw            string
+	} `json:"-"`
+}
+
+// anyBetaFallbackCreditUsageStatus is implemented by each variant of
+// [BetaFallbackCreditUsageStatusUnion] to add type safety for the return type of
+// [BetaFallbackCreditUsageStatusUnion.AsAny]
+type anyBetaFallbackCreditUsageStatus interface {
+	implBetaFallbackCreditUsageStatusUnion()
+}
+
+func (BetaFallbackCreditRedeemed) implBetaFallbackCreditUsageStatusUnion()   {}
+func (BetaFallbackCreditNotApplied) implBetaFallbackCreditUsageStatusUnion() {}
+
+// Use the following switch statement to find the correct variant
+//
+//	switch variant := BetaFallbackCreditUsageStatusUnion.AsAny().(type) {
+//	case anthropic.BetaFallbackCreditRedeemed:
+//	case anthropic.BetaFallbackCreditNotApplied:
+//	default:
+//	  fmt.Errorf("no variant present")
+//	}
+func (u BetaFallbackCreditUsageStatusUnion) AsAny() anyBetaFallbackCreditUsageStatus {
+	switch u.Type {
+	case "redeemed":
+		return u.AsRedeemed()
+	case "not_applied":
+		return u.AsNotApplied()
+	}
+	return nil
+}
+
+func (u BetaFallbackCreditUsageStatusUnion) AsRedeemed() (v BetaFallbackCreditRedeemed) {
+	apijson.UnmarshalRoot(json.RawMessage(u.JSON.raw), &v)
+	return
+}
+
+func (u BetaFallbackCreditUsageStatusUnion) AsNotApplied() (v BetaFallbackCreditNotApplied) {
+	apijson.UnmarshalRoot(json.RawMessage(u.JSON.raw), &v)
+	return
+}
+
+// Returns the unmodified JSON received from the API
+func (u BetaFallbackCreditUsageStatusUnion) RawJSON() string { return u.JSON.raw }
+
+func (r *BetaFallbackCreditUsageStatusUnion) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
@@ -4782,10 +5171,10 @@ func (r *BetaFallbackMessageIterationUsage) UnmarshalJSON(data []byte) error {
 
 // One entry in the `fallbacks` chain on a `/v1/messages` request.
 //
-// `model` is required. The four override fields (`max_tokens`, `thinking`,
-// `output_config`, and `speed`) replace the corresponding top-level field for this
-// attempt only and are validated as if the request were made to `model`. Any other
-// key is rejected at parse time.
+// `model` is required. The override fields (`max_tokens`, `thinking`,
+// `output_config`, and `speed`) set the corresponding parameter for this attempt
+// only and are validated as if the request were made to `model`. Any other key is
+// rejected at parse time.
 //
 // The property Model is required.
 type BetaFallbackParam struct {
@@ -4795,6 +5184,10 @@ type BetaFallbackParam struct {
 	// details and options.
 	Model     Model            `json:"model,omitzero" api:"required"`
 	MaxTokens param.Opt[int64] `json:"max_tokens,omitzero"`
+	// Inference speed mode. `fast` provides significantly faster output token
+	// generation at premium pricing. Not all models support `fast`; invalid
+	// combinations are rejected at create time.
+	//
 	// Any of "standard", "fast".
 	Speed        BetaFallbackParamSpeed         `json:"speed,omitzero"`
 	Thinking     BetaFallbackParamThinkingUnion `json:"thinking,omitzero"`
@@ -4811,6 +5204,9 @@ func (r *BetaFallbackParam) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
+// Inference speed mode. `fast` provides significantly faster output token
+// generation at premium pricing. Not all models support `fast`; invalid
+// combinations are rejected at create time.
 type BetaFallbackParamSpeed string
 
 const (
@@ -4883,6 +5279,69 @@ func init() {
 		apijson.Discriminator[BetaThinkingConfigDisabledParam]("disabled"),
 		apijson.Discriminator[BetaThinkingConfigAdaptiveParam]("adaptive"),
 	)
+}
+
+// The `from` model declined for policy reasons.
+type BetaFallbackRefusalTrigger struct {
+	// The policy category that triggered a refusal.
+	//
+	// Any of "cyber", "bio", "frontier_llm", "reasoning_extraction", "general_harms".
+	Category BetaFallbackRefusalTriggerCategory `json:"category" api:"required"`
+	Type     constant.Refusal                   `json:"type" default:"refusal"`
+	// JSON contains metadata for fields, check presence with [respjson.Field.Valid].
+	JSON struct {
+		Category    respjson.Field
+		Type        respjson.Field
+		ExtraFields map[string]respjson.Field
+		raw         string
+	} `json:"-"`
+}
+
+// Returns the unmodified JSON received from the API
+func (r BetaFallbackRefusalTrigger) RawJSON() string { return r.JSON.raw }
+func (r *BetaFallbackRefusalTrigger) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// The policy category that triggered a refusal.
+type BetaFallbackRefusalTriggerCategory string
+
+const (
+	BetaFallbackRefusalTriggerCategoryCyber               BetaFallbackRefusalTriggerCategory = "cyber"
+	BetaFallbackRefusalTriggerCategoryBio                 BetaFallbackRefusalTriggerCategory = "bio"
+	BetaFallbackRefusalTriggerCategoryFrontierLLM         BetaFallbackRefusalTriggerCategory = "frontier_llm"
+	BetaFallbackRefusalTriggerCategoryReasoningExtraction BetaFallbackRefusalTriggerCategory = "reasoning_extraction"
+	BetaFallbackRefusalTriggerCategoryGeneralHarms        BetaFallbackRefusalTriggerCategory = "general_harms"
+)
+
+func BetaFallbacksParamOfDefault() BetaFallbacksParamUnion {
+	return BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()}
+}
+
+// Only one field can be non-zero.
+//
+// Use [param.IsOmitted] to confirm if a field is set.
+type BetaFallbacksParamUnion struct {
+	OfBetaFallbackArray []BetaFallbackParam `json:",omitzero,inline"`
+	// Construct this variant with constant.ValueOf[constant.Default]()
+	OfDefault constant.Default `json:",omitzero,inline"`
+	paramUnion
+}
+
+func (u BetaFallbacksParamUnion) MarshalJSON() ([]byte, error) {
+	return param.MarshalUnion(u, u.OfBetaFallbackArray, u.OfDefault)
+}
+func (u *BetaFallbacksParamUnion) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, u)
+}
+
+func (u *BetaFallbacksParamUnion) asAny() any {
+	if !param.IsOmitted(u.OfBetaFallbackArray) {
+		return &u.OfBetaFallbackArray
+	} else if !param.IsOmitted(u.OfDefault) {
+		return &u.OfDefault
+	}
+	return nil
 }
 
 // The properties FileID, Type are required.
@@ -5388,7 +5847,8 @@ type BetaMemoryTool20250818Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -5752,6 +6212,7 @@ type BetaMessage struct {
 	//     back as-is in a subsequent request to let the model continue.
 	//   - `"refusal"`: when streaming classifiers intervene to handle potential policy
 	//     violations
+	//   - `"model_context_window_exceeded"`: we exceeded the model's context window
 	//
 	// In non-streaming mode this value is always non-null. In streaming mode, it is
 	// null in the `message_start` event and non-null otherwise.
@@ -5814,6 +6275,8 @@ type BetaMessageDeltaUsage struct {
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens" api:"required"`
 	// The cumulative number of input tokens read from the cache.
 	CacheReadInputTokens int64 `json:"cache_read_input_tokens" api:"required"`
+	// Outcome of the `fallback_credit_token` presented on this request.
+	FallbackCredit BetaFallbackCreditUsage `json:"fallback_credit" api:"required"`
 	// The cumulative number of input tokens which were used.
 	InputTokens int64 `json:"input_tokens" api:"required"`
 	// Per-iteration token usage breakdown.
@@ -5840,6 +6303,7 @@ type BetaMessageDeltaUsage struct {
 	JSON struct {
 		CacheCreationInputTokens respjson.Field
 		CacheReadInputTokens     respjson.Field
+		FallbackCredit           respjson.Field
 		InputTokens              respjson.Field
 		Iterations               respjson.Field
 		OutputTokens             respjson.Field
@@ -5974,7 +6438,7 @@ func (r *BetaMetadataParam) UnmarshalJSON(data []byte) error {
 // The properties Content, Type are required.
 type BetaMidConversationSystemBlockParam struct {
 	// System instruction text blocks.
-	Content []BetaTextBlockParam `json:"content,omitzero" api:"required"`
+	Content []BetaMidConversationSystemBlockParamContentUnion `json:"content,omitzero" api:"required"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
 	// This field can be elided, and will marshal its zero value as "mid_conv_system".
@@ -5988,6 +6452,144 @@ func (r BetaMidConversationSystemBlockParam) MarshalJSON() (data []byte, err err
 }
 func (r *BetaMidConversationSystemBlockParam) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
+}
+
+// Only one field can be non-zero.
+//
+// Use [param.IsOmitted] to confirm if a field is set.
+type BetaMidConversationSystemBlockParamContentUnion struct {
+	OfText         *BetaTextBlockParam                `json:",omitzero,inline"`
+	OfToolAddition *BetaRequestToolAdditionBlockParam `json:",omitzero,inline"`
+	OfToolRemoval  *BetaRequestToolRemovalBlockParam  `json:",omitzero,inline"`
+	paramUnion
+}
+
+func (u BetaMidConversationSystemBlockParamContentUnion) MarshalJSON() ([]byte, error) {
+	return param.MarshalUnion(u, u.OfText, u.OfToolAddition, u.OfToolRemoval)
+}
+func (u *BetaMidConversationSystemBlockParamContentUnion) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, u)
+}
+
+func (u *BetaMidConversationSystemBlockParamContentUnion) asAny() any {
+	if !param.IsOmitted(u.OfText) {
+		return u.OfText
+	} else if !param.IsOmitted(u.OfToolAddition) {
+		return u.OfToolAddition
+	} else if !param.IsOmitted(u.OfToolRemoval) {
+		return u.OfToolRemoval
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaMidConversationSystemBlockParamContentUnion) GetText() *string {
+	if vt := u.OfText; vt != nil {
+		return &vt.Text
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaMidConversationSystemBlockParamContentUnion) GetCitations() []BetaTextCitationParamUnion {
+	if vt := u.OfText; vt != nil {
+		return vt.Citations
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaMidConversationSystemBlockParamContentUnion) GetType() *string {
+	if vt := u.OfText; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfToolAddition; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfToolRemoval; vt != nil {
+		return (*string)(&vt.Type)
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's CacheControl property, if present.
+func (u BetaMidConversationSystemBlockParamContentUnion) GetCacheControl() *BetaCacheControlEphemeralParam {
+	if vt := u.OfText; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfToolAddition; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfToolRemoval; vt != nil {
+		return &vt.CacheControl
+	}
+	return nil
+}
+
+// Returns a subunion which exports methods to access subproperties
+//
+// Or use AsAny() to get the underlying value
+func (u BetaMidConversationSystemBlockParamContentUnion) GetTool() (res betaMidConversationSystemBlockParamContentUnionTool) {
+	if vt := u.OfToolAddition; vt != nil {
+		res.any = vt.Tool.asAny()
+	} else if vt := u.OfToolRemoval; vt != nil {
+		res.any = vt.Tool.asAny()
+	}
+	return
+}
+
+// Can have the runtime types [*BetaToolChangeToolReferenceParam],
+// [*BetaToolChangeMCPToolReferenceParam],
+// [*BetaToolChangeMCPToolsetReferenceParam]
+type betaMidConversationSystemBlockParamContentUnionTool struct{ any }
+
+// Use the following switch statement to get the type of the union:
+//
+//	switch u.AsAny().(type) {
+//	case *anthropic.BetaToolChangeToolReferenceParam:
+//	case *anthropic.BetaToolChangeMCPToolReferenceParam:
+//	case *anthropic.BetaToolChangeMCPToolsetReferenceParam:
+//	default:
+//	    fmt.Errorf("not present")
+//	}
+func (u betaMidConversationSystemBlockParamContentUnionTool) AsAny() any { return u.any }
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaMidConversationSystemBlockParamContentUnionTool) GetName() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetName()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetName()
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaMidConversationSystemBlockParamContentUnionTool) GetType() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetType()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetType()
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u betaMidConversationSystemBlockParamContentUnionTool) GetServerName() *string {
+	switch vt := u.any.(type) {
+	case *BetaRequestToolAdditionBlockToolUnionParam:
+		return vt.GetServerName()
+	case *BetaRequestToolRemovalBlockToolUnionParam:
+		return vt.GetServerName()
+	}
+	return nil
+}
+
+func init() {
+	apijson.RegisterUnion[BetaMidConversationSystemBlockParamContentUnion](
+		"type",
+		apijson.Discriminator[BetaTextBlockParam]("text"),
+		apijson.Discriminator[BetaRequestToolAdditionBlockParam]("tool_addition"),
+		apijson.Discriminator[BetaRequestToolRemovalBlockParam]("tool_removal"),
+	)
 }
 
 type BetaOutputConfigParam struct {
@@ -6315,8 +6917,10 @@ type BetaRawContentBlockStartEventContentBlockUnion struct {
 	// This field is from variant [BetaFallbackBlock].
 	From BetaFallbackInfo `json:"from"`
 	// This field is from variant [BetaFallbackBlock].
-	To   BetaFallbackInfo `json:"to"`
-	JSON struct {
+	To BetaFallbackInfo `json:"to"`
+	// This field is from variant [BetaFallbackBlock].
+	Trigger BetaFallbackRefusalTrigger `json:"trigger"`
+	JSON    struct {
 		Citations        respjson.Field
 		Text             respjson.Field
 		Type             respjson.Field
@@ -6335,6 +6939,7 @@ type BetaRawContentBlockStartEventContentBlockUnion struct {
 		EncryptedContent respjson.Field
 		From             respjson.Field
 		To               respjson.Field
+		Trigger          respjson.Field
 		raw              string
 	} `json:"-"`
 }
@@ -7013,11 +7618,9 @@ func (r *BetaRedactedThinkingBlockParam) UnmarshalJSON(data []byte) error {
 
 // Structured information about a refusal.
 type BetaRefusalStopDetails struct {
-	// The policy category that triggered the refusal.
+	// The policy category that triggered a refusal.
 	//
-	// `null` when the refusal doesn't map to a named category.
-	//
-	// Any of "cyber", "bio", "frontier_llm", "reasoning_extraction".
+	// Any of "cyber", "bio", "frontier_llm", "reasoning_extraction", "general_harms".
 	Category BetaRefusalStopDetailsCategory `json:"category" api:"required"`
 	// Human-readable explanation of the refusal.
 	//
@@ -7088,9 +7691,7 @@ func (r *BetaRefusalStopDetails) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
-// The policy category that triggered the refusal.
-//
-// `null` when the refusal doesn't map to a named category.
+// The policy category that triggered a refusal.
 type BetaRefusalStopDetailsCategory string
 
 const (
@@ -7098,6 +7699,7 @@ const (
 	BetaRefusalStopDetailsCategoryBio                 BetaRefusalStopDetailsCategory = "bio"
 	BetaRefusalStopDetailsCategoryFrontierLLM         BetaRefusalStopDetailsCategory = "frontier_llm"
 	BetaRefusalStopDetailsCategoryReasoningExtraction BetaRefusalStopDetailsCategory = "reasoning_extraction"
+	BetaRefusalStopDetailsCategoryGeneralHarms        BetaRefusalStopDetailsCategory = "general_harms"
 )
 
 // The properties Source, Type are required.
@@ -7306,6 +7908,196 @@ func (u *BetaRequestMCPToolResultBlockParamContentUnion) asAny() any {
 		return &u.OfBetaMCPToolResultBlockContent
 	}
 	return nil
+}
+
+// Mid-conversation directive to surface a declared tool.
+//
+// `tool` references a tool (or MCP toolset) by name from the request's `tools`; it
+// is offered to the model from this point in the conversation onward.
+//
+// The properties Tool, Type are required.
+type BetaRequestToolAdditionBlockParam struct {
+	// Reference to a single tool the caller declared directly in `tools[]`. Does not
+	// accept the composed `{server}_{name}` form the server assigns to MCP-resolved
+	// tools — use `mcp_tool_reference` or `mcp_toolset_reference` for those.
+	Tool BetaRequestToolAdditionBlockToolUnionParam `json:"tool,omitzero" api:"required"`
+	// Create a cache control breakpoint at this content block.
+	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
+	// This field can be elided, and will marshal its zero value as "tool_addition".
+	Type constant.ToolAddition `json:"type" default:"tool_addition"`
+	paramObj
+}
+
+func (r BetaRequestToolAdditionBlockParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaRequestToolAdditionBlockParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaRequestToolAdditionBlockParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Only one field can be non-zero.
+//
+// Use [param.IsOmitted] to confirm if a field is set.
+type BetaRequestToolAdditionBlockToolUnionParam struct {
+	OfToolReference       *BetaToolChangeToolReferenceParam       `json:",omitzero,inline"`
+	OfMCPToolReference    *BetaToolChangeMCPToolReferenceParam    `json:",omitzero,inline"`
+	OfMCPToolsetReference *BetaToolChangeMCPToolsetReferenceParam `json:",omitzero,inline"`
+	paramUnion
+}
+
+func (u BetaRequestToolAdditionBlockToolUnionParam) MarshalJSON() ([]byte, error) {
+	return param.MarshalUnion(u, u.OfToolReference, u.OfMCPToolReference, u.OfMCPToolsetReference)
+}
+func (u *BetaRequestToolAdditionBlockToolUnionParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, u)
+}
+
+func (u *BetaRequestToolAdditionBlockToolUnionParam) asAny() any {
+	if !param.IsOmitted(u.OfToolReference) {
+		return u.OfToolReference
+	} else if !param.IsOmitted(u.OfMCPToolReference) {
+		return u.OfMCPToolReference
+	} else if !param.IsOmitted(u.OfMCPToolsetReference) {
+		return u.OfMCPToolsetReference
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolAdditionBlockToolUnionParam) GetName() *string {
+	if vt := u.OfToolReference; vt != nil {
+		return (*string)(&vt.Name)
+	} else if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.Name)
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolAdditionBlockToolUnionParam) GetType() *string {
+	if vt := u.OfToolReference; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfMCPToolsetReference; vt != nil {
+		return (*string)(&vt.Type)
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolAdditionBlockToolUnionParam) GetServerName() *string {
+	if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.ServerName)
+	} else if vt := u.OfMCPToolsetReference; vt != nil {
+		return (*string)(&vt.ServerName)
+	}
+	return nil
+}
+
+func init() {
+	apijson.RegisterUnion[BetaRequestToolAdditionBlockToolUnionParam](
+		"type",
+		apijson.Discriminator[BetaToolChangeToolReferenceParam]("tool_reference"),
+		apijson.Discriminator[BetaToolChangeMCPToolReferenceParam]("mcp_tool_reference"),
+		apijson.Discriminator[BetaToolChangeMCPToolsetReferenceParam]("mcp_toolset_reference"),
+	)
+}
+
+// Mid-conversation directive to withdraw a tool.
+//
+// `tool` references a tool (or MCP toolset) by name from the request's `tools`; it
+// is no longer offered to the model from this point in the conversation onward.
+//
+// The properties Tool, Type are required.
+type BetaRequestToolRemovalBlockParam struct {
+	// Reference to a single tool the caller declared directly in `tools[]`. Does not
+	// accept the composed `{server}_{name}` form the server assigns to MCP-resolved
+	// tools — use `mcp_tool_reference` or `mcp_toolset_reference` for those.
+	Tool BetaRequestToolRemovalBlockToolUnionParam `json:"tool,omitzero" api:"required"`
+	// Create a cache control breakpoint at this content block.
+	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
+	// This field can be elided, and will marshal its zero value as "tool_removal".
+	Type constant.ToolRemoval `json:"type" default:"tool_removal"`
+	paramObj
+}
+
+func (r BetaRequestToolRemovalBlockParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaRequestToolRemovalBlockParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaRequestToolRemovalBlockParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Only one field can be non-zero.
+//
+// Use [param.IsOmitted] to confirm if a field is set.
+type BetaRequestToolRemovalBlockToolUnionParam struct {
+	OfToolReference       *BetaToolChangeToolReferenceParam       `json:",omitzero,inline"`
+	OfMCPToolReference    *BetaToolChangeMCPToolReferenceParam    `json:",omitzero,inline"`
+	OfMCPToolsetReference *BetaToolChangeMCPToolsetReferenceParam `json:",omitzero,inline"`
+	paramUnion
+}
+
+func (u BetaRequestToolRemovalBlockToolUnionParam) MarshalJSON() ([]byte, error) {
+	return param.MarshalUnion(u, u.OfToolReference, u.OfMCPToolReference, u.OfMCPToolsetReference)
+}
+func (u *BetaRequestToolRemovalBlockToolUnionParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, u)
+}
+
+func (u *BetaRequestToolRemovalBlockToolUnionParam) asAny() any {
+	if !param.IsOmitted(u.OfToolReference) {
+		return u.OfToolReference
+	} else if !param.IsOmitted(u.OfMCPToolReference) {
+		return u.OfMCPToolReference
+	} else if !param.IsOmitted(u.OfMCPToolsetReference) {
+		return u.OfMCPToolsetReference
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolRemovalBlockToolUnionParam) GetName() *string {
+	if vt := u.OfToolReference; vt != nil {
+		return (*string)(&vt.Name)
+	} else if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.Name)
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolRemovalBlockToolUnionParam) GetType() *string {
+	if vt := u.OfToolReference; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfMCPToolsetReference; vt != nil {
+		return (*string)(&vt.Type)
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaRequestToolRemovalBlockToolUnionParam) GetServerName() *string {
+	if vt := u.OfMCPToolReference; vt != nil {
+		return (*string)(&vt.ServerName)
+	} else if vt := u.OfMCPToolsetReference; vt != nil {
+		return (*string)(&vt.ServerName)
+	}
+	return nil
+}
+
+func init() {
+	apijson.RegisterUnion[BetaRequestToolRemovalBlockToolUnionParam](
+		"type",
+		apijson.Discriminator[BetaToolChangeToolReferenceParam]("tool_reference"),
+		apijson.Discriminator[BetaToolChangeMCPToolReferenceParam]("mcp_tool_reference"),
+		apijson.Discriminator[BetaToolChangeMCPToolsetReferenceParam]("mcp_toolset_reference"),
+	)
 }
 
 // The properties Content, Source, Title, Type are required.
@@ -8715,7 +9507,7 @@ type BetaThinkingConfigEnabledParam struct {
 	// Must be ≥1024 and less than `max_tokens`.
 	//
 	// See
-	// [extended thinking](https://docs.claude.com/en/docs/build-with-claude/extended-thinking)
+	// [extended thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
 	// for details.
 	BudgetTokens int64 `json:"budget_tokens" api:"required"`
 	// Controls how thinking content appears in the response. When set to `summarized`,
@@ -8921,7 +9713,8 @@ type BetaToolParam struct {
 	Strict param.Opt[bool] `json:"strict,omitzero"`
 	// Any of "custom".
 	Type BetaToolType `json:"type,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -8973,7 +9766,8 @@ type BetaToolBash20241022Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9004,7 +9798,8 @@ type BetaToolBash20250124Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9025,6 +9820,66 @@ func (r BetaToolBash20250124Param) MarshalJSON() (data []byte, err error) {
 	return param.MarshalObject(r, (*shadow)(&r))
 }
 func (r *BetaToolBash20250124Param) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Reference to a single MCP tool by its server and remote name — the same
+// `server_name`/`name` pair `mcp_tool_use` carries.
+//
+// The properties Name, ServerName, Type are required.
+type BetaToolChangeMCPToolReferenceParam struct {
+	Name       string `json:"name" api:"required"`
+	ServerName string `json:"server_name" api:"required"`
+	// This field can be elided, and will marshal its zero value as
+	// "mcp_tool_reference".
+	Type constant.MCPToolReference `json:"type" default:"mcp_tool_reference"`
+	paramObj
+}
+
+func (r BetaToolChangeMCPToolReferenceParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaToolChangeMCPToolReferenceParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaToolChangeMCPToolReferenceParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Reference to every tool in the named MCP server's toolset.
+//
+// The properties ServerName, Type are required.
+type BetaToolChangeMCPToolsetReferenceParam struct {
+	ServerName string `json:"server_name" api:"required"`
+	// This field can be elided, and will marshal its zero value as
+	// "mcp_toolset_reference".
+	Type constant.MCPToolsetReference `json:"type" default:"mcp_toolset_reference"`
+	paramObj
+}
+
+func (r BetaToolChangeMCPToolsetReferenceParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaToolChangeMCPToolsetReferenceParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaToolChangeMCPToolsetReferenceParam) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// Reference to a single tool the caller declared directly in `tools[]`. Does not
+// accept the composed `{server}_{name}` form the server assigns to MCP-resolved
+// tools — use `mcp_tool_reference` or `mcp_toolset_reference` for those.
+//
+// The properties Name, Type are required.
+type BetaToolChangeToolReferenceParam struct {
+	Name string `json:"name" api:"required"`
+	// This field can be elided, and will marshal its zero value as "tool_reference".
+	Type constant.ToolReference `json:"type" default:"tool_reference"`
+	paramObj
+}
+
+func (r BetaToolChangeToolReferenceParam) MarshalJSON() (data []byte, err error) {
+	type shadow BetaToolChangeToolReferenceParam
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaToolChangeToolReferenceParam) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
@@ -9213,7 +10068,8 @@ type BetaToolComputerUse20241022Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9251,7 +10107,8 @@ type BetaToolComputerUse20250124Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9291,7 +10148,8 @@ type BetaToolComputerUse20251124Param struct {
 	EnableZoom param.Opt[bool] `json:"enable_zoom,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9655,7 +10513,8 @@ type BetaToolSearchToolBm25_20251119Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9694,7 +10553,8 @@ type BetaToolSearchToolRegex20251119Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9963,7 +10823,8 @@ type BetaToolTextEditor20241022Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -9996,7 +10857,8 @@ type BetaToolTextEditor20250124Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -10029,7 +10891,8 @@ type BetaToolTextEditor20250429Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -10065,7 +10928,8 @@ type BetaToolTextEditor20250728Param struct {
 	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
 	// When true, guarantees schema validation on tool names and inputs
 	Strict param.Opt[bool] `json:"strict,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl  BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -10153,6 +11017,7 @@ type BetaToolUnionParam struct {
 	OfCodeExecutionTool20250522   *BetaCodeExecutionTool20250522Param   `json:",omitzero,inline"`
 	OfCodeExecutionTool20250825   *BetaCodeExecutionTool20250825Param   `json:",omitzero,inline"`
 	OfCodeExecutionTool20260120   *BetaCodeExecutionTool20260120Param   `json:",omitzero,inline"`
+	OfCodeExecutionTool20260521   *BetaCodeExecutionTool20260521Param   `json:",omitzero,inline"`
 	OfComputerUseTool20241022     *BetaToolComputerUse20241022Param     `json:",omitzero,inline"`
 	OfMemoryTool20250818          *BetaMemoryTool20250818Param          `json:",omitzero,inline"`
 	OfComputerUseTool20250124     *BetaToolComputerUse20250124Param     `json:",omitzero,inline"`
@@ -10166,6 +11031,8 @@ type BetaToolUnionParam struct {
 	OfWebSearchTool20260209       *BetaWebSearchTool20260209Param       `json:",omitzero,inline"`
 	OfWebFetchTool20260209        *BetaWebFetchTool20260209Param        `json:",omitzero,inline"`
 	OfWebFetchTool20260309        *BetaWebFetchTool20260309Param        `json:",omitzero,inline"`
+	OfWebSearchTool20260318       *BetaWebSearchTool20260318Param       `json:",omitzero,inline"`
+	OfWebFetchTool20260318        *BetaWebFetchTool20260318Param        `json:",omitzero,inline"`
 	OfAdvisorTool20260301         *BetaAdvisorTool20260301Param         `json:",omitzero,inline"`
 	OfToolSearchToolBm25_20251119 *BetaToolSearchToolBm25_20251119Param `json:",omitzero,inline"`
 	OfToolSearchToolRegex20251119 *BetaToolSearchToolRegex20251119Param `json:",omitzero,inline"`
@@ -10180,6 +11047,7 @@ func (u BetaToolUnionParam) MarshalJSON() ([]byte, error) {
 		u.OfCodeExecutionTool20250522,
 		u.OfCodeExecutionTool20250825,
 		u.OfCodeExecutionTool20260120,
+		u.OfCodeExecutionTool20260521,
 		u.OfComputerUseTool20241022,
 		u.OfMemoryTool20250818,
 		u.OfComputerUseTool20250124,
@@ -10193,6 +11061,8 @@ func (u BetaToolUnionParam) MarshalJSON() ([]byte, error) {
 		u.OfWebSearchTool20260209,
 		u.OfWebFetchTool20260209,
 		u.OfWebFetchTool20260309,
+		u.OfWebSearchTool20260318,
+		u.OfWebFetchTool20260318,
 		u.OfAdvisorTool20260301,
 		u.OfToolSearchToolBm25_20251119,
 		u.OfToolSearchToolRegex20251119,
@@ -10215,6 +11085,8 @@ func (u *BetaToolUnionParam) asAny() any {
 		return u.OfCodeExecutionTool20250825
 	} else if !param.IsOmitted(u.OfCodeExecutionTool20260120) {
 		return u.OfCodeExecutionTool20260120
+	} else if !param.IsOmitted(u.OfCodeExecutionTool20260521) {
+		return u.OfCodeExecutionTool20260521
 	} else if !param.IsOmitted(u.OfComputerUseTool20241022) {
 		return u.OfComputerUseTool20241022
 	} else if !param.IsOmitted(u.OfMemoryTool20250818) {
@@ -10241,6 +11113,10 @@ func (u *BetaToolUnionParam) asAny() any {
 		return u.OfWebFetchTool20260209
 	} else if !param.IsOmitted(u.OfWebFetchTool20260309) {
 		return u.OfWebFetchTool20260309
+	} else if !param.IsOmitted(u.OfWebSearchTool20260318) {
+		return u.OfWebSearchTool20260318
+	} else if !param.IsOmitted(u.OfWebFetchTool20260318) {
+		return u.OfWebFetchTool20260318
 	} else if !param.IsOmitted(u.OfAdvisorTool20260301) {
 		return u.OfAdvisorTool20260301
 	} else if !param.IsOmitted(u.OfToolSearchToolBm25_20251119) {
@@ -10289,14 +11165,6 @@ func (u BetaToolUnionParam) GetEnableZoom() *bool {
 func (u BetaToolUnionParam) GetMaxCharacters() *int64 {
 	if vt := u.OfTextEditor20250728; vt != nil && vt.MaxCharacters.Valid() {
 		return &vt.MaxCharacters.Value
-	}
-	return nil
-}
-
-// Returns a pointer to the underlying variant's property, if present.
-func (u BetaToolUnionParam) GetUseCache() *bool {
-	if vt := u.OfWebFetchTool20260309; vt != nil && vt.UseCache.Valid() {
-		return &vt.UseCache.Value
 	}
 	return nil
 }
@@ -10363,6 +11231,8 @@ func (u BetaToolUnionParam) GetName() *string {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
 		return (*string)(&vt.Name)
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
+		return (*string)(&vt.Name)
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfMemoryTool20250818; vt != nil {
@@ -10389,6 +11259,10 @@ func (u BetaToolUnionParam) GetName() *string {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return (*string)(&vt.Name)
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.Name)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return (*string)(&vt.Name)
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil {
@@ -10412,6 +11286,8 @@ func (u BetaToolUnionParam) GetDeferLoading() *bool {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfComputerUseTool20241022; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
@@ -10439,6 +11315,10 @@ func (u BetaToolUnionParam) GetDeferLoading() *bool {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil && vt.DeferLoading.Valid() {
@@ -10462,6 +11342,8 @@ func (u BetaToolUnionParam) GetStrict() *bool {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfComputerUseTool20241022; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
@@ -10489,6 +11371,10 @@ func (u BetaToolUnionParam) GetStrict() *bool {
 		return &vt.Strict.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil && vt.Strict.Valid() {
@@ -10512,6 +11398,8 @@ func (u BetaToolUnionParam) GetType() *string {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return (*string)(&vt.Type)
@@ -10538,6 +11426,10 @@ func (u BetaToolUnionParam) GetType() *string {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return (*string)(&vt.Type)
@@ -10599,6 +11491,10 @@ func (u BetaToolUnionParam) GetMaxUses() *int64 {
 		return &vt.MaxUses.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.MaxUses.Valid() {
 		return &vt.MaxUses.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.MaxUses.Valid() {
+		return &vt.MaxUses.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.MaxUses.Valid() {
+		return &vt.MaxUses.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.MaxUses.Valid() {
 		return &vt.MaxUses.Value
 	}
@@ -10613,6 +11509,28 @@ func (u BetaToolUnionParam) GetMaxContentTokens() *int64 {
 		return &vt.MaxContentTokens.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.MaxContentTokens.Valid() {
 		return &vt.MaxContentTokens.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.MaxContentTokens.Valid() {
+		return &vt.MaxContentTokens.Value
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaToolUnionParam) GetUseCache() *bool {
+	if vt := u.OfWebFetchTool20260309; vt != nil && vt.UseCache.Valid() {
+		return &vt.UseCache.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.UseCache.Valid() {
+		return &vt.UseCache.Value
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaToolUnionParam) GetResponseInclusion() *string {
+	if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.ResponseInclusion)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return (*string)(&vt.ResponseInclusion)
 	}
 	return nil
 }
@@ -10631,6 +11549,8 @@ func (u BetaToolUnionParam) GetAllowedCallers() []string {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return vt.AllowedCallers
@@ -10657,6 +11577,10 @@ func (u BetaToolUnionParam) GetAllowedCallers() []string {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return vt.AllowedCallers
@@ -10682,6 +11606,8 @@ func (u BetaToolUnionParam) GetCacheControl() *BetaCacheControlEphemeralParam {
 		return &vt.CacheControl
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
 		return &vt.CacheControl
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
+		return &vt.CacheControl
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfMemoryTool20250818; vt != nil {
@@ -10707,6 +11633,10 @@ func (u BetaToolUnionParam) GetCacheControl() *BetaCacheControlEphemeralParam {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return &vt.CacheControl
@@ -10762,6 +11692,10 @@ func (u BetaToolUnionParam) GetAllowedDomains() []string {
 		return vt.AllowedDomains
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return vt.AllowedDomains
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.AllowedDomains
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return vt.AllowedDomains
 	}
 	return nil
 }
@@ -10779,6 +11713,10 @@ func (u BetaToolUnionParam) GetBlockedDomains() []string {
 		return vt.BlockedDomains
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return vt.BlockedDomains
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.BlockedDomains
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return vt.BlockedDomains
 	}
 	return nil
 }
@@ -10788,6 +11726,8 @@ func (u BetaToolUnionParam) GetUserLocation() *BetaUserLocationParam {
 	if vt := u.OfWebSearchTool20250305; vt != nil {
 		return &vt.UserLocation
 	} else if vt := u.OfWebSearchTool20260209; vt != nil {
+		return &vt.UserLocation
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
 		return &vt.UserLocation
 	}
 	return nil
@@ -10800,6 +11740,8 @@ func (u BetaToolUnionParam) GetCitations() *BetaCitationsConfigParam {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return &vt.Citations
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return &vt.Citations
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return &vt.Citations
 	}
 	return nil
@@ -11053,6 +11995,8 @@ type BetaUsage struct {
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens" api:"required"`
 	// The number of input tokens read from the cache.
 	CacheReadInputTokens int64 `json:"cache_read_input_tokens" api:"required"`
+	// Outcome of the `fallback_credit_token` presented on this request.
+	FallbackCredit BetaFallbackCreditUsage `json:"fallback_credit" api:"required"`
 	// The geographic region where inference was performed for this request.
 	InferenceGeo string `json:"inference_geo" api:"required"`
 	// The number of input tokens which were used.
@@ -11081,7 +12025,9 @@ type BetaUsage struct {
 	//
 	// Any of "standard", "priority", "batch".
 	ServiceTier BetaUsageServiceTier `json:"service_tier" api:"required"`
-	// The inference speed mode used for this request.
+	// Inference speed mode. `fast` provides significantly faster output token
+	// generation at premium pricing. Not all models support `fast`; invalid
+	// combinations are rejected at create time.
 	//
 	// Any of "standard", "fast".
 	Speed BetaUsageSpeed `json:"speed" api:"required"`
@@ -11090,6 +12036,7 @@ type BetaUsage struct {
 		CacheCreation            respjson.Field
 		CacheCreationInputTokens respjson.Field
 		CacheReadInputTokens     respjson.Field
+		FallbackCredit           respjson.Field
 		InferenceGeo             respjson.Field
 		InputTokens              respjson.Field
 		Iterations               respjson.Field
@@ -11118,7 +12065,9 @@ const (
 	BetaUsageServiceTierBatch    BetaUsageServiceTier = "batch"
 )
 
-// The inference speed mode used for this request.
+// Inference speed mode. `fast` provides significantly faster output token
+// generation at premium pricing. Not all models support `fast`; invalid
+// combinations are rejected at create time.
 type BetaUsageSpeed string
 
 const (
@@ -11211,7 +12160,8 @@ type BetaWebFetchTool20250910Param struct {
 	AllowedDomains []string `json:"allowed_domains,omitzero"`
 	// List of domains to block fetching from
 	BlockedDomains []string `json:"blocked_domains,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -11254,7 +12204,8 @@ type BetaWebFetchTool20260209Param struct {
 	AllowedDomains []string `json:"allowed_domains,omitzero"`
 	// List of domains to block fetching from
 	BlockedDomains []string `json:"blocked_domains,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -11303,7 +12254,8 @@ type BetaWebFetchTool20260309Param struct {
 	AllowedDomains []string `json:"allowed_domains,omitzero"`
 	// List of domains to block fetching from
 	BlockedDomains []string `json:"blocked_domains,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -11329,6 +12281,76 @@ func (r BetaWebFetchTool20260309Param) MarshalJSON() (data []byte, err error) {
 func (r *BetaWebFetchTool20260309Param) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
+
+// The properties Name, Type are required.
+type BetaWebFetchTool20260318Param struct {
+	// Maximum number of tokens used by including web page text content in the context.
+	// The limit is approximate and does not apply to binary content such as PDFs.
+	MaxContentTokens param.Opt[int64] `json:"max_content_tokens,omitzero"`
+	// Maximum number of times the tool can be used in the API request.
+	MaxUses param.Opt[int64] `json:"max_uses,omitzero"`
+	// If true, tool will not be included in initial system prompt. Only loaded when
+	// returned via tool_reference from tool search.
+	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
+	// When true, guarantees schema validation on tool names and inputs
+	Strict param.Opt[bool] `json:"strict,omitzero"`
+	// Whether to use cached content. Set to false to bypass the cache and fetch fresh
+	// content. Only set to false when the user explicitly requests fresh content or
+	// when fetching rapidly-changing sources.
+	UseCache param.Opt[bool] `json:"use_cache,omitzero"`
+	// List of domains to allow fetching from
+	AllowedDomains []string `json:"allowed_domains,omitzero"`
+	// List of domains to block fetching from
+	BlockedDomains []string `json:"blocked_domains,omitzero"`
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
+	AllowedCallers []string `json:"allowed_callers,omitzero"`
+	// Create a cache control breakpoint at this content block.
+	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
+	// Citations configuration for fetched documents. Citations are disabled by
+	// default.
+	Citations BetaCitationsConfigParam `json:"citations,omitzero"`
+	// How this tool's result blocks appear in the API response when the result was
+	// consumed by a completed code_execution call in the same turn. 'full' returns the
+	// complete content (default). 'excluded' drops the nested server_tool_use and
+	// result block pair entirely. Results from direct calls, or from code_execution
+	// calls that paused before completing, are always returned in full so they can be
+	// sent back on the next turn.
+	//
+	// Any of "full", "excluded".
+	ResponseInclusion BetaWebFetchTool20260318ResponseInclusion `json:"response_inclusion,omitzero"`
+	// Name of the tool.
+	//
+	// This is how the tool will be called by the model and in `tool_use` blocks.
+	//
+	// This field can be elided, and will marshal its zero value as "web_fetch".
+	Name constant.WebFetch `json:"name" default:"web_fetch"`
+	// This field can be elided, and will marshal its zero value as
+	// "web_fetch_20260318".
+	Type constant.WebFetch20260318 `json:"type" default:"web_fetch_20260318"`
+	paramObj
+}
+
+func (r BetaWebFetchTool20260318Param) MarshalJSON() (data []byte, err error) {
+	type shadow BetaWebFetchTool20260318Param
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaWebFetchTool20260318Param) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// How this tool's result blocks appear in the API response when the result was
+// consumed by a completed code_execution call in the same turn. 'full' returns the
+// complete content (default). 'excluded' drops the nested server_tool_use and
+// result block pair entirely. Results from direct calls, or from code_execution
+// calls that paused before completing, are always returned in full so they can be
+// sent back on the next turn.
+type BetaWebFetchTool20260318ResponseInclusion string
+
+const (
+	BetaWebFetchTool20260318ResponseInclusionFull     BetaWebFetchTool20260318ResponseInclusion = "full"
+	BetaWebFetchTool20260318ResponseInclusionExcluded BetaWebFetchTool20260318ResponseInclusion = "excluded"
+)
 
 type BetaWebFetchToolResultBlock struct {
 	Content   BetaWebFetchToolResultBlockContentUnion `json:"content" api:"required"`
@@ -11729,7 +12751,8 @@ type BetaWebSearchTool20250305Param struct {
 	// If provided, these domains will never appear in results. Cannot be used
 	// alongside `allowed_domains`.
 	BlockedDomains []string `json:"blocked_domains,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -11771,7 +12794,8 @@ type BetaWebSearchTool20260209Param struct {
 	// If provided, these domains will never appear in results. Cannot be used
 	// alongside `allowed_domains`.
 	BlockedDomains []string `json:"blocked_domains,omitzero"`
-	// Any of "direct", "code_execution_20250825", "code_execution_20260120".
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
 	AllowedCallers []string `json:"allowed_callers,omitzero"`
 	// Create a cache control breakpoint at this content block.
 	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
@@ -11797,6 +12821,71 @@ func (r BetaWebSearchTool20260209Param) MarshalJSON() (data []byte, err error) {
 func (r *BetaWebSearchTool20260209Param) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
+
+// The properties Name, Type are required.
+type BetaWebSearchTool20260318Param struct {
+	// Maximum number of times the tool can be used in the API request.
+	MaxUses param.Opt[int64] `json:"max_uses,omitzero"`
+	// If true, tool will not be included in initial system prompt. Only loaded when
+	// returned via tool_reference from tool search.
+	DeferLoading param.Opt[bool] `json:"defer_loading,omitzero"`
+	// When true, guarantees schema validation on tool names and inputs
+	Strict param.Opt[bool] `json:"strict,omitzero"`
+	// If provided, only these domains will be included in results. Cannot be used
+	// alongside `blocked_domains`.
+	AllowedDomains []string `json:"allowed_domains,omitzero"`
+	// If provided, these domains will never appear in results. Cannot be used
+	// alongside `allowed_domains`.
+	BlockedDomains []string `json:"blocked_domains,omitzero"`
+	// Any of "direct", "code_execution_20250825", "code_execution_20260120",
+	// "code_execution_20260521".
+	AllowedCallers []string `json:"allowed_callers,omitzero"`
+	// Create a cache control breakpoint at this content block.
+	CacheControl BetaCacheControlEphemeralParam `json:"cache_control,omitzero"`
+	// How this tool's result blocks appear in the API response when the result was
+	// consumed by a completed code_execution call in the same turn. 'full' returns the
+	// complete content (default). 'excluded' drops the nested server_tool_use and
+	// result block pair entirely. Results from direct calls, or from code_execution
+	// calls that paused before completing, are always returned in full so they can be
+	// sent back on the next turn.
+	//
+	// Any of "full", "excluded".
+	ResponseInclusion BetaWebSearchTool20260318ResponseInclusion `json:"response_inclusion,omitzero"`
+	// Parameters for the user's location. Used to provide more relevant search
+	// results.
+	UserLocation BetaUserLocationParam `json:"user_location,omitzero"`
+	// Name of the tool.
+	//
+	// This is how the tool will be called by the model and in `tool_use` blocks.
+	//
+	// This field can be elided, and will marshal its zero value as "web_search".
+	Name constant.WebSearch `json:"name" default:"web_search"`
+	// This field can be elided, and will marshal its zero value as
+	// "web_search_20260318".
+	Type constant.WebSearch20260318 `json:"type" default:"web_search_20260318"`
+	paramObj
+}
+
+func (r BetaWebSearchTool20260318Param) MarshalJSON() (data []byte, err error) {
+	type shadow BetaWebSearchTool20260318Param
+	return param.MarshalObject(r, (*shadow)(&r))
+}
+func (r *BetaWebSearchTool20260318Param) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+// How this tool's result blocks appear in the API response when the result was
+// consumed by a completed code_execution call in the same turn. 'full' returns the
+// complete content (default). 'excluded' drops the nested server_tool_use and
+// result block pair entirely. Results from direct calls, or from code_execution
+// calls that paused before completing, are always returned in full so they can be
+// sent back on the next turn.
+type BetaWebSearchTool20260318ResponseInclusion string
+
+const (
+	BetaWebSearchTool20260318ResponseInclusionFull     BetaWebSearchTool20260318ResponseInclusion = "full"
+	BetaWebSearchTool20260318ResponseInclusionExcluded BetaWebSearchTool20260318ResponseInclusion = "excluded"
+)
 
 // The properties ErrorCode, Type are required.
 type BetaWebSearchToolRequestErrorParam struct {
@@ -12103,11 +13192,12 @@ type BetaMessageNewParams struct {
 	// only specifies the absolute maximum number of tokens to generate.
 	//
 	// Set to `0` to populate the
-	// [prompt cache](https://docs.claude.com/en/docs/build-with-claude/prompt-caching#pre-warming-the-cache)
+	// [prompt cache](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#pre-warming-the-cache)
 	// without generating a response.
 	//
 	// Different models have different maximum values for this parameter. See
-	// [models](https://docs.claude.com/en/docs/models-overview) for details.
+	// [models](https://platform.claude.com/docs/en/about-claude/models/overview) for
+	// details.
 	MaxTokens int64 `json:"max_tokens" api:"required"`
 	// Input messages.
 	//
@@ -12170,12 +13260,13 @@ type BetaMessageNewParams struct {
 	// { "role": "user", "content": [{ "type": "text", "text": "Hello, Claude" }] }
 	// ```
 	//
-	// See [input examples](https://docs.claude.com/en/api/messages-examples).
+	// See
+	// [input examples](https://platform.claude.com/docs/en/build-with-claude/working-with-messages).
 	//
 	// Note that if you want to include a
-	// [system prompt](https://docs.claude.com/en/docs/system-prompts), you can use the
-	// top-level `system` parameter — there is no `"system"` role for input messages in
-	// the Messages API.
+	// [system prompt](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#give-claude-a-role),
+	// you can use the top-level `system` parameter — there is no `"system"` role for
+	// input messages in the Messages API.
 	//
 	// There is a limit of 100,000 messages in a single request.
 	Messages []BetaMessageParam `json:"messages,omitzero" api:"required"`
@@ -12184,32 +13275,9 @@ type BetaMessageNewParams struct {
 	// See [models](https://docs.anthropic.com/en/docs/models-overview) for additional
 	// details and options.
 	Model Model `json:"model,omitzero" api:"required"`
-	// The `fallback_credit_token` from a prior refusal's `stop_details`.
-	//
-	// When a preceding request was refused and returned a `fallback_credit_token`,
-	// pass that code here on the retry to have the retry's cache-creation tokens for
-	// the prefix that was warm on the refused model billed at the cache-read rate.
-	// Must be redeemed by the same organization and workspace, with the same request
-	// body (optionally extended by one appended `assistant` message whose content is
-	// the partial text — with any trailing whitespace stripped from the final text
-	// block — and paired server-tool blocks streamed before the refusal; the
-	// appended-assistant form is not available for requests with `output_format` set
-	// or forced `tool_choice`), on an eligible fallback model, on the same platform,
-	// and within 5 minutes of the refusal; a mismatch is a 400. A token minted
-	// mid-server-tool-loop whose partial content was continuable may only be redeemed
-	// with the appended-assistant form — if an exact-body retry is rejected with a 400
-	// saying the token must be redeemed by continuing the partial response, retry with
-	// the appended-assistant form instead.
-	//
-	// When the appended-assistant form is used on a model that otherwise disallows
-	// assistant-turn prefill, this token also authorizes that one prefill.
-	FallbackCreditToken param.Opt[string] `json:"fallback_credit_token,omitzero"`
 	// Specifies the geographic region for inference processing. If not specified, the
 	// workspace's `default_inference_geo` is used.
 	InferenceGeo param.Opt[string] `json:"inference_geo,omitzero"`
-	// The user profile ID to attribute this request to. Use when acting on behalf of a
-	// party other than your organization.
-	UserProfileID param.Opt[string] `json:"user_profile_id,omitzero"`
 	// Amount of randomness injected into the response.
 	//
 	// Defaults to `1.0`. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0`
@@ -12234,14 +13302,39 @@ type BetaMessageNewParams struct {
 	//
 	// Recommended for advanced use cases only.
 	TopP param.Opt[float64] `json:"top_p,omitzero"`
+	// The user profile ID to attribute this request to. Use when acting on behalf of a
+	// party other than your organization. Requires the `user-profiles` beta header.
+	UserProfileID param.Opt[string] `header:"anthropic-user-profile-id,omitzero" json:"-"`
 	// Container identifier for reuse across requests.
 	Container BetaMessageNewParamsContainerUnion `json:"container,omitzero"`
+	// The `fallback_credit_token` from a prior refusal's `stop_details`.
+	//
+	// When a preceding request was refused and returned a `fallback_credit_token`,
+	// pass that code here on the retry to have the retry's cache-creation tokens for
+	// the prefix that was warm on the refused model billed at the cache-read rate.
+	// Must be redeemed by the same organization and workspace, with the same request
+	// body (optionally extended by one appended `assistant` message whose content is
+	// the partial text — with any trailing whitespace stripped from the final text
+	// block — and paired server-tool blocks streamed before the refusal; the
+	// appended-assistant form is not available for requests with `output_format` set
+	// or forced `tool_choice`), on an eligible fallback model, on the same platform,
+	// and within 5 minutes of the refusal; a mismatch is a 400. A token minted
+	// mid-server-tool-loop whose partial content was continuable may only be redeemed
+	// with the appended-assistant form — if an exact-body retry is rejected with a 400
+	// saying the token must be redeemed by continuing the partial response, retry with
+	// the appended-assistant form instead.
+	//
+	// When the appended-assistant form is used on a model that otherwise disallows
+	// assistant-turn prefill, this token also authorizes that one prefill.
+	FallbackCreditToken BetaMessageNewParamsFallbackCreditTokenUnion `json:"fallback_credit_token,omitzero"`
 	// Opt-in server-side retry on one or more substitute models when the requested
 	// model declines for policy reasons. Tried in order: if the first entry also
-	// declines, the second is tried, and so on.
-	Fallbacks []BetaFallbackParam `json:"fallbacks,omitzero"`
-	// The inference speed mode for this request. `"fast"` enables high
-	// output-tokens-per-second inference.
+	// declines, the second is tried, and so on. The string "default" requests the
+	// requested model's server-defined default fallback configuration.
+	Fallbacks BetaFallbacksParamUnion `json:"fallbacks,omitzero"`
+	// Inference speed mode. `fast` provides significantly faster output token
+	// generation at premium pricing. Not all models support `fast`; invalid
+	// combinations are rejected at create time.
 	//
 	// Any of "standard", "fast".
 	Speed BetaMessageNewParamsSpeed `json:"speed,omitzero"`
@@ -12272,7 +13365,8 @@ type BetaMessageNewParams struct {
 	// for this request.
 	//
 	// Anthropic offers different levels of service for your API requests. See
-	// [service-tiers](https://docs.claude.com/en/api/service-tiers) for details.
+	// [service-tiers](https://platform.claude.com/docs/en/api/service-tiers) for
+	// details.
 	//
 	// Any of "auto", "standard_only".
 	ServiceTier BetaMessageNewParamsServiceTier `json:"service_tier,omitzero"`
@@ -12290,7 +13384,7 @@ type BetaMessageNewParams struct {
 	//
 	// A system prompt is a way of providing context and instructions to Claude, such
 	// as specifying a particular goal or role. See our
-	// [guide to system prompts](https://docs.claude.com/en/docs/system-prompts).
+	// [guide to system prompts](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#give-claude-a-role).
 	System []BetaTextBlockParam `json:"system,omitzero"`
 	// Configuration for enabling Claude's extended thinking.
 	//
@@ -12299,7 +13393,7 @@ type BetaMessageNewParams struct {
 	// tokens and counts towards your `max_tokens` limit.
 	//
 	// See
-	// [extended thinking](https://docs.claude.com/en/docs/build-with-claude/extended-thinking)
+	// [extended thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
 	// for details.
 	Thinking BetaThinkingConfigParamUnion `json:"thinking,omitzero"`
 	// How the model should use the provided tools. The model can use a specific tool,
@@ -12314,9 +13408,9 @@ type BetaMessageNewParams struct {
 	//
 	// There are two types of tools: **client tools** and **server tools**. The
 	// behavior described below applies to client tools. For
-	// [server tools](https://docs.claude.com/en/docs/agents-and-tools/tool-use/overview#server-tools),
+	// [server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools),
 	// see their individual documentation as each has its own behavior (e.g., the
-	// [web search tool](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-search-tool)).
+	// [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)).
 	//
 	// Each tool definition includes:
 	//
@@ -12385,7 +13479,9 @@ type BetaMessageNewParams struct {
 	// functions, or more generally whenever you want the model to produce a particular
 	// JSON structure of output.
 	//
-	// See our [guide](https://docs.claude.com/en/docs/tool-use) for more details.
+	// See our
+	// [guide](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
+	// for more details.
 	Tools []BetaToolUnionParam `json:"tools,omitzero"`
 	// Optional header to specify the beta version(s) you want to use.
 	Betas []AnthropicBeta `header:"anthropic-beta,omitzero" json:"-"`
@@ -12425,11 +13521,37 @@ func (u *BetaMessageNewParamsContainerUnion) asAny() any {
 	return nil
 }
 
+// Only one field can be non-zero.
+//
+// Use [param.IsOmitted] to confirm if a field is set.
+type BetaMessageNewParamsFallbackCreditTokenUnion struct {
+	OfString              param.Opt[string]             `json:",omitzero,inline"`
+	OfFallbackCreditToken *BetaFallbackCreditTokenParam `json:",omitzero,inline"`
+	paramUnion
+}
+
+func (u BetaMessageNewParamsFallbackCreditTokenUnion) MarshalJSON() ([]byte, error) {
+	return param.MarshalUnion(u, u.OfString, u.OfFallbackCreditToken)
+}
+func (u *BetaMessageNewParamsFallbackCreditTokenUnion) UnmarshalJSON(data []byte) error {
+	return apijson.UnmarshalRoot(data, u)
+}
+
+func (u *BetaMessageNewParamsFallbackCreditTokenUnion) asAny() any {
+	if !param.IsOmitted(u.OfString) {
+		return &u.OfString.Value
+	} else if !param.IsOmitted(u.OfFallbackCreditToken) {
+		return u.OfFallbackCreditToken
+	}
+	return nil
+}
+
 // Determines whether to use priority capacity (if available) or standard capacity
 // for this request.
 //
 // Anthropic offers different levels of service for your API requests. See
-// [service-tiers](https://docs.claude.com/en/api/service-tiers) for details.
+// [service-tiers](https://platform.claude.com/docs/en/api/service-tiers) for
+// details.
 type BetaMessageNewParamsServiceTier string
 
 const (
@@ -12437,8 +13559,9 @@ const (
 	BetaMessageNewParamsServiceTierStandardOnly BetaMessageNewParamsServiceTier = "standard_only"
 )
 
-// The inference speed mode for this request. `"fast"` enables high
-// output-tokens-per-second inference.
+// Inference speed mode. `fast` provides significantly faster output token
+// generation at premium pricing. Not all models support `fast`; invalid
+// combinations are rejected at create time.
 type BetaMessageNewParamsSpeed string
 
 const (
@@ -12508,12 +13631,13 @@ type BetaMessageCountTokensParams struct {
 	// { "role": "user", "content": [{ "type": "text", "text": "Hello, Claude" }] }
 	// ```
 	//
-	// See [input examples](https://docs.claude.com/en/api/messages-examples).
+	// See
+	// [input examples](https://platform.claude.com/docs/en/build-with-claude/working-with-messages).
 	//
 	// Note that if you want to include a
-	// [system prompt](https://docs.claude.com/en/docs/system-prompts), you can use the
-	// top-level `system` parameter — there is no `"system"` role for input messages in
-	// the Messages API.
+	// [system prompt](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#give-claude-a-role),
+	// you can use the top-level `system` parameter — there is no `"system"` role for
+	// input messages in the Messages API.
 	//
 	// There is a limit of 100,000 messages in a single request.
 	Messages []BetaMessageParam `json:"messages,omitzero" api:"required"`
@@ -12522,8 +13646,12 @@ type BetaMessageCountTokensParams struct {
 	// See [models](https://docs.anthropic.com/en/docs/models-overview) for additional
 	// details and options.
 	Model Model `json:"model,omitzero" api:"required"`
-	// The inference speed mode for this request. `"fast"` enables high
-	// output-tokens-per-second inference.
+	// The user profile ID to attribute this request to. Use when acting on behalf of a
+	// party other than your organization. Requires the `user-profiles` beta header.
+	UserProfileID param.Opt[string] `header:"anthropic-user-profile-id,omitzero" json:"-"`
+	// Inference speed mode. `fast` provides significantly faster output token
+	// generation at premium pricing. Not all models support `fast`; invalid
+	// combinations are rejected at create time.
 	//
 	// Any of "standard", "fast".
 	Speed BetaMessageCountTokensParamsSpeed `json:"speed,omitzero"`
@@ -12549,7 +13677,7 @@ type BetaMessageCountTokensParams struct {
 	//
 	// A system prompt is a way of providing context and instructions to Claude, such
 	// as specifying a particular goal or role. See our
-	// [guide to system prompts](https://docs.claude.com/en/docs/system-prompts).
+	// [guide to system prompts](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#give-claude-a-role).
 	System BetaMessageCountTokensParamsSystemUnion `json:"system,omitzero"`
 	// Configuration for enabling Claude's extended thinking.
 	//
@@ -12558,7 +13686,7 @@ type BetaMessageCountTokensParams struct {
 	// tokens and counts towards your `max_tokens` limit.
 	//
 	// See
-	// [extended thinking](https://docs.claude.com/en/docs/build-with-claude/extended-thinking)
+	// [extended thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking)
 	// for details.
 	Thinking BetaThinkingConfigParamUnion `json:"thinking,omitzero"`
 	// How the model should use the provided tools. The model can use a specific tool,
@@ -12573,9 +13701,9 @@ type BetaMessageCountTokensParams struct {
 	//
 	// There are two types of tools: **client tools** and **server tools**. The
 	// behavior described below applies to client tools. For
-	// [server tools](https://docs.claude.com/en/docs/agents-and-tools/tool-use/overview#server-tools),
+	// [server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools),
 	// see their individual documentation as each has its own behavior (e.g., the
-	// [web search tool](https://docs.claude.com/en/docs/agents-and-tools/tool-use/web-search-tool)).
+	// [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)).
 	//
 	// Each tool definition includes:
 	//
@@ -12644,7 +13772,9 @@ type BetaMessageCountTokensParams struct {
 	// functions, or more generally whenever you want the model to produce a particular
 	// JSON structure of output.
 	//
-	// See our [guide](https://docs.claude.com/en/docs/tool-use) for more details.
+	// See our
+	// [guide](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
+	// for more details.
 	Tools []BetaMessageCountTokensParamsToolUnion `json:"tools,omitzero"`
 	// Optional header to specify the beta version(s) you want to use.
 	Betas []AnthropicBeta `header:"anthropic-beta,omitzero" json:"-"`
@@ -12659,8 +13789,9 @@ func (r *BetaMessageCountTokensParams) UnmarshalJSON(data []byte) error {
 	return apijson.UnmarshalRoot(data, r)
 }
 
-// The inference speed mode for this request. `"fast"` enables high
-// output-tokens-per-second inference.
+// Inference speed mode. `fast` provides significantly faster output token
+// generation at premium pricing. Not all models support `fast`; invalid
+// combinations are rejected at create time.
 type BetaMessageCountTokensParamsSpeed string
 
 const (
@@ -12703,6 +13834,7 @@ type BetaMessageCountTokensParamsToolUnion struct {
 	OfCodeExecutionTool20250522   *BetaCodeExecutionTool20250522Param   `json:",omitzero,inline"`
 	OfCodeExecutionTool20250825   *BetaCodeExecutionTool20250825Param   `json:",omitzero,inline"`
 	OfCodeExecutionTool20260120   *BetaCodeExecutionTool20260120Param   `json:",omitzero,inline"`
+	OfCodeExecutionTool20260521   *BetaCodeExecutionTool20260521Param   `json:",omitzero,inline"`
 	OfComputerUseTool20241022     *BetaToolComputerUse20241022Param     `json:",omitzero,inline"`
 	OfMemoryTool20250818          *BetaMemoryTool20250818Param          `json:",omitzero,inline"`
 	OfComputerUseTool20250124     *BetaToolComputerUse20250124Param     `json:",omitzero,inline"`
@@ -12716,6 +13848,8 @@ type BetaMessageCountTokensParamsToolUnion struct {
 	OfWebSearchTool20260209       *BetaWebSearchTool20260209Param       `json:",omitzero,inline"`
 	OfWebFetchTool20260209        *BetaWebFetchTool20260209Param        `json:",omitzero,inline"`
 	OfWebFetchTool20260309        *BetaWebFetchTool20260309Param        `json:",omitzero,inline"`
+	OfWebSearchTool20260318       *BetaWebSearchTool20260318Param       `json:",omitzero,inline"`
+	OfWebFetchTool20260318        *BetaWebFetchTool20260318Param        `json:",omitzero,inline"`
 	OfAdvisorTool20260301         *BetaAdvisorTool20260301Param         `json:",omitzero,inline"`
 	OfToolSearchToolBm25_20251119 *BetaToolSearchToolBm25_20251119Param `json:",omitzero,inline"`
 	OfToolSearchToolRegex20251119 *BetaToolSearchToolRegex20251119Param `json:",omitzero,inline"`
@@ -12730,6 +13864,7 @@ func (u BetaMessageCountTokensParamsToolUnion) MarshalJSON() ([]byte, error) {
 		u.OfCodeExecutionTool20250522,
 		u.OfCodeExecutionTool20250825,
 		u.OfCodeExecutionTool20260120,
+		u.OfCodeExecutionTool20260521,
 		u.OfComputerUseTool20241022,
 		u.OfMemoryTool20250818,
 		u.OfComputerUseTool20250124,
@@ -12743,6 +13878,8 @@ func (u BetaMessageCountTokensParamsToolUnion) MarshalJSON() ([]byte, error) {
 		u.OfWebSearchTool20260209,
 		u.OfWebFetchTool20260209,
 		u.OfWebFetchTool20260309,
+		u.OfWebSearchTool20260318,
+		u.OfWebFetchTool20260318,
 		u.OfAdvisorTool20260301,
 		u.OfToolSearchToolBm25_20251119,
 		u.OfToolSearchToolRegex20251119,
@@ -12765,6 +13902,8 @@ func (u *BetaMessageCountTokensParamsToolUnion) asAny() any {
 		return u.OfCodeExecutionTool20250825
 	} else if !param.IsOmitted(u.OfCodeExecutionTool20260120) {
 		return u.OfCodeExecutionTool20260120
+	} else if !param.IsOmitted(u.OfCodeExecutionTool20260521) {
+		return u.OfCodeExecutionTool20260521
 	} else if !param.IsOmitted(u.OfComputerUseTool20241022) {
 		return u.OfComputerUseTool20241022
 	} else if !param.IsOmitted(u.OfMemoryTool20250818) {
@@ -12791,6 +13930,10 @@ func (u *BetaMessageCountTokensParamsToolUnion) asAny() any {
 		return u.OfWebFetchTool20260209
 	} else if !param.IsOmitted(u.OfWebFetchTool20260309) {
 		return u.OfWebFetchTool20260309
+	} else if !param.IsOmitted(u.OfWebSearchTool20260318) {
+		return u.OfWebSearchTool20260318
+	} else if !param.IsOmitted(u.OfWebFetchTool20260318) {
+		return u.OfWebFetchTool20260318
 	} else if !param.IsOmitted(u.OfAdvisorTool20260301) {
 		return u.OfAdvisorTool20260301
 	} else if !param.IsOmitted(u.OfToolSearchToolBm25_20251119) {
@@ -12839,14 +13982,6 @@ func (u BetaMessageCountTokensParamsToolUnion) GetEnableZoom() *bool {
 func (u BetaMessageCountTokensParamsToolUnion) GetMaxCharacters() *int64 {
 	if vt := u.OfTextEditor20250728; vt != nil && vt.MaxCharacters.Valid() {
 		return &vt.MaxCharacters.Value
-	}
-	return nil
-}
-
-// Returns a pointer to the underlying variant's property, if present.
-func (u BetaMessageCountTokensParamsToolUnion) GetUseCache() *bool {
-	if vt := u.OfWebFetchTool20260309; vt != nil && vt.UseCache.Valid() {
-		return &vt.UseCache.Value
 	}
 	return nil
 }
@@ -12913,6 +14048,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetName() *string {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
 		return (*string)(&vt.Name)
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
+		return (*string)(&vt.Name)
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfMemoryTool20250818; vt != nil {
@@ -12939,6 +14076,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetName() *string {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return (*string)(&vt.Name)
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.Name)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return (*string)(&vt.Name)
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return (*string)(&vt.Name)
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil {
@@ -12962,6 +14103,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetDeferLoading() *bool {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfComputerUseTool20241022; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
@@ -12989,6 +14132,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetDeferLoading() *bool {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.DeferLoading.Valid() {
+		return &vt.DeferLoading.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.DeferLoading.Valid() {
 		return &vt.DeferLoading.Value
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil && vt.DeferLoading.Valid() {
@@ -13012,6 +14159,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetStrict() *bool {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfComputerUseTool20241022; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
@@ -13039,6 +14188,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetStrict() *bool {
 		return &vt.Strict.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.Strict.Valid() {
+		return &vt.Strict.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.Strict.Valid() {
 		return &vt.Strict.Value
 	} else if vt := u.OfToolSearchToolBm25_20251119; vt != nil && vt.Strict.Valid() {
@@ -13062,6 +14215,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetType() *string {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return (*string)(&vt.Type)
@@ -13088,6 +14243,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetType() *string {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.Type)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return (*string)(&vt.Type)
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return (*string)(&vt.Type)
@@ -13149,6 +14308,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetMaxUses() *int64 {
 		return &vt.MaxUses.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.MaxUses.Valid() {
 		return &vt.MaxUses.Value
+	} else if vt := u.OfWebSearchTool20260318; vt != nil && vt.MaxUses.Valid() {
+		return &vt.MaxUses.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.MaxUses.Valid() {
+		return &vt.MaxUses.Value
 	} else if vt := u.OfAdvisorTool20260301; vt != nil && vt.MaxUses.Valid() {
 		return &vt.MaxUses.Value
 	}
@@ -13163,6 +14326,28 @@ func (u BetaMessageCountTokensParamsToolUnion) GetMaxContentTokens() *int64 {
 		return &vt.MaxContentTokens.Value
 	} else if vt := u.OfWebFetchTool20260309; vt != nil && vt.MaxContentTokens.Valid() {
 		return &vt.MaxContentTokens.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.MaxContentTokens.Valid() {
+		return &vt.MaxContentTokens.Value
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaMessageCountTokensParamsToolUnion) GetUseCache() *bool {
+	if vt := u.OfWebFetchTool20260309; vt != nil && vt.UseCache.Valid() {
+		return &vt.UseCache.Value
+	} else if vt := u.OfWebFetchTool20260318; vt != nil && vt.UseCache.Valid() {
+		return &vt.UseCache.Value
+	}
+	return nil
+}
+
+// Returns a pointer to the underlying variant's property, if present.
+func (u BetaMessageCountTokensParamsToolUnion) GetResponseInclusion() *string {
+	if vt := u.OfWebSearchTool20260318; vt != nil {
+		return (*string)(&vt.ResponseInclusion)
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return (*string)(&vt.ResponseInclusion)
 	}
 	return nil
 }
@@ -13181,6 +14366,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetAllowedCallers() []string {
 	} else if vt := u.OfCodeExecutionTool20250825; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return vt.AllowedCallers
@@ -13207,6 +14394,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetAllowedCallers() []string {
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.AllowedCallers
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return vt.AllowedCallers
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return vt.AllowedCallers
@@ -13232,6 +14423,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetCacheControl() *BetaCacheContr
 		return &vt.CacheControl
 	} else if vt := u.OfCodeExecutionTool20260120; vt != nil {
 		return &vt.CacheControl
+	} else if vt := u.OfCodeExecutionTool20260521; vt != nil {
+		return &vt.CacheControl
 	} else if vt := u.OfComputerUseTool20241022; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfMemoryTool20250818; vt != nil {
@@ -13257,6 +14450,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetCacheControl() *BetaCacheContr
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return &vt.CacheControl
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return &vt.CacheControl
 	} else if vt := u.OfAdvisorTool20260301; vt != nil {
 		return &vt.CacheControl
@@ -13312,6 +14509,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetAllowedDomains() []string {
 		return vt.AllowedDomains
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return vt.AllowedDomains
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.AllowedDomains
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return vt.AllowedDomains
 	}
 	return nil
 }
@@ -13329,6 +14530,10 @@ func (u BetaMessageCountTokensParamsToolUnion) GetBlockedDomains() []string {
 		return vt.BlockedDomains
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
 		return vt.BlockedDomains
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
+		return vt.BlockedDomains
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
+		return vt.BlockedDomains
 	}
 	return nil
 }
@@ -13338,6 +14543,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetUserLocation() *BetaUserLocati
 	if vt := u.OfWebSearchTool20250305; vt != nil {
 		return &vt.UserLocation
 	} else if vt := u.OfWebSearchTool20260209; vt != nil {
+		return &vt.UserLocation
+	} else if vt := u.OfWebSearchTool20260318; vt != nil {
 		return &vt.UserLocation
 	}
 	return nil
@@ -13350,6 +14557,8 @@ func (u BetaMessageCountTokensParamsToolUnion) GetCitations() *BetaCitationsConf
 	} else if vt := u.OfWebFetchTool20260209; vt != nil {
 		return &vt.Citations
 	} else if vt := u.OfWebFetchTool20260309; vt != nil {
+		return &vt.Citations
+	} else if vt := u.OfWebFetchTool20260318; vt != nil {
 		return &vt.Citations
 	}
 	return nil

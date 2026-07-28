@@ -116,3 +116,15 @@ func TestSetGroupRejectsInvalid(t *testing.T) {
 	_, err = call(t, setGroup, `{"reviewType":"code","summary":"","isAccepted":true,"markdown":"b"}`)
 	require.ErrorContains(t, err, "required")
 }
+
+func TestAddIssuesRejectsEmptyBatch(t *testing.T) {
+	b := newReviewBuilder()
+	_, addIssues := addIssuesTool(b)
+
+	// {} is what a max_tokens-truncated tool call degrades to — must be an
+	// error, not a silent "added 0".
+	_, err := call(t, addIssues, `{}`)
+	require.ErrorContains(t, err, "empty issues array")
+	_, err = call(t, addIssues, `{"issues":[]}`)
+	require.ErrorContains(t, err, "empty issues array")
+}

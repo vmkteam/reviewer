@@ -71,6 +71,28 @@
         <column name="statusId" references="statusId"></column>
       </fk>
     </table>
+    <table name="runnerProfiles">
+      <column name="runnerProfileId" type="integer" nullable="false">
+        <identity generated="by-default"></identity>
+      </column>
+      <column name="title" type="varchar" length="255" nullable="false"></column>
+      <column name="runner" type="varchar" length="32" nullable="false"></column>
+      <column name="model" type="varchar" length="128"></column>
+      <column name="effort" type="varchar" length="16"></column>
+      <column name="apiProvider" type="varchar" length="32"></column>
+      <column name="apiBaseURL" type="varchar" length="255"></column>
+      <column name="token" type="varchar" length="255"></column>
+      <column name="params" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
+      <column name="isDefault" type="boolean" nullable="false" default="false"></column>
+      <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
+      <column name="statusId" type="integer" nullable="false"></column>
+      <pk name="runnerProfiles_pkey">
+        <column name="runnerProfileId"></column>
+      </pk>
+      <fk name="Ref_runnerProfiles_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="statusId" references="statusId"></column>
+      </fk>
+    </table>
     <table name="projects">
       <column name="projectId" type="integer" nullable="false">
         <identity generated="by-default"></identity>
@@ -83,6 +105,9 @@
       <column name="promptId" type="integer" nullable="false"></column>
       <column name="taskTrackerId" type="integer"></column>
       <column name="slackChannelId" type="integer"></column>
+      <column name="runnerProfileId" type="integer"></column>
+      <column name="runnerProfileIds" type="jsonb" nullable="false" default="&#39;[]&#39;"></column>
+      <column name="judgeRunnerProfileId" type="integer"></column>
       <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <pk name="projects_pkey">
@@ -96,6 +121,12 @@
       </fk>
       <fk name="Ref_projects_to_slackChannels" to-table="slackChannels" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="slackChannelId" references="slackChannelId"></column>
+      </fk>
+      <fk name="Ref_projects_to_runnerProfiles" to-table="runnerProfiles" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="runnerProfileId" references="runnerProfileId"></column>
+      </fk>
+      <fk name="Ref_projects_to_runnerProfiles_judge" to-table="runnerProfiles" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="judgeRunnerProfileId" references="runnerProfileId"></column>
       </fk>
       <fk name="Ref_projects_to_statuses" to-table="statuses" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="statusId" references="statusId"></column>
@@ -120,10 +151,13 @@
       <column name="createdAt" type="timestamptz" nullable="false" default="now()"></column>
       <column name="durationMS" type="integer" nullable="false" default="0"></column>
       <column name="modelInfo" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
+      <column name="runnerProfile" type="jsonb" nullable="false" default="&#39;{}&#39;"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <column name="promptId" type="integer" nullable="false"></column>
       <column name="effortMinutes" type="integer"></column>
       <column name="aiSlopScore" type="real"></column>
+      <column name="parentReviewId" type="integer"></column>
+      <column name="reviewRole" type="varchar" length="16" nullable="false" default="&#39;single&#39;"></column>
       <pk name="reviews_pkey">
         <column name="reviewId"></column>
       </pk>
@@ -135,6 +169,9 @@
       </fk>
       <fk name="Ref_reviews_to_prompts" to-table="prompts" on-delete="RESTRICT" on-update="RESTRICT">
         <column name="promptId" references="promptId"></column>
+      </fk>
+      <fk name="Ref_reviews_to_reviews" to-table="reviews" on-delete="RESTRICT" on-update="RESTRICT">
+        <column name="parentReviewId" references="reviewId"></column>
       </fk>
     </table>
     <table name="reviewFiles">
@@ -181,6 +218,7 @@
       <column name="suggestedFix" type="text"></column>
       <column name="statusId" type="integer" nullable="false"></column>
       <column name="archivedAt" type="timestamptz"></column>
+      <column name="sources" type="jsonb" nullable="false" default="&#39;[]&#39;"></column>
       <pk name="issues_pkey">
         <column name="issueId"></column>
       </pk>
@@ -271,6 +309,18 @@
     <index name="ix_projects_promptId" table="projects" using="btree">
       <column name="promptId"></column>
     </index>
+    <index name="ix_runnerProfiles_statusId" table="runnerProfiles" using="btree">
+      <column name="statusId"></column>
+    </index>
+    <index name="ix_projects_runnerProfileId" table="projects" using="btree">
+      <column name="runnerProfileId"></column>
+    </index>
+    <index name="ix_projects_judgeRunnerProfileId" table="projects" using="btree">
+      <column name="judgeRunnerProfileId"></column>
+    </index>
+    <index name="ix_reviews_parentReviewId" table="reviews" using="btree">
+      <column name="parentReviewId"></column>
+    </index>
   </schema>
   <functions></functions>
   <triggers></triggers>
@@ -283,6 +333,7 @@
       <entity schema="public" table="statuses" x="520" y="560"></entity>
       <entity schema="public" table="taskTrackers" x="840" y="40"></entity>
       <entity schema="public" table="slackChannels" x="480" y="-160"></entity>
+      <entity schema="public" table="runnerProfiles" x="-360" y="200"></entity>
       <entity schema="public" table="projects" x="60" y="-20"></entity>
       <entity schema="public" table="reviews" x="840" y="260"></entity>
       <entity schema="public" table="reviewFiles" x="860" y="680"></entity>

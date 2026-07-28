@@ -17,12 +17,13 @@ const (
 )
 
 const (
-	NSAuth         = "auth"
-	NSUser         = "user"
-	NSProject      = "project"
-	NSPrompt       = "prompt"
-	NSSlackChannel = "slackChannel"
-	NSTaskTracker  = "taskTracker"
+	NSAuth          = "auth"
+	NSUser          = "user"
+	NSProject       = "project"
+	NSPrompt        = "prompt"
+	NSSlackChannel  = "slackChannel"
+	NSTaskTracker   = "taskTracker"
+	NSRunnerProfile = "runnerProfile"
 )
 
 var (
@@ -68,12 +69,13 @@ func New(dbo db.DB, logger embedlog.Logger, isDevel bool, baseURL string) *zenrp
 
 	// services
 	rpc.RegisterAll(map[string]zenrpc.Invoker{
-		NSAuth:         NewAuthService(dbo, logger),
-		NSUser:         NewUserService(dbo, logger),
-		NSProject:      NewProjectService(dbo, logger, baseURL),
-		NSPrompt:       NewPromptService(dbo, logger),
-		NSSlackChannel: NewSlackChannelService(dbo, logger),
-		NSTaskTracker:  NewTaskTrackerService(dbo, logger),
+		NSAuth:          NewAuthService(dbo, logger),
+		NSUser:          NewUserService(dbo, logger),
+		NSProject:       NewProjectService(dbo, logger, baseURL),
+		NSPrompt:        NewPromptService(dbo, logger),
+		NSSlackChannel:  NewSlackChannelService(dbo, logger),
+		NSTaskTracker:   NewTaskTrackerService(dbo, logger),
+		NSRunnerProfile: NewRunnerProfileService(dbo, logger),
 	})
 
 	return rpc

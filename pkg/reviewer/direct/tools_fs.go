@@ -13,12 +13,22 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode/utf8"
+
+	"reviewsrv/pkg/reviewer"
 )
 
 const (
 	maxGlobResults = 300
 	maxGrepMatches = 300
 	maxGrepFile    = 1 << 20 // skip files larger than 1 MiB in grep
+	// grepClip caps grep output far below defaultClip: grep is a locator, and a
+	// broad pattern over generated code (300 near-cap lines) otherwise dumps
+	// ~100KB into the conversation prefix, which is then re-read every round.
+	grepClip = 20_000
+	// grepLineClip bounds a single matched line — generated Go/SQL lines run to
+	// kilobytes while the model only needs path:line plus a recognisable snippet.
+	grepLineClip = 240
 )
 
 // Tool names and schema property keys reused across the filesystem tools.
@@ -29,8 +39,33 @@ const (
 	fPath        = "path"
 )
 
-// skipDirs are never descended into by glob/grep walks.
-var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true}
+// skipDirs are never descended into by glob/grep walks. .claude is local agent
+// state (memory, session data) — never part of the change under review.
+var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true, ".claude": true}
+
+// skipFiles are the reviewer's own working-dir artifacts, hidden from glob/grep
+// walks: a leftover review.html or session log from a previous run would let a
+// repo-wide grep surface the PREVIOUS review's text and anchor the model on it.
+// Derived from the canonical set in the reviewer package (shared with the git
+// excludes and ctl's cleaner) so a new artifact is added once.
+var skipFiles = func() map[string]bool {
+	m := map[string]bool{reviewer.ReviewArtifactHTML: true}
+	for _, n := range reviewer.ReviewArtifactFiles {
+		m[n] = true
+	}
+	return m
+}()
+
+// skipWalkFile reports whether a walk should ignore this root-relative path.
+// Only ROOT-level artifacts are hidden — the reviewer writes them into the run
+// dir root, while nested copies are legitimate review material (the judge's
+// staged members/<label>/review.json and R*.ai.md must stay discoverable).
+func skipWalkFile(rel string) bool {
+	if strings.Contains(rel, "/") {
+		return false
+	}
+	return skipFiles[rel] || strings.HasSuffix(rel, reviewer.ReviewArtifactMDSuffix)
+}
 
 // readTracker records which files have already been fully read in this session
 // (seeded with the pre-loaded changed files), so a repeat full read returns a
@@ -80,6 +115,12 @@ func resolveInRoot(root, p string) (string, error) {
 	clean := filepath.Clean(p)
 	if filepath.IsAbs(clean) {
 		return "", fmt.Errorf("absolute paths are not allowed: %q", p)
+	}
+	// Walks only HIDE .claude (developer's local agent state: memory, session
+	// data); direct reads must refuse it too, or its contents could be quoted
+	// into the review body.
+	if s := filepath.ToSlash(clean); s == ".claude" || strings.HasPrefix(s, ".claude/") {
+		return "", fmt.Errorf("path is local agent state, not part of the review: %q", p)
 	}
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
@@ -291,6 +332,9 @@ func globWalk(rootAbs string, re *regexp.Regexp, matches *[]string) fs.WalkDirFu
 			return nil //nolint:nilerr // skip entries whose relative path can't be computed
 		}
 		rel = filepath.ToSlash(rel)
+		if skipWalkFile(rel) {
+			return nil
+		}
 		if re.MatchString(rel) {
 			*matches = append(*matches, rel)
 		}
@@ -348,7 +392,10 @@ func grepTool(root string) (ToolDef, Handler) {
 		if errors.Is(walkErr, errGrepLimit) {
 			res += fmt.Sprintf("\n... [truncated to %d matches]", maxGrepMatches)
 		}
-		return clip(res), nil
+		if len(res) > grepClip {
+			res = clipN(res, grepClip) + "\nNarrow the pattern or add path/glob filters to see the rest."
+		}
+		return res, nil
 	}
 	return def, h
 }
@@ -374,6 +421,9 @@ func grepWalk(rootAbs string, re, globRe *regexp.Regexp, out *[]string) fs.WalkD
 			return nil //nolint:nilerr // skip entries whose relative path can't be computed
 		}
 		rel = filepath.ToSlash(rel)
+		if skipWalkFile(rel) {
+			return nil
+		}
 		if globRe != nil && !globRe.MatchString(rel) {
 			return nil
 		}
@@ -389,11 +439,19 @@ func grepWalk(rootAbs string, re, globRe *regexp.Regexp, out *[]string) fs.WalkD
 }
 
 // grepLines appends every line of data matching re to out, returning errGrepLimit
-// once the match cap is reached.
+// once the match cap is reached. Matched lines are clipped to grepLineClip.
 func grepLines(rel string, data []byte, re *regexp.Regexp, out *[]string) error {
 	for i, line := range strings.Split(string(data), "\n") {
 		if re.MatchString(line) {
-			*out = append(*out, fmt.Sprintf("%s:%d:%s", rel, i+1, strings.TrimSpace(line)))
+			text := strings.TrimSpace(line)
+			if len(text) > grepLineClip {
+				n := grepLineClip
+				for n > 0 && !utf8.RuneStart(text[n]) { // don't split a rune mid-sequence
+					n--
+				}
+				text = text[:n] + "…"
+			}
+			*out = append(*out, fmt.Sprintf("%s:%d:%s", rel, i+1, text))
 			if len(*out) >= maxGrepMatches {
 				return errGrepLimit
 			}

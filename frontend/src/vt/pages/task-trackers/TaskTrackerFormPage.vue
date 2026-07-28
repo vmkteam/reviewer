@@ -23,7 +23,7 @@
       </FormField>
 
       <FormField label="Auth Token" :error="fieldError('authToken')">
-        <VInput v-model="entity.authToken" type="text" />
+        <SecretInput v-model="tokenInput" placeholder="Optional token" :saved-masked="entity.hasToken ? entity.tokenMasked : ''" />
       </FormField>
 
       <FormField label="Fetch Prompt" :error="fieldError('fetchPrompt')">
@@ -57,6 +57,7 @@ import { useForm } from '../../composables/useForm'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import VInput from '../../components/VInput.vue'
+import SecretInput from '../../components/SecretInput.vue'
 import VTextarea from '../../components/VTextarea.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
@@ -68,14 +69,19 @@ const isEdit = computed(() => !!props.id)
 const showConfirm = ref(false)
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<TaskTracker>(vtApi.tasktracker, 'taskTracker', () => ({
-  id: 0, title: '', url: '', authToken: '', fetchPrompt: '', statusId: 1,
+  id: 0, title: '', url: '', fetchPrompt: '', statusId: 1, tokenMasked: '', hasToken: false,
 }))
+
+// Token is write-only: bind a separate input so an untouched field stays "keep".
+const tokenInput = ref('')
 
 onMounted(() => {
   if (props.id) load(parseInt(props.id))
 })
 
 async function handleSave() {
+  // Empty token input means "keep existing" (update) or "none" (add): omit it.
+  entity.authToken = tokenInput.value ? tokenInput.value : undefined
   if (await save()) router.push('/task-trackers')
 }
 

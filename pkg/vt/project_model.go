@@ -2,25 +2,33 @@
 package vt
 
 import (
+	"strings"
+
 	"reviewsrv/pkg/db"
 )
 
 type Project struct {
-	ID             int     `json:"id"`
-	Title          string  `json:"title" validate:"required,max=255"`
-	VcsURL         string  `json:"vcsURL" validate:"required,http_url,max=255"`
-	Language       string  `json:"language" validate:"required,max=32"`
-	ProjectKey     string  `json:"projectKey"`
-	PromptID       int     `json:"promptId" validate:"required"`
-	TaskTrackerID  *int    `json:"taskTrackerId"`
-	SlackChannelID *int    `json:"slackChannelId"`
-	StatusID       int     `json:"statusId" validate:"required,status"`
-	Instructions   *string `json:"instructions"`
+	ID              int     `json:"id"`
+	Title           string  `json:"title" validate:"required,max=255"`
+	VcsURL          string  `json:"vcsURL" validate:"required,http_url,max=255"`
+	Language        string  `json:"language" validate:"required,max=32"`
+	ProjectKey      string  `json:"projectKey"`
+	PromptID        int     `json:"promptId" validate:"required"`
+	TaskTrackerID   *int    `json:"taskTrackerId"`
+	SlackChannelID  *int    `json:"slackChannelId"`
+	RunnerProfileID *int    `json:"runnerProfileId"`
+	StatusID        int     `json:"statusId" validate:"required,status"`
+	Instructions    *string `json:"instructions"`
 
-	Prompt       *PromptSummary       `json:"prompt"`
-	TaskTracker  *TaskTrackerSummary  `json:"taskTracker"`
-	SlackChannel *SlackChannelSummary `json:"slackChannel"`
-	Status       *Status              `json:"status"`
+	RunnerProfileIDs     []int `json:"runnerProfileIds"`     // additional panel members (ordered, duplicates allowed)
+	JudgeRunnerProfileID *int  `json:"judgeRunnerProfileId"` // judge; its presence turns multi-review on
+
+	Prompt             *PromptSummary        `json:"prompt"`
+	TaskTracker        *TaskTrackerSummary   `json:"taskTracker"`
+	SlackChannel       *SlackChannelSummary  `json:"slackChannel"`
+	RunnerProfile      *RunnerProfileSummary `json:"runnerProfile"`
+	JudgeRunnerProfile *RunnerProfileSummary `json:"judgeRunnerProfile"`
+	Status             *Status               `json:"status"`
 }
 
 func (p *Project) ToDB() *db.Project {
@@ -29,32 +37,36 @@ func (p *Project) ToDB() *db.Project {
 	}
 
 	project := &db.Project{
-		ID:             p.ID,
-		Title:          p.Title,
-		VcsURL:         p.VcsURL,
-		Language:       p.Language,
-		ProjectKey:     p.ProjectKey,
-		PromptID:       p.PromptID,
-		TaskTrackerID:  p.TaskTrackerID,
-		SlackChannelID: p.SlackChannelID,
-		StatusID:       p.StatusID,
-		Instructions:   p.Instructions,
+		ID:                   p.ID,
+		Title:                p.Title,
+		VcsURL:               p.VcsURL,
+		Language:             p.Language,
+		ProjectKey:           p.ProjectKey,
+		PromptID:             p.PromptID,
+		TaskTrackerID:        p.TaskTrackerID,
+		SlackChannelID:       p.SlackChannelID,
+		RunnerProfileID:      p.RunnerProfileID,
+		RunnerProfileIDs:     db.ProjectRunnerProfileIDs(p.RunnerProfileIDs),
+		JudgeRunnerProfileID: p.JudgeRunnerProfileID,
+		StatusID:             p.StatusID,
+		Instructions:         p.Instructions,
 	}
 
 	return project
 }
 
 type ProjectSearch struct {
-	ID             *int    `json:"id"`
-	Title          *string `json:"title"`
-	VcsURL         *string `json:"vcsURL"`
-	Language       *string `json:"language"`
-	ProjectKey     *string `json:"projectKey"`
-	PromptID       *int    `json:"promptId"`
-	TaskTrackerID  *int    `json:"taskTrackerId"`
-	SlackChannelID *int    `json:"slackChannelId"`
-	StatusID       *int    `json:"statusId"`
-	IDs            []int   `json:"ids"`
+	ID              *int    `json:"id"`
+	Title           *string `json:"title"`
+	VcsURL          *string `json:"vcsURL"`
+	Language        *string `json:"language"`
+	ProjectKey      *string `json:"projectKey"`
+	PromptID        *int    `json:"promptId"`
+	TaskTrackerID   *int    `json:"taskTrackerId"`
+	SlackChannelID  *int    `json:"slackChannelId"`
+	RunnerProfileID *int    `json:"runnerProfileId"`
+	StatusID        *int    `json:"statusId"`
+	IDs             []int   `json:"ids"`
 }
 
 func (ps *ProjectSearch) ToDB() *db.ProjectSearch {
@@ -63,33 +75,36 @@ func (ps *ProjectSearch) ToDB() *db.ProjectSearch {
 	}
 
 	return &db.ProjectSearch{
-		ID:             ps.ID,
-		TitleILike:     ps.Title,
-		VcsURLILike:    ps.VcsURL,
-		LanguageILike:  ps.Language,
-		ProjectKey:     ps.ProjectKey,
-		PromptID:       ps.PromptID,
-		TaskTrackerID:  ps.TaskTrackerID,
-		SlackChannelID: ps.SlackChannelID,
-		StatusID:       ps.StatusID,
-		IDs:            ps.IDs,
+		ID:              ps.ID,
+		TitleILike:      ps.Title,
+		VcsURLILike:     ps.VcsURL,
+		LanguageILike:   ps.Language,
+		ProjectKey:      ps.ProjectKey,
+		PromptID:        ps.PromptID,
+		TaskTrackerID:   ps.TaskTrackerID,
+		SlackChannelID:  ps.SlackChannelID,
+		RunnerProfileID: ps.RunnerProfileID,
+		StatusID:        ps.StatusID,
+		IDs:             ps.IDs,
 	}
 }
 
 type ProjectSummary struct {
-	ID             int    `json:"id"`
-	Title          string `json:"title"`
-	VcsURL         string `json:"vcsURL"`
-	Language       string `json:"language"`
-	ProjectKey     string `json:"projectKey"`
-	PromptID       int    `json:"promptId"`
-	TaskTrackerID  *int   `json:"taskTrackerId"`
-	SlackChannelID *int   `json:"slackChannelId"`
+	ID              int    `json:"id"`
+	Title           string `json:"title"`
+	VcsURL          string `json:"vcsURL"`
+	Language        string `json:"language"`
+	ProjectKey      string `json:"projectKey"`
+	PromptID        int    `json:"promptId"`
+	TaskTrackerID   *int   `json:"taskTrackerId"`
+	SlackChannelID  *int   `json:"slackChannelId"`
+	RunnerProfileID *int   `json:"runnerProfileId"`
 
-	Prompt       *PromptSummary       `json:"prompt"`
-	TaskTracker  *TaskTrackerSummary  `json:"taskTracker"`
-	SlackChannel *SlackChannelSummary `json:"slackChannel"`
-	Status       *Status              `json:"status"`
+	Prompt        *PromptSummary        `json:"prompt"`
+	TaskTracker   *TaskTrackerSummary   `json:"taskTracker"`
+	SlackChannel  *SlackChannelSummary  `json:"slackChannel"`
+	RunnerProfile *RunnerProfileSummary `json:"runnerProfile"`
+	Status        *Status               `json:"status"`
 }
 
 type Prompt struct {
@@ -172,11 +187,13 @@ type PromptSummary struct {
 }
 
 type SlackChannel struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title" validate:"required,max=255"`
-	Channel    string `json:"channel" validate:"required,max=255"`
-	WebhookURL string `json:"webhookURL" validate:"required,max=1024"`
-	StatusID   int    `json:"statusId" validate:"required,status"`
+	ID               int     `json:"id"`
+	Title            string  `json:"title" validate:"required,max=255"`
+	Channel          string  `json:"channel" validate:"required,max=255"`
+	WebhookURL       *string `json:"webhookURL,omitempty" validate:"omitempty,max=1024"` // write-only: nil on read, set-or-keep on write
+	WebhookURLMasked string  `json:"webhookURLMasked"`                                   // read-only masked display
+	HasWebhookURL    bool    `json:"hasWebhookURL"`                                      // read-only
+	StatusID         int     `json:"statusId" validate:"required,status"`
 
 	Status *Status `json:"status"`
 }
@@ -187,23 +204,24 @@ func (sc *SlackChannel) ToDB() *db.SlackChannel {
 	}
 
 	slackChannel := &db.SlackChannel{
-		ID:         sc.ID,
-		Title:      sc.Title,
-		Channel:    sc.Channel,
-		WebhookURL: sc.WebhookURL,
-		StatusID:   sc.StatusID,
+		ID:       sc.ID,
+		Title:    sc.Title,
+		Channel:  sc.Channel,
+		StatusID: sc.StatusID,
+	}
+	if sc.WebhookURL != nil {
+		slackChannel.WebhookURL = *sc.WebhookURL
 	}
 
 	return slackChannel
 }
 
 type SlackChannelSearch struct {
-	ID         *int    `json:"id"`
-	Title      *string `json:"title"`
-	Channel    *string `json:"channel"`
-	WebhookURL *string `json:"webhookURL"`
-	StatusID   *int    `json:"statusId"`
-	IDs        []int   `json:"ids"`
+	ID       *int    `json:"id"`
+	Title    *string `json:"title"`
+	Channel  *string `json:"channel"`
+	StatusID *int    `json:"statusId"`
+	IDs      []int   `json:"ids"`
 }
 
 func (scs *SlackChannelSearch) ToDB() *db.SlackChannelSearch {
@@ -212,20 +230,18 @@ func (scs *SlackChannelSearch) ToDB() *db.SlackChannelSearch {
 	}
 
 	return &db.SlackChannelSearch{
-		ID:              scs.ID,
-		TitleILike:      scs.Title,
-		ChannelILike:    scs.Channel,
-		WebhookURLILike: scs.WebhookURL,
-		StatusID:        scs.StatusID,
-		IDs:             scs.IDs,
+		ID:           scs.ID,
+		TitleILike:   scs.Title,
+		ChannelILike: scs.Channel,
+		StatusID:     scs.StatusID,
+		IDs:          scs.IDs,
 	}
 }
 
 type SlackChannelSummary struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title"`
-	Channel    string `json:"channel"`
-	WebhookURL string `json:"webhookURL"`
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	Channel string `json:"channel"`
 
 	Status *Status `json:"status"`
 }
@@ -234,7 +250,9 @@ type TaskTracker struct {
 	ID          int     `json:"id"`
 	Title       string  `json:"title" validate:"required,max=255"`
 	URL         string  `json:"url" validate:"required,max=255"`
-	AuthToken   *string `json:"authToken" validate:"omitempty,max=255"`
+	AuthToken   *string `json:"authToken,omitempty" validate:"omitempty,max=255"` // write-only: nil on read, set-or-keep on write
+	TokenMasked string  `json:"tokenMasked"`                                      // read-only masked display
+	HasToken    bool    `json:"hasToken"`                                         // read-only
 	FetchPrompt string  `json:"fetchPrompt" validate:"required"`
 	StatusID    int     `json:"statusId" validate:"required,status"`
 
@@ -247,9 +265,11 @@ func (tt *TaskTracker) ToDB() *db.TaskTracker {
 	}
 
 	taskTracker := &db.TaskTracker{
-		ID:          tt.ID,
-		Title:       tt.Title,
-		URL:         tt.URL,
+		ID:    tt.ID,
+		Title: tt.Title,
+		// Stored without a trailing slash: consumers join it with /api/... paths,
+		// and a doubled slash makes SPA trackers (YouTrack) serve HTML with 200.
+		URL:         strings.TrimSuffix(tt.URL, "/"),
 		AuthToken:   tt.AuthToken,
 		FetchPrompt: tt.FetchPrompt,
 		StatusID:    tt.StatusID,
@@ -262,7 +282,6 @@ type TaskTrackerSearch struct {
 	ID          *int    `json:"id"`
 	Title       *string `json:"title"`
 	URL         *string `json:"url"`
-	AuthToken   *string `json:"authToken"`
 	FetchPrompt *string `json:"fetchPrompt"`
 	StatusID    *int    `json:"statusId"`
 	IDs         []int   `json:"ids"`
@@ -277,7 +296,6 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 		ID:               tts.ID,
 		TitleILike:       tts.Title,
 		URL:              tts.URL,
-		AuthTokenILike:   tts.AuthToken,
 		FetchPromptILike: tts.FetchPrompt,
 		StatusID:         tts.StatusID,
 		IDs:              tts.IDs,
@@ -285,11 +303,10 @@ func (tts *TaskTrackerSearch) ToDB() *db.TaskTrackerSearch {
 }
 
 type TaskTrackerSummary struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"title"`
-	URL         string  `json:"url"`
-	AuthToken   *string `json:"authToken"`
-	FetchPrompt string  `json:"fetchPrompt"`
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	FetchPrompt string `json:"fetchPrompt"`
 
 	Status *Status `json:"status"`
 }

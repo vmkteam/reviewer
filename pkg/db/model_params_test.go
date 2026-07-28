@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReviewModelInfo_Add(t *testing.T) {
@@ -151,4 +152,46 @@ func TestReviewModelInfo_Add(t *testing.T) {
 		assert.Equal(t, 200, base.OutputTokens)
 		assert.InDelta(t, 0.5, base.CostUsd, 0.0001)
 	})
+}
+
+// The jsonb slice columns (issues.sources, projects.runnerProfileIds) round-trip
+// through go-pg via Value()/Scan(): Value() returns a JSON string that PostgreSQL
+// casts to jsonb, Scan() unmarshals the jsonb bytes back. The live suite exercises
+// the go-pg integration on the empty path; these lock the JSON contract for the
+// populated path and the nil → "[]" default.
+
+func TestIssueSources_ValueScan(t *testing.T) {
+	// nil marshals to the column default "[]", never JSON null (column is NOT NULL).
+	v, err := IssueSources(nil).Value()
+	require.NoError(t, err)
+	assert.Equal(t, "[]", v)
+
+	v, err = IssueSources{"gpt-5.5", "deepseek-v4-pro", "judge"}.Value()
+	require.NoError(t, err)
+	assert.Equal(t, `["gpt-5.5","deepseek-v4-pro","judge"]`, v)
+
+	var s IssueSources
+	require.NoError(t, s.Scan([]byte(`["a","b"]`))) // bytes, as go-pg delivers jsonb
+	assert.Equal(t, IssueSources{"a", "b"}, s)
+
+	require.NoError(t, s.Scan(`["c"]`)) // string form
+	assert.Equal(t, IssueSources{"c"}, s)
+
+	require.NoError(t, s.Scan(nil)) // NULL leaves dst untouched
+	assert.Equal(t, IssueSources{"c"}, s)
+}
+
+func TestProjectRunnerProfileIDs_ValueScan(t *testing.T) {
+	v, err := ProjectRunnerProfileIDs(nil).Value()
+	require.NoError(t, err)
+	assert.Equal(t, "[]", v)
+
+	// order and duplicates are preserved (duplicates = self-fusion).
+	v, err = ProjectRunnerProfileIDs{5, 7, 5}.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "[5,7,5]", v)
+
+	var ids ProjectRunnerProfileIDs
+	require.NoError(t, ids.Scan([]byte("[5,7,5]")))
+	assert.Equal(t, ProjectRunnerProfileIDs{5, 7, 5}, ids)
 }

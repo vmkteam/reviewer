@@ -21,11 +21,22 @@ const (
 	SeverityHigh     = "high"
 	SeverityMedium   = "medium"
 	SeverityLow      = "low"
+
+	TrafficLightRed    = "red"
+	TrafficLightYellow = "yellow"
+	TrafficLightGreen  = "green"
+
+	// Review roles (reviews.reviewRole): a standalone review, a panel member of
+	// a fusion, or the fusion/synthesis itself. See docs/llm/MultiReview.md.
+	ReviewRoleSingle = "single"
+	ReviewRoleMember = "member"
+	ReviewRoleFusion = "fusion"
 )
 
 var (
 	ReviewTypes            = []string{ReviewTypeArchitecture, ReviewTypeCode, ReviewTypeSecurity, ReviewTypeTests, ReviewTypeOperability}
 	Severities             = []string{SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow}
+	ReviewRoles            = []string{ReviewRoleSingle, ReviewRoleMember, ReviewRoleFusion}
 	ErrInvalidReviewType   = errors.New("invalid review type")
 	ErrDuplicateReviewType = errors.New("duplicate review type")
 	ErrReviewNotFound      = errors.New("review not found")
@@ -40,6 +51,11 @@ func IsValidReviewType(rt string) bool {
 // IsValidSeverity checks if the given severity is supported.
 func IsValidSeverity(s string) bool {
 	return slices.Contains(Severities, s)
+}
+
+// IsValidReviewRole checks if the given review role is supported.
+func IsValidReviewRole(r string) bool {
+	return slices.Contains(ReviewRoles, r)
 }
 
 type Review struct {
@@ -128,6 +144,21 @@ func NewTaskTracker(in *db.TaskTracker) *TaskTracker {
 	}
 }
 
+type RunnerProfile struct {
+	db.RunnerProfile
+}
+
+// NewRunnerProfile converts a db.RunnerProfile to the domain model, returning nil for nil input.
+func NewRunnerProfile(in *db.RunnerProfile) *RunnerProfile {
+	if in == nil {
+		return nil
+	}
+
+	return &RunnerProfile{
+		RunnerProfile: *in,
+	}
+}
+
 type Prompt struct {
 	db.Prompt
 }
@@ -158,13 +189,13 @@ func calcIssueStats(issues Issues) IssueStats {
 	var s IssueStats
 	for _, iss := range issues {
 		switch iss.Severity {
-		case "critical":
+		case SeverityCritical:
 			s.Critical++
-		case "high":
+		case SeverityHigh:
 			s.High++
-		case "medium":
+		case SeverityMedium:
 			s.Medium++
-		case "low":
+		case SeverityLow:
 			s.Low++
 		}
 	}
@@ -180,11 +211,11 @@ func CalcTrafficLight(s IssueStats) string {
 func calcTrafficLight(s IssueStats) string {
 	switch {
 	case s.Critical >= 1 || s.High >= 2:
-		return "red"
+		return TrafficLightRed
 	case s.High >= 1 || s.Medium >= 3:
-		return "yellow"
+		return TrafficLightYellow
 	default:
-		return "green"
+		return TrafficLightGreen
 	}
 }
 
@@ -205,6 +236,13 @@ type ReviewSearch struct {
 	TrafficLight *string
 	ExternalID   *string
 	FromReviewID *int
+	// ParentReviewID, when set, lists a fusion review's panel members (children).
+	ParentReviewID *int
+	// IncludeMembers keeps reviewRole='member' rows in the result. Default false:
+	// members are link-only and filtered from lists/aggregations (the fusion is
+	// primary). A ParentReviewID query implies members, so the exclusion is also
+	// skipped when ParentReviewID is set.
+	IncludeMembers bool
 }
 
 // ToDB converts domain search params to the database layer representation.
@@ -214,12 +252,19 @@ func (s *ReviewSearch) ToDB() *db.ReviewSearch {
 	}
 
 	search := &db.ReviewSearch{
-		ProjectID:    &s.ProjectID,
-		TitleILike:   s.Title,
-		AuthorILike:  s.Author,
-		TrafficLight: s.TrafficLight,
-		ExternalID:   s.ExternalID,
-		IDLt:         s.FromReviewID,
+		ProjectID:      &s.ProjectID,
+		TitleILike:     s.Title,
+		AuthorILike:    s.Author,
+		TrafficLight:   s.TrafficLight,
+		ExternalID:     s.ExternalID,
+		IDLt:           s.FromReviewID,
+		ParentReviewID: s.ParentReviewID,
+	}
+	// Members are link-only: exclude them from default lists so the fusion review
+	// is the primary one. A by-id read (ReviewByID) bypasses this search, so a
+	// member stays reachable by direct URL; a ParentReviewID query wants members.
+	if !s.IncludeMembers && s.ParentReviewID == nil {
+		search.With("?.? <> ?", pg.Ident("t"), pg.Ident(db.Columns.Review.ReviewRole), ReviewRoleMember)
 	}
 	return search
 }

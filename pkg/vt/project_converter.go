@@ -10,21 +10,26 @@ func NewProject(in *db.Project) *Project {
 	}
 
 	project := &Project{
-		ID:             in.ID,
-		Title:          in.Title,
-		VcsURL:         in.VcsURL,
-		Language:       in.Language,
-		ProjectKey:     in.ProjectKey,
-		PromptID:       in.PromptID,
-		TaskTrackerID:  in.TaskTrackerID,
-		SlackChannelID: in.SlackChannelID,
-		StatusID:       in.StatusID,
-		Instructions:   in.Instructions,
+		ID:                   in.ID,
+		Title:                in.Title,
+		VcsURL:               in.VcsURL,
+		Language:             in.Language,
+		ProjectKey:           in.ProjectKey,
+		PromptID:             in.PromptID,
+		TaskTrackerID:        in.TaskTrackerID,
+		SlackChannelID:       in.SlackChannelID,
+		RunnerProfileID:      in.RunnerProfileID,
+		RunnerProfileIDs:     in.RunnerProfileIDs,
+		JudgeRunnerProfileID: in.JudgeRunnerProfileID,
+		StatusID:             in.StatusID,
+		Instructions:         in.Instructions,
 
-		Prompt:       NewPromptSummary(in.Prompt),
-		TaskTracker:  NewTaskTrackerSummary(in.TaskTracker),
-		SlackChannel: NewSlackChannelSummary(in.SlackChannel),
-		Status:       NewStatus(in.StatusID),
+		Prompt:             NewPromptSummary(in.Prompt),
+		TaskTracker:        NewTaskTrackerSummary(in.TaskTracker),
+		SlackChannel:       NewSlackChannelSummary(in.SlackChannel),
+		RunnerProfile:      NewRunnerProfileSummary(in.RunnerProfile),
+		JudgeRunnerProfile: NewRunnerProfileSummary(in.JudgeRunnerProfile),
+		Status:             NewStatus(in.StatusID),
 	}
 
 	return project
@@ -36,19 +41,21 @@ func NewProjectSummary(in *db.Project) *ProjectSummary {
 	}
 
 	return &ProjectSummary{
-		ID:             in.ID,
-		Title:          in.Title,
-		VcsURL:         in.VcsURL,
-		Language:       in.Language,
-		ProjectKey:     in.ProjectKey,
-		PromptID:       in.PromptID,
-		TaskTrackerID:  in.TaskTrackerID,
-		SlackChannelID: in.SlackChannelID,
+		ID:              in.ID,
+		Title:           in.Title,
+		VcsURL:          in.VcsURL,
+		Language:        in.Language,
+		ProjectKey:      in.ProjectKey,
+		PromptID:        in.PromptID,
+		TaskTrackerID:   in.TaskTrackerID,
+		SlackChannelID:  in.SlackChannelID,
+		RunnerProfileID: in.RunnerProfileID,
 
-		Prompt:       NewPromptSummary(in.Prompt),
-		TaskTracker:  NewTaskTrackerSummary(in.TaskTracker),
-		SlackChannel: NewSlackChannelSummary(in.SlackChannel),
-		Status:       NewStatus(in.StatusID),
+		Prompt:        NewPromptSummary(in.Prompt),
+		TaskTracker:   NewTaskTrackerSummary(in.TaskTracker),
+		SlackChannel:  NewSlackChannelSummary(in.SlackChannel),
+		RunnerProfile: NewRunnerProfileSummary(in.RunnerProfile),
+		Status:        NewStatus(in.StatusID),
 	}
 }
 
@@ -99,11 +106,13 @@ func NewSlackChannel(in *db.SlackChannel) *SlackChannel {
 	}
 
 	slackChannel := &SlackChannel{
-		ID:         in.ID,
-		Title:      in.Title,
-		Channel:    in.Channel,
-		WebhookURL: in.WebhookURL,
-		StatusID:   in.StatusID,
+		ID:               in.ID,
+		Title:            in.Title,
+		Channel:          in.Channel,
+		WebhookURL:       nil, // never expose the raw webhook URL to the admin API
+		WebhookURLMasked: maskSecret(&in.WebhookURL),
+		HasWebhookURL:    in.WebhookURL != "",
+		StatusID:         in.StatusID,
 
 		Status: NewStatus(in.StatusID),
 	}
@@ -117,10 +126,9 @@ func NewSlackChannelSummary(in *db.SlackChannel) *SlackChannelSummary {
 	}
 
 	return &SlackChannelSummary{
-		ID:         in.ID,
-		Title:      in.Title,
-		Channel:    in.Channel,
-		WebhookURL: in.WebhookURL,
+		ID:      in.ID,
+		Title:   in.Title,
+		Channel: in.Channel,
 
 		Status: NewStatus(in.StatusID),
 	}
@@ -135,7 +143,9 @@ func NewTaskTracker(in *db.TaskTracker) *TaskTracker {
 		ID:          in.ID,
 		Title:       in.Title,
 		URL:         in.URL,
-		AuthToken:   in.AuthToken,
+		AuthToken:   nil, // never expose the raw token to the admin API
+		TokenMasked: maskSecret(in.AuthToken),
+		HasToken:    in.AuthToken != nil && *in.AuthToken != "",
 		FetchPrompt: in.FetchPrompt,
 		StatusID:    in.StatusID,
 
@@ -154,7 +164,6 @@ func NewTaskTrackerSummary(in *db.TaskTracker) *TaskTrackerSummary {
 		ID:          in.ID,
 		Title:       in.Title,
 		URL:         in.URL,
-		AuthToken:   in.AuthToken,
 		FetchPrompt: in.FetchPrompt,
 
 		Status: NewStatus(in.StatusID),

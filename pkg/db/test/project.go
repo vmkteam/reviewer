@@ -359,3 +359,74 @@ func WithFakeTaskTracker(t *testing.T, dbo orm.DB, in *db.TaskTracker) Cleaner {
 
 	return emptyClean
 }
+
+type RunnerProfileOpFunc func(t *testing.T, dbo orm.DB, in *db.RunnerProfile) Cleaner
+
+func RunnerProfile(t *testing.T, dbo orm.DB, in *db.RunnerProfile, ops ...RunnerProfileOpFunc) (*db.RunnerProfile, Cleaner) {
+	repo := db.NewProjectRepo(dbo)
+	var cleaners []Cleaner
+
+	// Fill the incoming entity
+	if in == nil {
+		in = &db.RunnerProfile{}
+	}
+
+	// Check if PKs are provided
+	if in.ID != 0 {
+		// Fetch the entity by PK
+		runnerProfile, err := repo.RunnerProfileByID(t.Context(), in.ID, repo.FullRunnerProfile())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// We must find the entity by PK
+		if runnerProfile == nil {
+			t.Fatalf("the entity RunnerProfile is not found by provided PKs ID=%v", in.ID)
+		}
+
+		// Return if found without real cleanup
+		return runnerProfile, emptyClean
+	}
+
+	for _, op := range ops {
+		if cl := op(t, dbo, in); cl != nil {
+			cleaners = append(cleaners, cl)
+		}
+	}
+
+	// Create the main entity
+	runnerProfile, err := repo.AddRunnerProfile(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return runnerProfile, func() {
+		if _, err := dbo.ModelContext(t.Context(), &db.RunnerProfile{ID: runnerProfile.ID}).WherePK().Delete(); err != nil {
+			t.Fatal(err)
+		}
+		// Clean up related entities from the last to the first
+		for i := len(cleaners) - 1; i >= 0; i-- {
+			cleaners[i]()
+		}
+	}
+}
+
+func WithFakeRunnerProfile(t *testing.T, dbo orm.DB, in *db.RunnerProfile) Cleaner {
+	if in.Title == "" {
+		in.Title = cutS(gofakeit.Sentence(10), 255)
+	}
+
+	if in.Runner == "" {
+		in.Runner = cutS(gofakeit.Sentence(3), 32)
+	}
+
+	if in.CreatedAt.IsZero() {
+		in.CreatedAt = time.Now()
+	}
+
+	if in.StatusID == 0 {
+		in.StatusID = 1
+	}
+
+	return emptyClean
+}

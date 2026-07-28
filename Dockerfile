@@ -7,7 +7,7 @@ COPY frontend/ .
 RUN npm run build:all
 
 # Build backend
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 RUN apk add --no-cache git
 # VERSION is passed via `docker build --build-arg VERSION=...` (GH Actions sends
 # github.ref_name on release). Falls back to `git describe` when not provided.

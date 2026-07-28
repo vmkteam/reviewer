@@ -164,7 +164,7 @@ func TestRunEmitsTranscript(t *testing.T) {
 
 func TestCompactMessages(t *testing.T) {
 	// mk builds a realistic history: user task, then alternating assistant/tool
-	// turns (odd index = assistant, even = tool).
+	// turns (odd index = assistant, even = tool with one result).
 	mk := func(n int) []Message {
 		m := make([]Message, n)
 		m[0] = Message{Role: RoleUser, Text: "task"}
@@ -172,7 +172,7 @@ func TestCompactMessages(t *testing.T) {
 			if i%2 == 1 {
 				m[i] = Message{Role: RoleAssistant, Text: fmt.Sprintf("a%d", i)}
 			} else {
-				m[i] = Message{Role: RoleTool}
+				m[i] = Message{Role: RoleTool, ToolResults: []ToolResult{{CallID: fmt.Sprintf("c%d", i), Content: fmt.Sprintf("r%d", i)}}}
 			}
 		}
 		return m
@@ -181,14 +181,33 @@ func TestCompactMessages(t *testing.T) {
 	// Short conversation: returned unchanged.
 	require.Len(t, compactMessages(mk(3), 12), 3)
 
-	// Long: head kept with the marker folded in (no separate user message), tail
-	// resumes on an assistant turn so head+tail never collide into two users.
-	out := compactMessages(mk(40), 5)
-	require.Contains(t, out[0].Text, "task")
-	require.Contains(t, out[0].Text, "compacted")
+	// Long: the head must stay byte-identical (mutating it would invalidate the
+	// whole provider prompt cache) — the marker lands in the first tool result of
+	// the tail instead, and the tail resumes on an assistant turn.
+	src := mk(40)
+	out := compactMessages(src, 5)
+	require.Equal(t, "task", out[0].Text, "head must stay byte-identical for cache reuse")
 	require.Equal(t, RoleUser, out[0].Role)
 	require.Equal(t, RoleAssistant, out[1].Role, "tail must resume on an assistant turn")
 	require.Len(t, out, 1+5)
+	require.Equal(t, RoleTool, out[2].Role)
+	require.Contains(t, out[2].ToolResults[0].Content, "compacted")
+	// The source history must not be mutated (its ToolResults backing is shared).
+	require.NotContains(t, src[36].ToolResults[0].Content, "compacted")
+
+	// Tail without tool results (text-only turns): fall back to the head marker.
+	textOnly := []Message{
+		{Role: RoleUser, Text: "task"},
+		{Role: RoleAssistant, Text: "a1"},
+		{Role: RoleUser, Text: "u1"},
+		{Role: RoleAssistant, Text: "a2"},
+		{Role: RoleUser, Text: "u2"},
+		{Role: RoleAssistant, Text: "a3"},
+		{Role: RoleUser, Text: "u3"},
+		{Role: RoleAssistant, Text: "a4"},
+	}
+	fb := compactMessages(textOnly, 2)
+	require.Contains(t, fb[0].Text, "compacted")
 
 	// C3: a tail boundary landing on a mid-history user message (e.g. a nudge)
 	// must advance to the next assistant turn, never leaving two consecutive
@@ -265,4 +284,66 @@ func TestDispatchParallelRecoversPanic(t *testing.T) {
 	require.Contains(t, results[0].Content, "panicked")
 	require.False(t, results[1].IsError)
 	require.Equal(t, "fine", results[1].Content)
+}
+
+func TestRunTruncatedToolRoundNotifiesModel(t *testing.T) {
+	dir := t.TempDir()
+	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
+	prov := &scriptedProvider{responses: []Response{
+		// max_tokens cut the turn: add_issues arrived with empty args.
+		{StopReason: stopMaxTokens, ToolCalls: []ToolCall{{ID: "1", Name: toolAddIssues, Args: json.RawMessage(`{}`)}}},
+		{ToolCalls: []ToolCall{{ID: "2", Name: "submit_review", Args: validSubmitArgs(t, "high")}}},
+	}}
+
+	res, err := Run(context.Background(), prov, reg, "system", "review this", Options{MaxRounds: 10})
+	require.NoError(t, err)
+	require.True(t, res.Submitted)
+	require.Len(t, prov.seen, 2)
+
+	// The tool turn fed back must carry an error for the empty batch plus the
+	// truncation notice folded into the last result.
+	last := prov.seen[1].Messages[len(prov.seen[1].Messages)-1]
+	require.Equal(t, RoleTool, last.Role)
+	require.Len(t, last.ToolResults, 1)
+	require.True(t, last.ToolResults[0].IsError)
+	require.Contains(t, last.ToolResults[0].Content, "empty issues array")
+	require.Contains(t, last.ToolResults[0].Content, noticeTruncated)
+}
+
+func TestRunTruncatedBareTurnRetries(t *testing.T) {
+	dir := t.TempDir()
+	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
+	prov := &scriptedProvider{responses: []Response{
+		// Cut off mid-text before any tool call.
+		{Text: "Now I will add the iss", StopReason: stopMaxTokens},
+		{ToolCalls: []ToolCall{{ID: "1", Name: "submit_review", Args: validSubmitArgs(t, "low")}}},
+	}}
+
+	res, err := Run(context.Background(), prov, reg, "system", "review this", Options{MaxRounds: 10})
+	require.NoError(t, err)
+	require.True(t, res.Submitted)
+	require.Len(t, prov.seen, 2)
+	last := prov.seen[1].Messages[len(prov.seen[1].Messages)-1]
+	require.Equal(t, RoleUser, last.Role)
+	require.Equal(t, noticeTruncated, last.Text)
+}
+
+func TestRunAbortsOnConsecutiveTruncatedRounds(t *testing.T) {
+	dir := t.TempDir()
+	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
+	trunc := Response{StopReason: stopMaxTokens, ToolCalls: []ToolCall{{ID: "1", Name: toolAddIssues, Args: json.RawMessage(`{}`)}}}
+	prov := &scriptedProvider{responses: []Response{trunc, trunc, trunc, trunc}}
+
+	res, err := Run(context.Background(), prov, reg, "system", "review this", Options{MaxRounds: 10})
+	require.ErrorIs(t, err, errTruncatedRounds)
+	require.Equal(t, "error", res.StopReason)
+	require.False(t, res.Submitted)
+	require.Equal(t, maxConsecutiveTruncated, res.Rounds)
+}
+
+func TestIsTruncated(t *testing.T) {
+	require.True(t, IsTruncated(stopMaxTokens), "Anthropic stop_reason")
+	require.True(t, IsTruncated(stopLength), "OpenAI finish_reason")
+	require.False(t, IsTruncated("end_turn"))
+	require.False(t, IsTruncated(""))
 }

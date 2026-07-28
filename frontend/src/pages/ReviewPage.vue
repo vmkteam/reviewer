@@ -254,6 +254,11 @@
             />
           </TabPanel>
 
+          <!-- Panel breakdown tab (fusion reviews only) -->
+          <TabPanel v-if="review.members && review.members.length">
+            <PanelBreakdownCard :review="review" />
+          </TabPanel>
+
           <!-- Previous Reviews tab -->
           <TabPanel v-if="previousCount >= 2">
             <div v-if="previousLoading" class="flex justify-center py-12">
@@ -288,6 +293,7 @@ import ErrorAlert from '../components/ErrorAlert.vue'
 import ExternalLink from '../components/ExternalLink.vue'
 import ScrollToTop from '../components/ScrollToTop.vue'
 import IssuesTable from '../components/IssuesTable.vue'
+import PanelBreakdownCard from '../components/PanelBreakdownCard.vue'
 import ReviewsTable from '../components/ReviewsTable.vue'
 import { useFormat, reviewTypes } from '../composables/useFormat'
 import { useBreadcrumbs } from '../composables/useBreadcrumbs'
@@ -434,6 +440,9 @@ const tabs = computed(() => {
     color: rf.trafficLight,
   }))
   const allTabs = [...rfTabs, { key: 'issues', label: 'Issues', color: '' }]
+  if (review.value?.members && review.value.members.length) {
+    allTabs.push({ key: 'multireview', label: 'Multi-review', color: '' })
+  }
   if (previousCount.value >= 2) {
     allTabs.push({ key: 'previous', label: 'Previous Reviews', color: '' })
   }

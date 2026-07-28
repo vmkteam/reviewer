@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -65,8 +67,8 @@ func TestController_Upload(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		// POST /v1/upload/{projectKey}/ — review
-		if len(parts) == 3 && r.Method == http.MethodPost {
+		// POST /v1/reviewctl/upload/{projectKey}/ — review
+		if len(parts) == 4 && r.Method == http.MethodPost {
 			body, _ := io.ReadAll(r.Body)
 			var draft map[string]any
 			json.Unmarshal(body, &draft)
@@ -75,9 +77,9 @@ func TestController_Upload(t *testing.T) {
 			w.Write([]byte("42"))
 			return
 		}
-		// POST /v1/upload/{projectKey}/{reviewId}/{type}/ — file
-		if len(parts) == 5 && r.Method == http.MethodPost {
-			uploadedFiles = append(uploadedFiles, parts[4])
+		// POST /v1/reviewctl/upload/{projectKey}/{reviewId}/{type}/ — file
+		if len(parts) == 6 && r.Method == http.MethodPost {
+			uploadedFiles = append(uploadedFiles, parts[5])
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -112,22 +114,22 @@ func TestController_Review(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		// GET /v1/prompt/{key}/
-		if strings.HasPrefix(path, "/v1/prompt/") && r.Method == http.MethodGet {
+		// POST /v1/reviewctl/rpc/ — Prompt
+		if path == "/v1/reviewctl/rpc/" && r.Method == http.MethodPost {
 			promptCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Review %SOURCE_BRANCH% to %TARGET_BRANCH%"))
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "Review %SOURCE_BRANCH% to %TARGET_BRANCH%", "id": 1})
 			return
 		}
-		// POST /v1/upload/{key}/
+		// POST /v1/reviewctl/upload/{key}/
 		parts := strings.Split(strings.Trim(path, "/"), "/")
-		if len(parts) == 3 && r.Method == http.MethodPost {
+		if len(parts) == 4 && r.Method == http.MethodPost {
 			uploadedReview = true
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("42"))
 			return
 		}
-		if len(parts) == 5 && r.Method == http.MethodPost {
+		if len(parts) == 6 && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -162,9 +164,9 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if strings.HasPrefix(path, "/v1/prompt/") && r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("prompt"))
+		if path == "/v1/reviewctl/rpc/" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "prompt", "id": 1})
 			return
 		}
 		if strings.HasPrefix(path, "/v1/upload/debug/") && r.Method == http.MethodPost {
@@ -243,4 +245,63 @@ func TestController_Comment(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, commentPosted, "MR comment was not posted")
+}
+
+func TestFillMetadataClearsPlaceholdersAndFillsFromGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "feature/x"},
+		{"config", "user.email", "dev@example.com"},
+		{"config", "user.name", "Dev Author"},
+		{"commit", "-q", "--allow-empty", "-m", "init"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+
+	c := NewController(&Config{Dir: dir}, nil, slog.Default())
+	draft := &rest.ReviewDraft{}
+	draft.Review.ExternalID = PlaceholderExternalID
+	draft.Review.Author = PlaceholderAuthor
+	draft.Review.SourceBranch = PlaceholderSourceBranch
+	draft.Review.TargetBranch = PlaceholderTargetBranch
+	draft.Review.CommitHash = PlaceholderCommitHash
+	draft.Review.Title = PlaceholderTitle
+
+	c.fillMetadata(context.Background(), draft)
+
+	// Placeholders cleared; author/branch/commit recovered from git; fields with
+	// no local source stay empty rather than leaking literal placeholders.
+	require.Equal(t, "Dev Author", draft.Review.Author)
+	require.Equal(t, "feature/x", draft.Review.SourceBranch)
+	require.Equal(t, gitMeta(context.Background(), dir, "rev-parse", "HEAD"), draft.Review.CommitHash)
+	require.NotEmpty(t, draft.Review.CommitHash)
+	require.Empty(t, draft.Review.TargetBranch)
+	require.Empty(t, draft.Review.Title)
+	require.Empty(t, draft.Review.ExternalID)
+
+	// The second Title placeholder variant is cleared too.
+	d2 := &rest.ReviewDraft{}
+	d2.Review.Title = PlaceholderMRTitle
+	c.fillMetadata(context.Background(), d2)
+	require.Empty(t, d2.Review.Title)
+}
+
+func TestWriteReviewJSONRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	draft := &rest.ReviewDraft{}
+	draft.Review.Description = "done"
+	draft.Review.ModelInfo.Model = "claude-opus-5"
+	draft.Review.ModelInfo.CostUsd = 1.5
+	draft.Review.DurationMs = 4200
+
+	require.NoError(t, WriteReviewJSON(dir, draft))
+	got, _ := ReadReviewJSON(dir) // validation outcome is irrelevant here — the metadata must round-trip
+	require.NotNil(t, got)
+	require.Equal(t, "claude-opus-5", got.Review.ModelInfo.Model)
+	require.InEpsilon(t, 1.5, got.Review.ModelInfo.CostUsd, 1e-9)
+	require.Equal(t, 4200, got.Review.DurationMs)
 }

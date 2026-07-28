@@ -105,7 +105,7 @@ func (g *GitLabClient) PostInlineCommentWithFallback(ctx context.Context, issue 
 
 func (g *GitLabClient) createNote(ctx context.Context, body string) error {
 	url := fmt.Sprintf("%s/projects/%s/merge_requests/%s/notes", g.apiURL, g.projectID, g.mrIID)
-	payload, _ := json.Marshal(map[string]string{"body": body})
+	payload, _ := json.Marshal(map[string]string{"body": body}) //nolint:goconst // GitLab API field name
 	return g.doJSONRequest(ctx, http.MethodPost, url, payload)
 }
 
@@ -191,7 +191,7 @@ func (g *GitLabClient) cleanupInlineDiscussions(ctx context.Context) {
 			continue
 		}
 		// Only clean up inline diff discussions, not summary notes.
-		if d.Notes[0].Type != "DiffNote" {
+		if d.Notes[0].Type != "DiffNote" { //nolint:goconst // GitLab note type
 			continue
 		}
 		if !strings.Contains(d.Notes[0].Body, reviewerMarker) {

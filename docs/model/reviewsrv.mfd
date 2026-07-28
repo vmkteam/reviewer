@@ -12,7 +12,7 @@
     <CustomTypes></CustomTypes>
     <TableMapping>
         <common>users</common>
-        <project>projects,taskTrackers,slackChannels,prompts</project>
+        <project>projects,taskTrackers,slackChannels,prompts,runnerProfiles</project>
         <review>reviews,reviewFiles,issues</review>
     </TableMapping>
 </Project>

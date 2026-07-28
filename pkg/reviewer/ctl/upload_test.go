@@ -23,7 +23,7 @@ func TestUploadReview(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		assert.True(t, strings.HasPrefix(r.URL.Path, "/v1/upload/test-key/"), "path = %q, want prefix /v1/upload/test-key/", r.URL.Path)
+		assert.True(t, strings.HasPrefix(r.URL.Path, "/v1/reviewctl/upload/test-key/"), "path = %q, want prefix /v1/reviewctl/upload/test-key/", r.URL.Path)
 
 		body, _ := io.ReadAll(r.Body)
 		var draft rest.ReviewDraft
@@ -58,7 +58,7 @@ func TestUploadFile(t *testing.T) {
 	c := NewUploadClient(slog.Default())
 	err := c.UploadFile(context.Background(), srv.URL, "test-key", 42, "architecture", []byte("# Architecture"))
 	require.NoError(t, err)
-	assert.Equal(t, "/v1/upload/test-key/42/architecture/", gotPath)
+	assert.Equal(t, "/v1/reviewctl/upload/test-key/42/architecture/", gotPath)
 }
 
 func TestUploadReview_ServerError(t *testing.T) {
@@ -269,7 +269,7 @@ func TestCleanReviewArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	// Review outputs that must be wiped before the next run.
 	artifacts := []string{
-		"review.json", "direct-output.jsonl", "claude-output.json",
+		"review.json", "review.html", "direct-output.jsonl", "claude-output.json",
 		"opencode-output.jsonl", "R1.foo.ru.md", "R5.bar.md",
 	}
 	// Source/doc files that must survive (no R1..R5 prefix, or not an artifact).

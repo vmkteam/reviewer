@@ -15,6 +15,7 @@
 
       <div class="flex gap-4 mb-6 border-b border-edge">
         <button type="button" @click="activeTab = 'general'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'general' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">General</button>
+        <button type="button" @click="activeTab = 'runner'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'runner' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">Runner</button>
         <button type="button" @click="activeTab = 'instructions'" :class="['pb-2 px-1 text-sm font-medium border-b-2 transition-colors', activeTab === 'instructions' ? 'border-accent text-accent' : 'border-transparent text-fg-subtle hover:text-fg']">Instructions</button>
       </div>
 
@@ -32,7 +33,13 @@
         </FormField>
 
         <FormField v-if="isEdit" label="Project Key">
-          <VInput :model-value="entity.projectKey" type="text" readonly class="border-edge bg-surface-alt text-fg-muted" />
+          <button
+            type="button"
+            @click="copyKey"
+            class="font-mono text-xs px-2 py-1.5 rounded transition-colors cursor-pointer"
+            :class="keyCopied ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-surface-alt text-fg-muted hover:bg-accent-light hover:text-accent'"
+            title="Copy to clipboard"
+          >{{ keyCopied ? 'Copied!' : maskKey(entity.projectKey) }}</button>
         </FormField>
 
         <FormField label="Prompt" :error="fieldError('promptId')">
@@ -49,6 +56,24 @@
 
         <FormField label="Status" :error="fieldError('statusId')">
           <StatusRadio v-model="entity.statusId" name="statusId" />
+        </FormField>
+      </div>
+
+      <div v-show="activeTab === 'runner'">
+        <FormField label="Runner Profile — Primary / fallback" :error="fieldError('runnerProfileId')">
+          <FKSelect v-model="entity.runnerProfileId" :load-fn="loadRunnerProfiles" nullable />
+          <p class="mt-1 text-xs text-fg-subtle">The primary runner and the promotion target. Leave as “— None —” to use the default profile.</p>
+        </FormField>
+
+        <FormField label="Panel — additional members" :error="fieldError('runnerProfileIds')">
+          <FKListEditor v-model="entity.runnerProfileIds" :load-fn="loadRunnerProfiles" placeholder="+ Add panel member…" />
+          <p class="mt-1 text-xs text-fg-subtle">Extra runners reviewed alongside the primary. Order matters; the same profile twice is self-fusion. The full panel is [Primary] + these.</p>
+        </FormField>
+
+        <FormField label="Judge" :error="fieldError('judgeRunnerProfileId')">
+          <FKSelect v-model="entity.judgeRunnerProfileId" :load-fn="loadRunnerProfiles" nullable />
+          <p class="mt-1 text-xs text-fg-subtle">Synthesizes the panel into one fused review. Setting a judge turns multi-review on; “— None —” means a single review.</p>
+          <p v-if="dormantPanel" class="mt-1 text-xs text-amber-600 dark:text-amber-400">Panel members are set but no judge is selected — they stay dormant and the project runs a single review.</p>
         </FormField>
       </div>
 
@@ -82,8 +107,10 @@ import { extractTitleFromVcsURL } from '../../composables/useVcsTitle'
 import FormField from '../../components/FormField.vue'
 import StatusRadio from '../../components/StatusRadio.vue'
 import FKSelect from '../../components/FKSelect.vue'
+import FKListEditor from '../../components/FKListEditor.vue'
 import VInput from '../../components/VInput.vue'
 import VTextarea from '../../components/VTextarea.vue'
+import { maskKey } from '../../format'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import VButton from '../../components/VButton.vue'
 
@@ -94,11 +121,29 @@ const showConfirm = ref(false)
 const activeTab = ref('general')
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<Project>(vtApi.project, 'project', () => ({
-  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, statusId: 1, instructions: '',
+  id: 0, title: '', vcsURL: '', language: '', promptId: undefined, taskTrackerId: undefined, slackChannelId: undefined, runnerProfileId: undefined, runnerProfileIds: [], judgeRunnerProfileId: undefined, statusId: 1, instructions: '',
 }))
+
+// Panel members configured without a judge stay dormant (the project still runs a
+// single review); surface that as a soft hint, not a validation error.
+const dormantPanel = computed(() => !!entity.runnerProfileIds?.length && !entity.judgeRunnerProfileId)
+
+const keyCopied = ref(false)
+
+function copyKey() {
+  if (!entity.projectKey) return
+  navigator.clipboard.writeText(entity.projectKey)
+  keyCopied.value = true
+  setTimeout(() => { keyCopied.value = false }, 2000)
+}
 
 async function loadPrompts() {
   const list = await vtApi.prompt.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
+  return (list ?? []).map(p => ({ id: p.id, title: p.title }))
+}
+
+async function loadRunnerProfiles() {
+  const list = await vtApi.runnerprofile.get({ viewOps: { page: 1, pageSize: 500, sortColumn: 'title', sortDesc: false } })
   return (list ?? []).map(p => ({ id: p.id, title: p.title }))
 }
 

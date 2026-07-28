@@ -61,6 +61,7 @@ func TestExecCodexRunnerBuildArgs(t *testing.T) {
 
 func TestCodexEstimateCostUSD(t *testing.T) {
 	require.InDelta(t, 0.001525, codexEstimateCostUSD("gpt-5-codex", 800, 50, 200), 1e-9)
+	require.InDelta(t, 0.0028, codexEstimateCostUSD("gpt-5.6-terra", 800, 50, 200), 1e-9)
 	require.Zero(t, codexEstimateCostUSD("unknown-model", 1000, 100, 0))
 }
 

@@ -367,26 +367,29 @@ func (rfs *ReviewFileSearch) Q() applier {
 type ReviewSearch struct {
 	search
 
-	ID            *int
-	ProjectID     *int
-	Title         *string
-	Description   *string
-	ExternalID    *string
-	TrafficLight  *string
-	CommitHash    *string
-	SourceBranch  *string
-	TargetBranch  *string
-	Author        *string
-	CreatedAt     *time.Time
-	DurationMS    *int
-	StatusID      *int
-	PromptID      *int
-	EffortMinutes *int
-	AiSlopScore   *float32
-	IDs           []int
-	IDLt          *int
-	TitleILike    *string
-	AuthorILike   *string
+	ID              *int
+	ProjectID       *int
+	Title           *string
+	Description     *string
+	ExternalID      *string
+	TrafficLight    *string
+	CommitHash      *string
+	SourceBranch    *string
+	TargetBranch    *string
+	Author          *string
+	CreatedAt       *time.Time
+	DurationMS      *int
+	StatusID        *int
+	PromptID        *int
+	EffortMinutes   *int
+	AiSlopScore     *float32
+	ParentReviewID  *int
+	ReviewRole      *string
+	IDs             []int
+	IDLt            *int
+	TitleILike      *string
+	AuthorILike     *string
+	ReviewRoleILike *string
 }
 
 func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
@@ -441,6 +444,12 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	if rs.AiSlopScore != nil {
 		rs.where(query, Tables.Review.Alias, Columns.Review.AiSlopScore, rs.AiSlopScore)
 	}
+	if rs.ParentReviewID != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.ParentReviewID, rs.ParentReviewID)
+	}
+	if rs.ReviewRole != nil {
+		rs.where(query, Tables.Review.Alias, Columns.Review.ReviewRole, rs.ReviewRole)
+	}
 	if len(rs.IDs) > 0 {
 		Filter{Columns.Review.ID, rs.IDs, SearchTypeArray, false}.Apply(query)
 	}
@@ -452,6 +461,9 @@ func (rs *ReviewSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if rs.AuthorILike != nil {
 		Filter{Columns.Review.Author, *rs.AuthorILike, SearchTypeILike, false}.Apply(query)
+	}
+	if rs.ReviewRoleILike != nil {
+		Filter{Columns.Review.ReviewRole, *rs.ReviewRoleILike, SearchTypeILike, false}.Apply(query)
 	}
 
 	rs.apply(query)
@@ -471,22 +483,24 @@ func (rs *ReviewSearch) Q() applier {
 type ProjectSearch struct {
 	search
 
-	ID              *int
-	Title           *string
-	VcsURL          *string
-	Language        *string
-	ProjectKey      *string
-	PromptID        *int
-	TaskTrackerID   *int
-	SlackChannelID  *int
-	CreatedAt       *time.Time
-	StatusID        *int
-	Instructions    *string
-	IDs             []int
-	TitleILike      *string
-	VcsURLILike     *string
-	LanguageILike   *string
-	ProjectKeyILike *string
+	ID                   *int
+	Title                *string
+	VcsURL               *string
+	Language             *string
+	ProjectKey           *string
+	PromptID             *int
+	TaskTrackerID        *int
+	SlackChannelID       *int
+	CreatedAt            *time.Time
+	StatusID             *int
+	Instructions         *string
+	RunnerProfileID      *int
+	JudgeRunnerProfileID *int
+	IDs                  []int
+	TitleILike           *string
+	VcsURLILike          *string
+	LanguageILike        *string
+	ProjectKeyILike      *string
 }
 
 func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
@@ -525,6 +539,12 @@ func (ps *ProjectSearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if ps.Instructions != nil {
 		ps.where(query, Tables.Project.Alias, Columns.Project.Instructions, ps.Instructions)
+	}
+	if ps.RunnerProfileID != nil {
+		ps.where(query, Tables.Project.Alias, Columns.Project.RunnerProfileID, ps.RunnerProfileID)
+	}
+	if ps.JudgeRunnerProfileID != nil {
+		ps.where(query, Tables.Project.Alias, Columns.Project.JudgeRunnerProfileID, ps.JudgeRunnerProfileID)
 	}
 	if len(ps.IDs) > 0 {
 		Filter{Columns.Project.ID, ps.IDs, SearchTypeArray, false}.Apply(query)
@@ -777,5 +797,89 @@ func (tts *TaskTrackerSearch) Q() applier {
 			return query, nil
 		}
 		return tts.Apply(query), nil
+	}
+}
+
+type RunnerProfileSearch struct {
+	search
+
+	ID          *int
+	Title       *string
+	Runner      *string
+	Model       *string
+	Effort      *string
+	APIProvider *string
+	APIBaseURL  *string
+	Token       *string
+	IsDefault   *bool
+	CreatedAt   *time.Time
+	StatusID    *int
+	IDs         []int
+	TitleILike  *string
+	RunnerILike *string
+	StatusIDs   []int
+}
+
+func (rps *RunnerProfileSearch) Apply(query *orm.Query) *orm.Query {
+	if rps == nil {
+		return query
+	}
+	if rps.ID != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.ID, rps.ID)
+	}
+	if rps.Title != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Title, rps.Title)
+	}
+	if rps.Runner != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Runner, rps.Runner)
+	}
+	if rps.Model != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Model, rps.Model)
+	}
+	if rps.Effort != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Effort, rps.Effort)
+	}
+	if rps.APIProvider != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.APIProvider, rps.APIProvider)
+	}
+	if rps.APIBaseURL != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.APIBaseURL, rps.APIBaseURL)
+	}
+	if rps.Token != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.Token, rps.Token)
+	}
+	if rps.IsDefault != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.IsDefault, rps.IsDefault)
+	}
+	if rps.CreatedAt != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.CreatedAt, rps.CreatedAt)
+	}
+	if rps.StatusID != nil {
+		rps.where(query, Tables.RunnerProfile.Alias, Columns.RunnerProfile.StatusID, rps.StatusID)
+	}
+	if len(rps.IDs) > 0 {
+		Filter{Columns.RunnerProfile.ID, rps.IDs, SearchTypeArray, false}.Apply(query)
+	}
+	if rps.TitleILike != nil {
+		Filter{Columns.RunnerProfile.Title, *rps.TitleILike, SearchTypeILike, false}.Apply(query)
+	}
+	if rps.RunnerILike != nil {
+		Filter{Columns.RunnerProfile.Runner, *rps.RunnerILike, SearchTypeILike, false}.Apply(query)
+	}
+	if len(rps.StatusIDs) > 0 {
+		Filter{Columns.RunnerProfile.StatusID, rps.StatusIDs, SearchTypeArray, false}.Apply(query)
+	}
+
+	rps.apply(query)
+
+	return query
+}
+
+func (rps *RunnerProfileSearch) Q() applier {
+	return func(query *orm.Query) (*orm.Query, error) {
+		if rps == nil {
+			return query, nil
+		}
+		return rps.Apply(query), nil
 	}
 }

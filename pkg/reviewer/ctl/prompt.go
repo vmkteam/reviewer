@@ -2,12 +2,12 @@ package ctl
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"reviewsrv/pkg/reviewer/ctl/reviewctlclient"
 )
 
 // CI metadata placeholders left in the prompt body and the review.json
@@ -28,7 +28,13 @@ const (
 	PlaceholderMRTitle = "%MR_TITLE%"
 )
 
-// PromptClient fetches review prompts from the reviewsrv server.
+// reviewctlRPCPath is the internal JSON-RPC endpoint reviewctl talks to. The
+// generated client posts to the exact endpoint it is given, so the full path is
+// appended to the server URL here.
+const reviewctlRPCPath = "/v1/reviewctl/rpc/"
+
+// PromptClient fetches the runner profile and review prompt from the reviewsrv
+// server over the internal reviewctl JSON-RPC, using the rpcgen-generated client.
 type PromptClient struct {
 	httpClient *http.Client
 	log        *slog.Logger
@@ -42,33 +48,120 @@ func NewPromptClient(log *slog.Logger) *PromptClient {
 	}
 }
 
-// FetchPrompt fetches the assembled prompt for the given project key.
+// RunnerProfileParams mirrors the server's params payload.
+type RunnerProfileParams struct {
+	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+}
+
+// ResolvedProfile is one resolved runner profile from the server (with its real
+// token): the primary, a panel member, or the judge.
+type ResolvedProfile struct {
+	RunnerProfileID int                 `json:"runnerProfileId"`
+	Title           string              `json:"title"`
+	Runner          string              `json:"runner"`
+	Model           string              `json:"model"`
+	Effort          string              `json:"effort"`
+	APIProvider     string              `json:"apiProvider"`
+	APIBaseURL      string              `json:"apiBaseURL"`
+	Token           string              `json:"token"`
+	Params          RunnerProfileParams `json:"params"`
+}
+
+// TrackerConfig is the project task-tracker access config from the server: the
+// base URL that scopes the direct runner's http_fetch tool and the auth token
+// handed to runners out-of-band (the $REVIEW_TRACKER_TOKEN env var still takes
+// priority on the client).
+type TrackerConfig struct {
+	URL   string `json:"url"`
+	Token string `json:"token"`
+}
+
+// ReviewConfig is the resolved multi-review panel returned by the reviewctl RPC:
+// the primary runner, the additional panel members and the optional judge. The
+// full run set is [Primary] + Panel; a nil Judge means single review via Primary.
+// Tracker is the project's task-tracker access config (nil = none configured).
+type ReviewConfig struct {
+	Primary *ResolvedProfile
+	Panel   []*ResolvedProfile
+	Judge   *ResolvedProfile
+	Tracker *TrackerConfig
+}
+
+// client builds a generated reviewctl client pointed at serverURL. The endpoint
+// (server URL + the RPC path) is only known per call, so it is built on demand
+// over the shared httpClient (which keeps the 10s timeout).
+func (c *PromptClient) client(serverURL string) *reviewctlclient.Client {
+	return reviewctlclient.NewClient(strings.TrimRight(serverURL, "/")+reviewctlRPCPath, c.httpClient)
+}
+
+// newResolvedProfile maps a generated client Config to a ResolvedProfile,
+// returning nil for nil input (an absent judge).
+func newResolvedProfile(cfg *reviewctlclient.Config) *ResolvedProfile {
+	if cfg == nil {
+		return nil
+	}
+	return &ResolvedProfile{
+		RunnerProfileID: cfg.RunnerProfileID,
+		Title:           cfg.Title,
+		Runner:          cfg.Runner,
+		Model:           cfg.Model,
+		Effort:          cfg.Effort,
+		APIProvider:     cfg.ApiProvider,
+		APIBaseURL:      cfg.ApiBaseURL,
+		Token:           cfg.Token,
+		Params:          RunnerProfileParams{AllowDangerousPermissions: cfg.Params.AllowDangerousPermissions},
+	}
+}
+
+// FetchConfig fetches the resolved multi-review panel (primary + panel + judge)
+// for the project key over the internal reviewctl RPC.
+func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey string) (*ReviewConfig, error) {
+	setup, err := c.client(serverURL).Reviewctl.ReviewConfig(ctx, projectKey)
+	if err != nil {
+		return nil, err
+	}
+
+	rc := &ReviewConfig{
+		Primary: newResolvedProfile(setup.Primary),
+		Judge:   newResolvedProfile(setup.Judge),
+	}
+	for i := range setup.Panel {
+		rc.Panel = append(rc.Panel, newResolvedProfile(&setup.Panel[i]))
+	}
+	if setup.Tracker != nil {
+		rc.Tracker = &TrackerConfig{URL: setup.Tracker.Url, Token: setup.Tracker.Token}
+	}
+
+	judging := rc.Judge != nil
+	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey,
+		"panelMembers", 1+len(rc.Panel), "judging", judging)
+	return rc, nil
+}
+
+// FetchFusionPrompt fetches the built-in judge/synthesizer prompt over the
+// internal reviewctl RPC.
+func (c *PromptClient) FetchFusionPrompt(ctx context.Context, serverURL, projectKey string) (string, error) {
+	prompt, err := c.client(serverURL).Reviewctl.FusionPrompt(ctx, projectKey)
+	if err != nil {
+		return "", err
+	}
+	c.log.InfoContext(ctx, "fetched fusion prompt", "projectKey", projectKey, "length", len(prompt))
+	return prompt, nil
+}
+
+// FetchPrompt fetches the assembled prompt for the given project key over the
+// internal reviewctl RPC. tokenEnv=true asks for the tracker section with the
+// $REVIEW_TRACKER_TOKEN env reference (this client exports the var to runners);
+// an older server ignores the unknown flag and returns the legacy prompt with
+// the real token — still functional, just not yet secret-free.
 func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey string) (string, error) {
-	url := fmt.Sprintf("%s/v1/prompt/%s/", strings.TrimRight(serverURL, "/"), projectKey)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	tokenEnv := true
+	prompt, err := c.client(serverURL).Reviewctl.Prompt(ctx, projectKey, &tokenEnv)
 	if err != nil {
-		return "", fmt.Errorf("create prompt request: %w", err)
+		return "", err
 	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch prompt: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read prompt response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch prompt: HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	c.log.InfoContext(ctx, "fetched prompt", "projectKey", projectKey, "length", len(body))
-
-	return string(body), nil
+	c.log.InfoContext(ctx, "fetched prompt", "projectKey", projectKey, "length", len(prompt))
+	return prompt, nil
 }
 
 // SubstituteVariables replaces CI placeholders in the prompt text. Empty

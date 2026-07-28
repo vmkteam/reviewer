@@ -12,6 +12,8 @@ import SlackChannelFormPage from './pages/slack-channels/SlackChannelFormPage.vu
 import ProjectsPage from './pages/projects/ProjectsPage.vue'
 import ProjectFormPage from './pages/projects/ProjectFormPage.vue'
 import ProjectBulkAddPage from './pages/projects/ProjectBulkAddPage.vue'
+import RunnerProfilesPage from './pages/runner-profiles/RunnerProfilesPage.vue'
+import RunnerProfileFormPage from './pages/runner-profiles/RunnerProfileFormPage.vue'
 import UsersPage from './pages/users/UsersPage.vue'
 import UserFormPage from './pages/users/UserFormPage.vue'
 
@@ -34,6 +36,9 @@ const router = createRouter({
     { path: '/projects/new', name: 'project-new', component: ProjectFormPage },
     { path: '/projects/bulk-add', name: 'project-bulk-add', component: ProjectBulkAddPage },
     { path: '/projects/:id', name: 'project-edit', component: ProjectFormPage, props: true },
+    { path: '/runner-profiles', name: 'runner-profiles', component: RunnerProfilesPage },
+    { path: '/runner-profiles/new', name: 'runner-profile-new', component: RunnerProfileFormPage },
+    { path: '/runner-profiles/:id', name: 'runner-profile-edit', component: RunnerProfileFormPage, props: true },
     { path: '/users', name: 'users', component: UsersPage },
     { path: '/users/new', name: 'user-new', component: UserFormPage },
     { path: '/users/:id', name: 'user-edit', component: UserFormPage, props: true },

@@ -251,3 +251,46 @@ func TestPathspec(t *testing.T) {
 	require.Equal(t, "--", whole[0])
 	require.Contains(t, whole, ":(exclude)vendor")
 }
+
+func TestGrepClipsLongLines(t *testing.T) {
+	dir := t.TempDir()
+	// Generated-code lines run to kilobytes; grep output must stay a locator.
+	write(t, dir, "gen.go", "package gen\nvar X = \""+strings.Repeat("x", 2000)+"\" // needle\n")
+
+	_, h := grepTool(dir)
+	out, err := call(t, h, `{"pattern":"needle"}`)
+	require.NoError(t, err)
+	require.Contains(t, out, "gen.go:2:")
+	require.Contains(t, out, "…")
+	require.Less(t, len(out), grepLineClip+40, "matched line must be clipped")
+}
+
+func TestWalksSkipReviewerArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "a.go", "package a // needle\n")
+	// Leftovers a previous run may have produced + local agent state: invisible
+	// to glob/grep so the model can't anchor on a prior review's text.
+	write(t, dir, "review.html", "<html>needle PLF-1490</html>")
+	write(t, dir, "review.json", `{"needle":1}`)
+	write(t, dir, "R1.ai.md", "needle")
+	write(t, dir, "direct-output.jsonl", `{"needle":1}`)
+	write(t, dir, ".claude/memory/index.md", "needle")
+	// Only ROOT-level artifacts are hidden: the judge's staged member outputs
+	// live in members/<label>/ and must stay discoverable.
+	write(t, dir, "members/opus/review.json", `{"needle":2}`)
+	write(t, dir, "members/opus/R1.ai.md", "member needle")
+
+	_, glob := globTool(dir)
+	out, err := call(t, glob, `{"pattern":"**/*"}`)
+	require.NoError(t, err)
+	require.Equal(t, "a.go\nmembers/opus/R1.ai.md\nmembers/opus/review.json", out)
+
+	_, grep := grepTool(dir)
+	out, err = call(t, grep, `{"pattern":"needle","glob":"*.go"}`)
+	require.NoError(t, err)
+	require.Equal(t, "a.go:1:package a // needle", out)
+
+	out, err = call(t, grep, `{"pattern":"member needle"}`)
+	require.NoError(t, err)
+	require.Equal(t, "members/opus/R1.ai.md:1:member needle", out)
+}

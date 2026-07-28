@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/ctl"
 	"reviewsrv/pkg/reviewer/direct"
 	"reviewsrv/pkg/reviewer/runner"
@@ -17,6 +19,7 @@ var version = "dev"
 
 func main() {
 	cfg := &ctl.Config{}
+	var multiRaw, judgeRaw string
 
 	rootCmd := &cobra.Command{
 		Use:          "reviewctl",
@@ -61,21 +64,20 @@ func main() {
 	pf.StringVar(&cfg.APIProvider, "api-provider", ctl.EnvDefault("REVIEW_API_PROVIDER", "deepseek"), "direct runner provider: deepseek | openai-compat | anthropic (key from ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env)")
 	pf.StringVar(&cfg.APIBaseURL, "api-base-url", os.Getenv("REVIEW_API_BASE_URL"), "direct runner API base URL (defaults to provider's standard endpoint)")
 	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
+	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
+	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
+	pf.DurationVar(&cfg.Timeout, "timeout", ctl.EnvDuration("REVIEW_TIMEOUT", 30*time.Minute), "per-member/judge run timeout (e.g. 30m, 1h); 0 = no timeout")
+	// --multi/--judge are local debug overrides (ambient creds, bypass the server
+	// panel config). Keep them working but hidden so they don't become a stable CLI
+	// contract — production multi-review is driven by the project's runner profiles.
+	_ = pf.MarkHidden("multi")
+	_ = pf.MarkHidden("judge")
 
 	reviewCmd := &cobra.Command{
 		Use:   "review",
 		Short: "Full review cycle: prompt → Claude → upload → comment → HTML",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := cfg.Validate("review"); err != nil {
-				return err
-			}
-			log := slog.Default()
-			rr, err := buildRunner(cfg, log)
-			if err != nil {
-				return err
-			}
-			c := ctl.NewController(cfg, rr, log)
-			return c.Review(cmd.Context())
+			return runReview(cmd, cfg, multiRaw, judgeRaw, slog.Default())
 		},
 	}
 
@@ -119,11 +121,137 @@ func main() {
 	}
 }
 
+// runReview drives the review subcommand: parse the optional --multi panel, then
+// either resolve the server profile and build the primary runner (single review)
+// or hand the per-member factory to the controller (multi-review panel, which
+// builds one runner per member inside its worktree and bypasses server config).
+func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw, judgeRaw string, log *slog.Logger) error {
+	if err := cfg.Validate("review"); err != nil {
+		return err
+	}
+
+	multi, err := ctl.ParseMulti(multiRaw)
+	if err != nil {
+		return err
+	}
+	cfg.Multi = multi
+	if cfg.Judge, err = ctl.ParseJudge(judgeRaw); err != nil {
+		return err
+	}
+
+	var rr runner.ReviewRunner
+	if len(cfg.Multi) == 0 {
+		// No local --multi override: fetch server config. applyReviewConfig applies
+		// the primary to cfg and, when the project has a judge, populates cfg.Multi
+		// (the [primary] + panel members) + cfg.Judge — a server-driven panel.
+		if err = applyReviewConfig(cmd, cfg, log); err != nil {
+			return err
+		}
+		if len(cfg.Multi) == 0 { // still single after server config
+			if rr, err = buildRunner(cfg, log); err != nil {
+				return err
+			}
+		}
+	}
+
+	factory := func(mc *ctl.Config) (runner.ReviewRunner, error) { return buildRunner(mc, log) }
+	return ctl.NewController(cfg, rr, log, ctl.WithRunnerFactory(factory)).Review(cmd.Context())
+}
+
+// applyReviewConfig fetches the project's resolved panel from the server and
+// applies it to cfg. The primary profile fills the single-review runner fields
+// (explicit flags still win); when the project configures a judge, the panel
+// members ([primary] + additional) and the judge are loaded into cfg so the run
+// fans out server-driven. CI needs only the image, project key, server URL and
+// credentials.
+func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) error {
+	rc, err := ctl.NewPromptClient(log).FetchConfig(cmd.Context(), cfg.URL, cfg.Key)
+	if err != nil {
+		return fmt.Errorf("fetch review config: %w", err)
+	}
+
+	p := rc.Primary // never nil: the server returns ErrNoRunnerProfile otherwise
+	fl := cmd.Flags()
+	cfg.RunnerProfileID = p.RunnerProfileID
+	cfg.RunnerProfileTitle = p.Title
+	cfg.Token = p.Token
+	// Server profile fills each runner field only when the user didn't pass the
+	// flag and the server has a value — explicit flags always win over the profile.
+	serverDefault(fl.Changed, "runner", p.Runner, &cfg.Runner)
+	serverDefault(fl.Changed, "model", p.Model, &cfg.Model)
+	serverDefault(fl.Changed, "effort", p.Effort, &cfg.Effort)
+	serverDefault(fl.Changed, "api-provider", p.APIProvider, &cfg.APIProvider)
+	serverDefault(fl.Changed, "api-base-url", p.APIBaseURL, &cfg.APIBaseURL)
+	if !fl.Changed("allow-dangerous-permissions") {
+		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+	}
+
+	// Task-tracker access: the URL comes from the server config; the CI env var
+	// wins over the server-stored token (same precedence as the API keys). The
+	// token reaches runners out-of-band — never through the prompt text.
+	if rc.Tracker != nil {
+		cfg.TrackerURL = rc.Tracker.URL
+		cfg.TrackerToken = rc.Tracker.Token
+	}
+	if v := os.Getenv(envTrackerToken); v != "" {
+		cfg.TrackerToken = v
+	}
+
+	// A configured judge turns multi-review on: run the full panel ([primary] +
+	// additional members), then fuse. No judge → cfg.Multi stays empty → single.
+	if rc.Judge != nil {
+		cfg.Multi = serverPanelMembers(rc)
+		cfg.Judge = profileMember(rc.Judge)
+	}
+
+	provider := "" // provider applies to the direct runner only; blank elsewhere
+	if cfg.Runner == runner.RunnerDirect {
+		provider = cfg.APIProvider
+	}
+	log.InfoContext(cmd.Context(), "applied runner profile",
+		"profileId", p.RunnerProfileID, "title", p.Title,
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort,
+		"provider", provider, "panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
+	return nil
+}
+
+// serverDefault applies a server profile string field to *dst when the user left
+// the flag at its default (changed reports false) and the server has a non-empty
+// value, so an explicit flag always wins over the profile.
+func serverDefault(changed func(string) bool, flag, serverVal string, dst *string) {
+	if !changed(flag) && serverVal != "" {
+		*dst = serverVal
+	}
+}
+
+// profileMember wraps a resolved profile as a panel MemberSpec carrying that
+// profile, so the member runs with its own credentials/settings and records its
+// own snapshot.
+func profileMember(p *ctl.ResolvedProfile) *ctl.MemberSpec {
+	return &ctl.MemberSpec{Runner: p.Runner, Model: p.Model, Profile: p}
+}
+
+// serverPanelMembers builds the full member list for a server-driven panel: the
+// primary runner first, then the additional panel members (the [primary] + panel
+// run set).
+func serverPanelMembers(rc *ctl.ReviewConfig) []ctl.MemberSpec {
+	members := make([]ctl.MemberSpec, 0, 1+len(rc.Panel))
+	members = append(members, *profileMember(rc.Primary))
+	for _, p := range rc.Panel {
+		members = append(members, *profileMember(p))
+	}
+	return members
+}
+
 func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	cfg.ResolveDefaults()
+	// The profile token is passed to the runner as a per-process credential (the
+	// runner injects it only when the ambient env var is absent — env wins). This
+	// replaces a global os.Setenv so concurrent panel members with different tokens
+	// don't race. The direct runner consumes the token directly (buildDirectRunner).
 	switch cfg.Runner {
 	case "", runner.RunnerClaude:
-		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &runner.ExecClaudeRunner{Model: cfg.Model, Effort: cfg.Effort, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
 	case runner.RunnerOpenCode:
 		return &runner.ExecOpenCodeRunner{
 			Model:                     cfg.Model,
@@ -131,10 +259,11 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 			SessionID:                 cfg.SessionID,
 			ContinueSession:           cfg.ContinueSession,
 			AllowDangerousPermissions: cfg.AllowDangerousPermissions,
+			TrackerToken:              cfg.TrackerToken,
 			Log:                       log,
 		}, nil
 	case runner.RunnerCodex:
-		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Log: log}, nil
+		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
 	case runner.RunnerDirect:
 		return buildDirectRunner(cfg, log)
 	default:
@@ -145,7 +274,10 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error) {
 	apiKey := directAPIKey(cfg.APIProvider)
 	if apiKey == "" {
-		return nil, fmt.Errorf("--runner direct: API key not found in environment (set %s)", strings.Join(directKeyEnvs(cfg.APIProvider), " or "))
+		apiKey = cfg.Token // runner profile fallback (env still took priority above)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("--runner direct: API key not found in environment (set %s) or runner profile token", strings.Join(directKeyEnvs(cfg.APIProvider), " or "))
 	}
 	prov, err := direct.NewProvider(direct.ProviderConfig{
 		Provider: cfg.APIProvider,
@@ -156,15 +288,34 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 	if err != nil {
 		return nil, err
 	}
+	// Tracker access travels as tool config, not prompt text: http_fetch is
+	// scoped to the tracker URL and injects the token itself.
+	var tracker *direct.TrackerConfig
+	if cfg.TrackerURL != "" {
+		tracker = &direct.TrackerConfig{URL: cfg.TrackerURL, Token: cfg.TrackerToken}
+	}
 	return &runner.DirectRunner{
-		Provider: prov,
-		Dir:      cfg.Dir,
-		DiffBase: cfg.TargetBranch,
-		DiffHead: cfg.SourceBranch,
-		Effort:   cfg.Effort,
-		Log:      log,
+		Provider:  prov,
+		Dir:       cfg.Dir,
+		DiffBase:  cfg.TargetBranch,
+		DiffHead:  cfg.SourceBranch,
+		Effort:    cfg.Effort,
+		CompactAt: direct.DefaultCompactAt(cfg.APIProvider),
+		Tracker:   tracker,
+		Log:       log,
 	}, nil
 }
+
+// Env var names that may carry the direct-runner API key, plus the task-tracker
+// token override (CI variable wins over the server-stored tracker token; the
+// name aliases the canonical reviewer const referenced by assembled prompts).
+const (
+	envReviewAPIKey    = "REVIEW_API_KEY"
+	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
+	envOpenAIAPIKey    = "OPENAI_API_KEY"
+	envDeepSeekAPIKey  = "DEEPSEEK_API_KEY"
+	envTrackerToken    = reviewer.EnvTrackerToken
+)
 
 // directKeyEnvs reports the env vars that may hold the API key for the given
 // provider, in priority order. REVIEW_API_KEY is a provider-agnostic override so
@@ -174,11 +325,11 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 func directKeyEnvs(provider string) []string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "anthropic":
-		return []string{"REVIEW_API_KEY", "ANTHROPIC_API_KEY"}
+		return []string{envReviewAPIKey, envAnthropicAPIKey}
 	case "openai", "openai-compat":
-		return []string{"REVIEW_API_KEY", "OPENAI_API_KEY"}
+		return []string{envReviewAPIKey, envOpenAIAPIKey}
 	default: // deepseek (the default) and any other openai-compatible backend
-		return []string{"REVIEW_API_KEY", "DEEPSEEK_API_KEY"}
+		return []string{envReviewAPIKey, envDeepSeekAPIKey}
 	}
 }
 

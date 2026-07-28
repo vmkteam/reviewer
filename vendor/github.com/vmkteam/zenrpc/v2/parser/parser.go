@@ -297,53 +297,52 @@ func (pi *PackageInfo) parseMethods(f *ast.File, packagePath string) error {
 }
 
 func (pi *PackageInfo) String() string {
-	result := fmt.Sprintf("Generated services for package %s:\n", pi.PackageName)
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Generated services for package %s:\n", pi.PackageName)
 	for _, s := range pi.Services {
-		result += fmt.Sprintf("- %s\n", s.Name)
+		fmt.Fprintf(&sb, "- %s\n", s.Name)
 		for _, m := range s.Methods {
-			result += fmt.Sprintf("  • %s", m.Name)
+			fmt.Fprintf(&sb, "  • %s", m.Name)
 
 			// args
-			result += "("
+			sb.WriteString("(")
 			for i, a := range m.Args {
 				if i != 0 {
-					result += ", "
+					sb.WriteString(", ")
 				}
-
-				result += fmt.Sprintf("%s %s", a.Name, a.Type)
+				fmt.Fprintf(&sb, "%s %s", a.Name, a.Type)
 			}
-			result += ") "
+			sb.WriteString(") ")
 
 			// no return args
 			if len(m.Returns) == 0 {
-				result += "\n"
+				sb.WriteString("\n")
 				continue
 			}
 
 			// only one return arg without name
 			if len(m.Returns) == 1 && m.Returns[0].Name == "" {
-				result += m.Returns[0].Type + "\n"
+				sb.WriteString(m.Returns[0].Type + "\n")
 				continue
 			}
 
 			// return
-			result += "("
+			sb.WriteString("(")
 			for i, a := range m.Returns {
 				if i != 0 {
-					result += ", "
+					sb.WriteString(", ")
 				}
-
 				if a.Name == "" {
-					result += a.Type
+					sb.WriteString(a.Type)
 				} else {
-					result += fmt.Sprintf("%s %s", a.Name, a.Type)
+					fmt.Fprintf(&sb, "%s %s", a.Name, a.Type)
 				}
 			}
-			result += ")\n"
+			sb.WriteString(")\n")
 		}
 	}
 
-	return result
+	return sb.String()
 }
 
 func (pi *PackageInfo) OutputFilename() string {
@@ -474,7 +473,7 @@ func (m *Method) parseReturns(pi *PackageInfo, fdecl *ast.FuncDecl, serviceNames
 
 	// get Service.Method list
 	methods := func() string {
-		methods := []string{}
+		methods := make([]string, 0, len(serviceNames))
 		for _, s := range serviceNames {
 			methods = append(methods, s+"."+m.Name)
 		}

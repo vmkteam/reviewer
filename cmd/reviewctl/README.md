@@ -11,19 +11,47 @@ Go CLI orchestrator for AI code review. Single binary for the full review cycle:
 | `reviewctl comment` | Post MR comments for an existing review |
 | `reviewctl version` | Print version |
 
+## Runner configuration
+
+The runner (runner type, model, effort, provider, optional fallback token) comes
+from the project's **runner profile**, fetched from the server at run time — CI
+passes only the project key, server URL and credentials, so it stays thin. The
+runner flags below are **local overrides**: an explicit flag always wins over the
+profile. Multi-review is profile-driven too (see below).
+
 ## Flags & Environment Variables
 
-All flags have environment variable defaults for backward compatibility with CI.
+Most flags have an environment-variable default for CI.
+
+### Identity, server & operation
 
 | Flag | Env Variable | Default | Description |
 |------|-------------|---------|-------------|
 | `--key` | `$PROJECT_KEY` | *required* | Project key (UUID) |
 | `--url` | `$REVIEWSRV_URL` | *required* | Reviewer server URL used for API calls from CI |
 | `--public-url` | `$REVIEWSRV_PUBLIC_URL` | *falls back to `--url`* | Browser-facing base URL used in MR comment links |
-| `--model` | `$REVIEW_MODEL` | `opus` | Claude model |
 | `--dir` | `$REVIEW_DIR` | `.` | Working directory with review files |
 | `--verbose` | `$REVIEW_VERBOSE` | `false` | Verbose output |
 | `--session` | — | — | Claude session ID for `--resume` (reuses prompt cache) |
+| `--continue` | — | `false` | Continue the last Claude session instead of `--resume` |
+| `--debug-upload` | `$REVIEW_DEBUG_UPLOAD` | `false` | Always upload artifacts to `/v1/upload/debug/` (failures upload regardless) |
+| `--timeout` | `$REVIEW_TIMEOUT` | `30m` | Per-run timeout (and per panel member/judge); `0` = no timeout |
+
+### Runner overrides (otherwise taken from the runner profile)
+
+| Flag | Env Variable | Default | Description |
+|------|-------------|---------|-------------|
+| `--runner` | `$REVIEW_RUNNER` | `claude` | Runner: `claude` \| `opencode` \| `codex` \| `direct` |
+| `--model` | `$REVIEW_MODEL` | *runner default* | Model name |
+| `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort for the `direct` Anthropic runner: `low`..`max` |
+| `--api-provider` | `$REVIEW_API_PROVIDER` | `deepseek` | `direct` runner provider: `deepseek` \| `openai-compat` \| `anthropic` |
+| `--api-base-url` | `$REVIEW_API_BASE_URL` | *provider default* | `direct` runner API base URL |
+| `--allow-dangerous-permissions` | `$REVIEW_ALLOW_DANGEROUS_PERMISSIONS` | `true` | Pass `--dangerously-skip-permissions` to opencode (needed for unattended CI) |
+
+### MR & CI metadata (from GitLab CI)
+
+| Flag | Env Variable | Default | Description |
+|------|-------------|---------|-------------|
 | `--gitlab-url` | `$CI_API_V4_URL` | — | GitLab API URL |
 | `--gitlab-token` | `$REVIEWER_GITLAB_TOKEN` | — | GitLab API token for MR comments |
 | `--mr-iid` | `$CI_MERGE_REQUEST_IID` | — | Merge Request IID |
@@ -31,11 +59,22 @@ All flags have environment variable defaults for backward compatibility with CI.
 | `--source-branch` | `$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME` | — | Source branch |
 | `--target-branch` | `$CI_MERGE_REQUEST_TARGET_BRANCH_NAME` | — | Target branch |
 | `--commit` | `$CI_COMMIT_SHA` | — | Commit SHA |
-| `--author` | `$GITLAB_USER_LOGIN` | — | MR author |
+| `--author` | `$CI_COMMIT_AUTHOR` | *falls back to `$GITLAB_USER_LOGIN`* | MR author (email stripped) |
 | `--mr-title` | `$CI_MERGE_REQUEST_TITLE` | — | MR title |
 | `--external-id` | `$CI_MERGE_REQUEST_IID` | — | External ID |
 | `--diff-base-sha` | `$CI_MERGE_REQUEST_DIFF_BASE_SHA` | — | Diff base SHA for inline comments |
 | `--review-id` | — | — | Existing review ID (for `comment` subcommand) |
+
+## Multi-review (panel + fusion)
+
+When a project's runner profile config attaches **panel members** and a **judge**,
+`reviewctl review` fans out: it runs each member in its own detached git worktree
+(in parallel, fault-tolerant — one survivor is enough), then a judge runner fuses
+the member reviews into one, keeping the individual member reviews linked. The
+panel and judge are configured per project in the admin panel; CI runs the same
+`reviewctl review` either way. Direct credentials for each member come from its
+profile token (or the ambient env). The cost is roughly the sum of the members
+plus the judge, so it is opt-in per project.
 
 ## Usage
 
@@ -44,7 +83,7 @@ All flags have environment variable defaults for backward compatibility with CI.
 ```yaml
 review:
   stage: review
-  image: vmkteam/claude-ci:latest
+  image: your-registry/reviewer-ci:latest  # vmkteam/claude-ci + reviewctl
   script:
     - reviewctl review
   artifacts:
@@ -55,7 +94,10 @@ review:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
 
-Required CI variables: `PROJECT_KEY`, `REVIEWSRV_URL`, `ANTHROPIC_API_KEY`, `REVIEWER_GITLAB_TOKEN`.
+Required CI variables: `PROJECT_KEY`, `REVIEWSRV_URL`, `REVIEWER_GITLAB_TOKEN`. The LLM
+API key is optional — the runner profile supplies the runner, model and an optional token;
+set `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY`) only
+when the profile has no token.
 
 ### Local Run
 

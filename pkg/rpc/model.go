@@ -164,6 +164,20 @@ type ReviewFileSummary struct {
 	IssueStats   IssueStats `json:"issueStats"`
 }
 
+// newReviewFileSummaries maps review files to their A/C/S/T summary cells, shared
+// by the review-list row and the fusion panel breakdown.
+func newReviewFileSummaries(in reviewer.ReviewFiles) []ReviewFileSummary {
+	out := make([]ReviewFileSummary, len(in))
+	for i, rf := range in {
+		out[i] = ReviewFileSummary{
+			ReviewType:   rf.ReviewType,
+			TrafficLight: rf.TrafficLight,
+			IssueStats:   newIssueStats(rf.IssueStats),
+		}
+	}
+	return out
+}
+
 func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 	if in == nil {
 		return nil
@@ -178,15 +192,7 @@ func newReviewSummary(in *reviewer.Review) *ReviewSummary {
 		SourceBranch: in.SourceBranch,
 		TargetBranch: in.TargetBranch,
 		CreatedAt:    in.CreatedAt,
-		ReviewFiles:  make([]ReviewFileSummary, len(in.ReviewFiles)),
-	}
-
-	for i, rf := range in.ReviewFiles {
-		rs.ReviewFiles[i] = ReviewFileSummary{
-			ReviewType:   rf.ReviewType,
-			TrafficLight: rf.TrafficLight,
-			IssueStats:   newIssueStats(rf.IssueStats),
-		}
+		ReviewFiles:  newReviewFileSummaries(in.ReviewFiles),
 	}
 
 	rs.EffortMinutes = in.EffortMinutes
@@ -215,6 +221,32 @@ type Review struct {
 	EffortMinutes       *int         `json:"effortMinutes,omitempty"`
 	AiSlopScore         *float32     `json:"aiSlopScore,omitempty"`
 	LastVersionReviewID *int         `json:"lastVersionReviewId,omitempty"`
+
+	ReviewRole     string        `json:"reviewRole"` // single|member|fusion (member points at its fusion via parentReviewId)
+	ParentReviewID *int          `json:"parentReviewId,omitempty"`
+	Members        []PanelMember `json:"members,omitempty"`      // fusion panel breakdown: the member children
+	PanelCostUsd   float64       `json:"panelCostUsd,omitempty"` // summed member cost (judge's own cost is in modelInfo)
+}
+
+// PanelMember — одно ревью-участник панели в разборе fusion-ревью.
+type PanelMember struct {
+	ID           int                 `json:"reviewId"`
+	Title        string              `json:"title"`
+	TrafficLight string              `json:"trafficLight"`
+	Model        string              `json:"model"`
+	CostUsd      float64             `json:"costUsd"`
+	ReviewFiles  []ReviewFileSummary `json:"reviewFiles"`
+}
+
+func newPanelMember(in *reviewer.Review) PanelMember {
+	return PanelMember{
+		ID:           in.ID,
+		Title:        in.Title,
+		TrafficLight: in.TrafficLight,
+		Model:        in.ModelInfo.Model,
+		CostUsd:      in.ModelInfo.CostUsd,
+		ReviewFiles:  newReviewFileSummaries(in.ReviewFiles),
+	}
 }
 
 func newReview(in *reviewer.Review) *Review {
@@ -240,6 +272,8 @@ func newReview(in *reviewer.Review) *Review {
 		EffortMinutes:       in.EffortMinutes,
 		AiSlopScore:         in.AiSlopScore,
 		LastVersionReviewID: in.LastVersionReviewID,
+		ReviewRole:          in.ReviewRole,
+		ParentReviewID:      in.ParentReviewID,
 	}
 
 	return r
@@ -270,21 +304,22 @@ func newReviewFile(in *reviewer.ReviewFile) *ReviewFile {
 
 // Issue — строка таблицы issues в табе Issues.
 type Issue struct {
-	ID           int     `json:"issueId"`
-	ReviewID     int     `json:"reviewId"`
-	LocalID      *string `json:"localId"`
-	Title        string  `json:"title"`
-	Severity     string  `json:"severity"`
-	Description  string  `json:"description"`
-	Content      string  `json:"content"`
-	File         string  `json:"file"`
-	Lines        string  `json:"lines"`
-	IssueType    string  `json:"issueType"`
-	ReviewType   string  `json:"reviewType"`
-	CommitHash   string  `json:"commitHash"`
-	SuggestedFix *string `json:"suggestedFix,omitempty"`
-	StatusID     int     `json:"statusId"`
-	Comment      *string `json:"comment"`
+	ID           int      `json:"issueId"`
+	ReviewID     int      `json:"reviewId"`
+	LocalID      *string  `json:"localId"`
+	Title        string   `json:"title"`
+	Severity     string   `json:"severity"`
+	Description  string   `json:"description"`
+	Content      string   `json:"content"`
+	File         string   `json:"file"`
+	Lines        string   `json:"lines"`
+	IssueType    string   `json:"issueType"`
+	ReviewType   string   `json:"reviewType"`
+	CommitHash   string   `json:"commitHash"`
+	SuggestedFix *string  `json:"suggestedFix,omitempty"`
+	StatusID     int      `json:"statusId"`
+	Comment      *string  `json:"comment"`
+	Sources      []string `json:"sources,omitempty"` // fusion provenance: model labels that flagged the issue (empty for single/member)
 }
 
 func newIssue(in *reviewer.Issue) *Issue {
@@ -307,6 +342,7 @@ func newIssue(in *reviewer.Issue) *Issue {
 		SuggestedFix: in.SuggestedFix,
 		StatusID:     in.StatusID,
 		Comment:      in.Comment,
+		Sources:      in.Sources,
 	}
 
 	if in.Review != nil {

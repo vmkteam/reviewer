@@ -52,7 +52,7 @@ type Colour int32
 
 // NewColour creates a Colour directly from RGB values.
 func NewColour(r, g, b uint8) Colour {
-	return ParseColour(fmt.Sprintf("%02x%02x%02x", r, g, b))
+	return Colour(int32(r)<<16|int32(g)<<8|int32(b)) + 1
 }
 
 // Distance between this colour and another.
@@ -92,7 +92,7 @@ func (c Colour) Brighten(factor float64) Colour {
 	return NewColour(uint8(r), uint8(g), uint8(b))
 }
 
-// BrightenOrDarken brightens a colour if it is < 0.5 brighteness or darkens if > 0.5 brightness.
+// BrightenOrDarken brightens a colour if it is < 0.5 brightness or darkens if > 0.5 brightness.
 func (c Colour) BrightenOrDarken(factor float64) Colour {
 	if c.Brightness() < 0.5 {
 		return c.Brighten(factor)
@@ -100,7 +100,35 @@ func (c Colour) BrightenOrDarken(factor float64) Colour {
 	return c.Brighten(-factor)
 }
 
-// Brightness of the colour (roughly) in the range 0.0 to 1.0
+// ClampBrightness returns a copy of this colour with its brightness adjusted such that
+// it falls within the range [min, max] (or very close to it due to rounding errors).
+// The supplied values use the same [0.0, 1.0] range as Brightness.
+func (c Colour) ClampBrightness(min, max float64) Colour {
+	if !c.IsSet() {
+		return c
+	}
+
+	min = math.Max(min, 0)
+	max = math.Min(max, 1)
+	current := c.Brightness()
+	target := math.Min(math.Max(current, min), max)
+	if current == target {
+		return c
+	}
+
+	r := float64(c.Red())
+	g := float64(c.Green())
+	b := float64(c.Blue())
+	rgb := r + g + b
+	if target > current {
+		// Solve for x: target == ((255-r)*x + r + (255-g)*x + g + (255-b)*x + b) / 255 / 3
+		return c.Brighten((target*255*3 - rgb) / (255*3 - rgb))
+	}
+	// Solve for x: target == (r*(x+1) + g*(x+1) + b*(x+1)) / 255 / 3
+	return c.Brighten((target*255*3)/rgb - 1)
+}
+
+// Brightness of the colour (roughly) in the range 0.0 to 1.0.
 func (c Colour) Brightness() float64 {
 	return (float64(c.Red()) + float64(c.Green()) + float64(c.Blue())) / 255.0 / 3.0
 }
@@ -113,7 +141,7 @@ func ParseColour(colour string) Colour {
 	if err != nil {
 		return 0
 	}
-	return Colour(n + 1)
+	return Colour(n + 1) //nolint:gosec
 }
 
 // MustParseColour is like ParseColour except it panics if the colour is invalid.
@@ -134,13 +162,13 @@ func (c Colour) String() string   { return fmt.Sprintf("#%06x", int(c-1)) }
 func (c Colour) GoString() string { return fmt.Sprintf("Colour(0x%06x)", int(c-1)) }
 
 // Red component of colour.
-func (c Colour) Red() uint8 { return uint8(((c - 1) >> 16) & 0xff) }
+func (c Colour) Red() uint8 { return uint8(((c - 1) >> 16) & 0xff) } //nolint:gosec
 
 // Green component of colour.
-func (c Colour) Green() uint8 { return uint8(((c - 1) >> 8) & 0xff) }
+func (c Colour) Green() uint8 { return uint8(((c - 1) >> 8) & 0xff) } //nolint:gosec
 
 // Blue component of colour.
-func (c Colour) Blue() uint8 { return uint8((c - 1) & 0xff) }
+func (c Colour) Blue() uint8 { return uint8((c - 1) & 0xff) } //nolint:gosec
 
 // Colours is an orderable set of colours.
 type Colours []Colour

@@ -21,6 +21,7 @@
                 <Attribute Name="LocalID" DBName="localId" DBType="varchar" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="16"></Attribute>
                 <Attribute Name="SuggestedFix" DBName="suggestedFix" DBType="text" GoType="*string" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="ArchivedAt" DBName="archivedAt" DBType="timestamptz" GoType="*time.Time" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="Sources" DBName="sources" DBType="jsonb" GoType="IssueSources" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
             </Attributes>
             <Searches>
                 <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
@@ -75,16 +76,20 @@
                 <Attribute Name="CreatedAt" DBName="createdAt" DBType="timestamptz" GoType="time.Time" PK="false" Nullable="No" Addable="false" Updatable="false" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="DurationMS" DBName="durationMS" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="ModelInfo" DBName="modelInfo" DBType="jsonb" GoType="ReviewModelInfo" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
+                <Attribute Name="RunnerProfile" DBName="runnerProfile" DBType="jsonb" GoType="ReviewRunnerProfile" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0" HasDefault="true"></Attribute>
                 <Attribute Name="StatusID" DBName="statusId" DBType="int4" GoType="int" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="PromptID" DBName="promptId" DBType="int4" GoType="int" PK="false" FK="Prompt" Nullable="No" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="EffortMinutes" DBName="effortMinutes" DBType="int4" GoType="*int" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
                 <Attribute Name="AiSlopScore" DBName="aiSlopScore" DBType="float4" GoType="*float32" PK="false" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="ParentReviewID" DBName="parentReviewId" DBType="int4" GoType="*int" PK="false" FK="Review" Nullable="Yes" Addable="true" Updatable="true" Min="0" Max="0"></Attribute>
+                <Attribute Name="ReviewRole" DBName="reviewRole" DBType="varchar" GoType="string" PK="false" Nullable="No" Addable="true" Updatable="true" Min="0" Max="16" HasDefault="true"></Attribute>
             </Attributes>
             <Searches>
                 <Search Name="IDs" AttrName="ID" SearchType="SEARCHTYPE_ARRAY"></Search>
                 <Search Name="IDLt" AttrName="ID" SearchType="SEARCHTYPE_L"></Search>
                 <Search Name="TitleILike" AttrName="Title" SearchType="SEARCHTYPE_ILIKE"></Search>
                 <Search Name="AuthorILike" AttrName="Author" SearchType="SEARCHTYPE_ILIKE"></Search>
+                <Search Name="ReviewRoleILike" AttrName="ReviewRole" SearchType="SEARCHTYPE_ILIKE"></Search>
             </Searches>
         </Entity>
     </Entities>

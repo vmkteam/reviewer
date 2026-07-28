@@ -159,7 +159,23 @@ func (s ReviewService) GetByID(ctx context.Context, reviewId int) (*Review, erro
 		return nil, newInternalError(err)
 	}
 
-	return newReview(&reviews[0]), nil
+	out := newReview(&reviews[0])
+
+	// A fusion review carries its panel breakdown: the member children plus the
+	// aggregate panel cost (sum of members; the judge's own cost stays in ModelInfo).
+	if out.ReviewRole == reviewer.ReviewRoleFusion {
+		members, err := s.rm.ListMembers(ctx, out.ProjectID, out.ID)
+		if err != nil {
+			return nil, newInternalError(err)
+		}
+		out.Members = make([]PanelMember, len(members))
+		for i := range members {
+			out.Members[i] = newPanelMember(&members[i])
+			out.PanelCostUsd += members[i].ModelInfo.CostUsd
+		}
+	}
+
+	return out, nil
 }
 
 // Issues returns list of issues for a review.

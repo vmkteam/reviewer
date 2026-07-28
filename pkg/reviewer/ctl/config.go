@@ -2,7 +2,11 @@ package ctl
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
+	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer/runner"
 )
 
@@ -42,11 +46,41 @@ type Config struct {
 	APIBaseURL  string
 	Effort      string
 
+	// Resolved runner profile (fetched from the server over /v1/reviewctl/rpc/).
+	// Token is the optional API-key fallback used only when the matching env var
+	// is absent; RunnerProfileID/Title are recorded in the review snapshot.
+	Token              string
+	RunnerProfileID    int
+	RunnerProfileTitle string
+
+	// Task-tracker access (fetched with the review config; $REVIEW_TRACKER_TOKEN
+	// takes priority over the server token). The direct runner scopes its
+	// http_fetch tool to TrackerURL; CLI runners get the token exported as
+	// REVIEW_TRACKER_TOKEN so prompt curl instructions can reference it. The
+	// token never appears in the prompt itself.
+	TrackerURL   string
+	TrackerToken string
+
 	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
 	// runners that support it (currently opencode). Defaults to true to match
 	// previous behaviour — unattended CI runs need it to avoid permission
 	// prompts. Set false for local interactive review on untrusted code.
 	AllowDangerousPermissions bool
+
+	// Multi holds the panel members for a local multi-review run (--multi /
+	// $REVIEW_MULTI). Empty = single review. Each member is a runner+model run in
+	// its own git worktree with ambient credentials; the server-driven panel
+	// (with per-member tokens) arrives in a later phase.
+	Multi []MemberSpec
+
+	// Judge is the synthesizer for a multi-review panel (--judge / $REVIEW_JUDGE).
+	// When set with >=2 members, reviewctl runs the panel then the judge over the
+	// members' outputs and uploads one fused review. Nil = no fusion (members only).
+	Judge *MemberSpec
+
+	// Timeout bounds each member and the judge run (--timeout / $REVIEW_TIMEOUT).
+	// 0 = no timeout. Members run concurrently, so this caps the slowest one.
+	Timeout time.Duration
 
 	// DebugUpload uploads collected artifacts to /v1/upload/debug/ on every run.
 	// On failure, the upload happens regardless of this flag.
@@ -54,6 +88,21 @@ type Config struct {
 
 	// For comment subcommand.
 	ReviewID int
+}
+
+// RunnerProfileSnapshot builds the resolved-profile snapshot recorded on the
+// review. The token is deliberately excluded — secrets never land in a review.
+func (c *Config) RunnerProfileSnapshot() db.ReviewRunnerProfile {
+	return db.ReviewRunnerProfile{
+		RunnerProfileID: c.RunnerProfileID,
+		Title:           c.RunnerProfileTitle,
+		Runner:          c.Runner,
+		Model:           c.Model,
+		Effort:          c.Effort,
+		APIProvider:     c.APIProvider,
+		APIBaseURL:      c.APIBaseURL,
+		Params:          db.RunnerProfileParams{AllowDangerousPermissions: c.AllowDangerousPermissions},
+	}
 }
 
 // Validate checks that required fields are set for the given subcommand.
@@ -65,7 +114,7 @@ func (c *Config) Validate(cmd string) error {
 		return errors.New("--url / $REVIEWSRV_URL is required")
 	}
 
-	if cmd == "comment" && c.ReviewID == 0 {
+	if cmd == "comment" && c.ReviewID == 0 { //nolint:goconst // CLI subcommand name
 		return errors.New("--review-id is required for comment subcommand")
 	}
 
@@ -95,19 +144,19 @@ func (c *Config) PublicBaseURL() string {
 // we pin opus to keep review cost and quality predictable.
 func (c *Config) ResolveDefaults() {
 	if c.Model == "" && (c.Runner == "" || c.Runner == runner.RunnerClaude) {
-		c.Model = "opus"
+		c.Model = "opus" //nolint:goconst // Claude model alias
 	}
 	// Direct runner against Anthropic: pin a concrete model and reasoning effort
 	// so cost/quality stay predictable. Without an explicit effort the Anthropic
 	// API silently defaults to "high", whereas Claude Code uses "xhigh" for
 	// agentic coding — match it so the direct runner isn't a notch weaker out of
 	// the box. DeepSeek/openai-compat ignore effort and require an explicit --model.
-	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" {
+	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" { //nolint:goconst // provider id; canonical const lives in pkg/reviewer/direct
 		if c.Model == "" {
-			c.Model = "claude-opus-4-8"
+			c.Model = "claude-opus-4-8" //nolint:goconst // pinned model id
 		}
 		if c.Effort == "" {
-			c.Effort = "xhigh"
+			c.Effort = "xhigh" //nolint:goconst // reasoning effort level
 		}
 	}
 	// Codex reports no dollar cost, so pin a concrete model: the CLI then uses a
@@ -115,5 +164,62 @@ func (c *Config) ResolveDefaults() {
 	// table (an empty model leaves cost at 0). Override with --model.
 	if c.Runner == runner.RunnerCodex && c.Model == "" {
 		c.Model = "gpt-5.1-codex"
+	}
+}
+
+// MemberSpec is one panel member. For the --multi local override it is just a
+// runner and its model (ambient credentials). For a server-driven panel it also
+// carries the member's resolved runner profile (Profile) so the member runs with
+// its own token/effort/provider — that's how per-member credentials reach the run.
+type MemberSpec struct {
+	Runner  string
+	Model   string
+	Profile *ResolvedProfile
+}
+
+// ParseMulti parses the --multi value: a comma-separated list of runner:model
+// members, e.g. "codex:gpt-5.5,opencode:openrouter/deepseek/deepseek-v4-pro". Only
+// the first colon separates runner from model (models may contain slashes); a bare
+// "runner" with no colon uses the runner's default model. Returns nil for an empty
+// string (single review, no panel).
+func ParseMulti(s string) ([]MemberSpec, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, nil
+	}
+
+	var out []MemberSpec
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		r, m, _ := strings.Cut(part, ":")
+		r = strings.TrimSpace(r)
+		m = strings.TrimSpace(m)
+		switch r {
+		case runner.RunnerClaude, runner.RunnerOpenCode, runner.RunnerCodex, runner.RunnerDirect:
+		default:
+			return nil, fmt.Errorf("--multi: unknown runner %q in %q (want claude|opencode|codex|direct)", r, part)
+		}
+		out = append(out, MemberSpec{Runner: r, Model: m})
+	}
+	return out, nil
+}
+
+// ParseJudge parses the --judge value: a single runner:model spec (same grammar
+// as one --multi member). Returns nil for an empty string (no judge / no fusion).
+func ParseJudge(s string) (*MemberSpec, error) {
+	specs, err := ParseMulti(s)
+	if err != nil {
+		return nil, err
+	}
+	switch len(specs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &specs[0], nil
+	default:
+		return nil, fmt.Errorf("--judge expects a single runner:model, got %d", len(specs))
 	}
 }

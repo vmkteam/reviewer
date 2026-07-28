@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,4 +79,15 @@ func TestParseOpenCodeResult_SkipsMalformedLines(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", cr.Result)
 	assert.Equal(t, 1, cr.NumTurns)
+}
+
+func TestOpenCodeBuildArgsPinsDir(t *testing.T) {
+	r := &ExecOpenCodeRunner{Dir: "/tmp/wt-1"}
+	args := r.buildArgs()
+	require.Contains(t, args, "--dir")
+	assert.Equal(t, "/tmp/wt-1", args[slices.Index(args, "--dir")+1],
+		"--dir must pin the worktree so opencode does not escape to the main repo via the shared git dir")
+
+	r = &ExecOpenCodeRunner{}
+	assert.NotContains(t, r.buildArgs(), "--dir", "no dir configured → no flag")
 }

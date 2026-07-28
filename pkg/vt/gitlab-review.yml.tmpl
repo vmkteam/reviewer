@@ -10,7 +10,9 @@ spec:
 
     dockerimage:
       type: string
-      default: vmkteam/claude-ci:latest
+      # CI image = vmkteam/claude-ci (Claude Code) + reviewctl. Build it from the
+      # Dockerfile in the reviewer "CI Setup", push to your registry, point here.
+      default: your-registry/reviewer-ci:latest
 
     stub_rules:
       type: array
@@ -39,14 +41,26 @@ pipeline-ok:
     - echo "pipeline ok"
   rules: $[[ inputs.stub_rules ]]
 
-# Required CI/CD variables: PROJECT_KEY, ANTHROPIC_API_KEY, REVIEWSRV_URL
+# Required CI/CD variables: PROJECT_KEY, REVIEWSRV_URL.
+# LLM credentials: the runner profile (configured on the server) supplies the runner,
+# model and an optional API token. Provide a key here only when the profile has none —
+# REVIEW_API_KEY (provider-agnostic) or the provider-specific var
+# (ANTHROPIC_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY). reviewctl fails fast if no
+# credential is available from either the profile or the environment.
 # Optional: REVIEWSRV_PUBLIC_URL — browser-facing URL for MR comment links when it differs from REVIEWSRV_URL (e.g. internal vs public DNS).
+# Optional: REVIEW_TRACKER_TOKEN — task-tracker API token override; wins over the token stored
+# with the project's task tracker on the server (the token itself never appears in the prompt).
 $[[ inputs.job_name ]]:
   image: $[[ inputs.dockerimage ]]
   stage: $[[ inputs.stage ]]
   tags: $[[ inputs.tags ]]
   variables:
     GIT_DEPTH: 100
+  # Session cache for the Claude runner: re-running the review on the same MR
+  # reuses the prior session (--continue), so Claude reads its prompt cache
+  # instead of rebuilding it (~90% input-token savings). Safe no-op for the
+  # opencode/codex/direct runners — the restore/detect/save steps below find no
+  # Claude session, so --continue stays empty and the runner starts fresh.
   cache:
     key: "claude-review-${CI_MERGE_REQUEST_IID}"
     paths:
@@ -55,7 +69,7 @@ $[[ inputs.job_name ]]:
     - |
       missing=0
 
-      for var in PROJECT_KEY ANTHROPIC_API_KEY REVIEWSRV_URL; do
+      for var in PROJECT_KEY REVIEWSRV_URL; do
         if [ -z "${!var}" ]; then
           echo "ERROR: required env var '$var' is not set" >&2
           missing=1
@@ -67,7 +81,7 @@ $[[ inputs.job_name ]]:
       fi
     - git fetch --depth=20 --force origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - |
-      # Restore cached session into current project hash directory
+      # Restore cached Claude session into its project dir (Claude runner only).
       CACHED_SESSION=$(find .claude-cache/projects -name '*.jsonl' -print -quit 2>/dev/null)
       if [ -n "$CACHED_SESSION" ]; then
         CACHED_PROJECT_DIR=$(dirname "$CACHED_SESSION")
@@ -85,7 +99,7 @@ $[[ inputs.job_name ]]:
       fi
     - reviewctl review $REVIEWCTL_CONTINUE --verbose
     - |
-      # Save current session for next run
+      # Save the Claude session for the next run (no-op when no Claude session exists).
       CURRENT_HASH=$(echo "$PWD" | sed 's|/|-|g; s|^-||')
       SOURCE_DIR="/root/.claude/projects/$CURRENT_HASH"
       if [ -d "$SOURCE_DIR" ]; then

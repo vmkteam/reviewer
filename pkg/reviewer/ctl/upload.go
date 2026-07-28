@@ -20,14 +20,15 @@ import (
 
 	"reviewsrv/pkg/debug"
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 )
 
 // reviewTypeByPrefix maps R*.md file prefixes to review types.
 var reviewTypeByPrefix = map[string]string{
-	"R1": "architecture",
-	"R2": "code",
-	"R3": "security",
-	"R4": "tests",
+	"R1": "architecture", //nolint:goconst // review-type label
+	"R2": "code",         //nolint:goconst // review-type label
+	"R3": "security",     //nolint:goconst // review-type label
+	"R4": "tests",        //nolint:goconst // review-type label
 	"R5": "operability",
 }
 
@@ -47,7 +48,7 @@ func NewUploadClient(log *slog.Logger) *UploadClient {
 
 // UploadReview uploads review.json and returns the reviewId.
 func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey string, draft *rest.ReviewDraft) (int, error) {
-	url := fmt.Sprintf("%s/v1/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
 
 	body, err := json.Marshal(draft)
 	if err != nil {
@@ -87,7 +88,7 @@ func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey s
 
 // UploadFile uploads a single review file (markdown content).
 func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey string, reviewID int, reviewType string, content []byte) error {
-	url := fmt.Sprintf("%s/v1/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
+	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(content))
 	if err != nil {
@@ -152,6 +153,18 @@ func ReadReviewJSON(dir string) (*rest.ReviewDraft, error) {
 	}
 
 	return &draft, nil
+}
+
+// WriteReviewJSON writes the draft back to review.json in dir, so run metadata
+// applied only in memory (model, tokens, cost, duration) survives a failed
+// upload — a later standalone `reviewctl upload` then sends the same enriched
+// draft instead of the bare skeleton.
+func WriteReviewJSON(dir string, draft *rest.ReviewDraft) error {
+	data, err := json.MarshalIndent(draft, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal review.json: %w", err)
+	}
+	return os.WriteFile(filepath.Join(dir, "review.json"), data, 0o644)
 }
 
 // DebugMeta carries reviewctl run metadata uploaded alongside artifacts.
@@ -259,10 +272,10 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 }
 
 // reviewArtifactFiles are the fixed-name outputs a runner writes into the review
-// directory (the R*.md bodies are matched separately by FindMDFiles). Shared by
-// CollectDebugArtifacts (read for the bundle) and CleanReviewArtifacts (wiped
-// before a run) so the set stays in one place.
-var reviewArtifactFiles = []string{"claude-output.json", "opencode-output.jsonl", "direct-output.jsonl", "review.json"}
+// directory (the R*.md bodies are matched separately by FindMDFiles). The
+// canonical set lives in the reviewer package, shared with the direct runner's
+// diff/walk excludes.
+var reviewArtifactFiles = reviewer.ReviewArtifactFiles
 
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
@@ -289,12 +302,13 @@ func CollectDebugArtifacts(dir string) map[string][]byte {
 }
 
 // CleanReviewArtifacts removes the outputs a previous run left in dir (review.json,
-// the R*.md bodies and the runner session logs) so the next run starts on a clean
-// tree. Without this the runner's glob/grep/read tools surface a prior run's output
-// as if it were part of the codebase under review. Best-effort: absent files are
-// fine; any real removal errors are joined and returned for logging.
+// review.html, the R*.md bodies and the runner session logs) so the next run starts
+// on a clean tree. Without this the runner's glob/grep/read tools surface a prior
+// run's output as if it were part of the codebase under review — a leftover
+// review.html even anchors the model on the PREVIOUS review's findings. Best-effort:
+// absent files are fine; any real removal errors are joined and returned for logging.
 func CleanReviewArtifacts(dir string) error {
-	paths := make([]string, 0, len(reviewArtifactFiles))
+	paths := []string{filepath.Join(dir, reviewer.ReviewArtifactHTML)} // rendered post-upload, not in reviewArtifactFiles (debug bundles don't need it)
 	for _, name := range reviewArtifactFiles {
 		paths = append(paths, filepath.Join(dir, name))
 	}

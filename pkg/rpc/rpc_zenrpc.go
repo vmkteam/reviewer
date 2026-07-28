@@ -512,6 +512,29 @@ func (ReviewService) SMD() smd.ServiceInfo {
 							Optional: true,
 							Type:     smd.Integer,
 						},
+						{
+							Name:        "reviewRole",
+							Description: `single|member|fusion (member points at its fusion via parentReviewId)`,
+							Type:        smd.String,
+						},
+						{
+							Name:     "parentReviewId",
+							Optional: true,
+							Type:     smd.Integer,
+						},
+						{
+							Name:        "members",
+							Description: `fusion panel breakdown: the member children`,
+							Type:        smd.Array,
+							Items: map[string]string{
+								"$ref": "#/definitions/PanelMember",
+							},
+						},
+						{
+							Name:        "panelCostUsd",
+							Description: `summed member cost (judge's own cost is in modelInfo)`,
+							Type:        smd.Float,
+						},
 					},
 					Definitions: map[string]smd.Definition{
 						"ModelInfo": {
@@ -676,6 +699,56 @@ func (ReviewService) SMD() smd.ServiceInfo {
 								},
 							},
 						},
+						"PanelMember": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "reviewId",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+								{
+									Name: "trafficLight",
+									Type: smd.String,
+								},
+								{
+									Name: "model",
+									Type: smd.String,
+								},
+								{
+									Name: "costUsd",
+									Type: smd.Float,
+								},
+								{
+									Name: "reviewFiles",
+									Type: smd.Array,
+									Items: map[string]string{
+										"$ref": "#/definitions/ReviewFileSummary",
+									},
+								},
+							},
+						},
+						"ReviewFileSummary": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "reviewType",
+									Type: smd.String,
+								},
+								{
+									Name: "trafficLight",
+									Type: smd.String,
+								},
+								{
+									Name: "issueStats",
+									Ref:  "#/definitions/IssueStats",
+									Type: smd.Object,
+								},
+							},
+						},
 					},
 				},
 				Errors: map[int]string{
@@ -800,6 +873,14 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Name:     "comment",
 									Optional: true,
 									Type:     smd.String,
+								},
+								{
+									Name:        "sources",
+									Description: `fusion provenance: model labels that flagged the issue (empty for single/member)`,
+									Type:        smd.Array,
+									Items: map[string]string{
+										"type": smd.String,
+									},
 								},
 							},
 						},
@@ -984,6 +1065,14 @@ func (ReviewService) SMD() smd.ServiceInfo {
 									Name:     "comment",
 									Optional: true,
 									Type:     smd.String,
+								},
+								{
+									Name:        "sources",
+									Description: `fusion provenance: model labels that flagged the issue (empty for single/member)`,
+									Type:        smd.Array,
+									Items: map[string]string{
+										"type": smd.String,
+									},
 								},
 							},
 						},

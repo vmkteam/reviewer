@@ -68,7 +68,13 @@ func (a *App) registerHandlers() {
 
 	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL)
 
-	a.echo.GET("/v1/prompt/:projectKey/", h.GetPrompt, lg)
+	// Internal reviewctl API: config + prompt over JSON-RPC (registered as a
+	// separate zenrpc server in registerReviewctlAPIHandlers), plus review upload.
+	// CI-only path; reviewctl pulls its runner profile and prompt from here.
+	a.echo.POST("/v1/reviewctl/upload/:projectKey/", h.CreateReview, lg)
+	a.echo.POST("/v1/reviewctl/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
+
+	// Deprecated upload aliases kept for older CI images during the cutover.
 	a.echo.POST("/v1/upload/:projectKey/", h.CreateReview, lg)
 	a.echo.POST("/v1/upload/:projectKey/:reviewId/:reviewType/", h.UploadReviewFile, lg)
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
@@ -118,6 +124,14 @@ func (a *App) registerAPIHandlers() {
 	a.echo.Any("/v1/rpc/doc/", appkit.EchoHandlerFunc(zenrpc.SMDBoxHandler))
 	a.echo.Any("/v1/rpc/openrpc.json", appkit.EchoHandlerFunc(rpcgen.Handler(gen.OpenRPC("reviewsrv", "http://localhost:8075/v1/rpc"))))
 	a.echo.Any("/v1/rpc/api.ts", appkit.EchoHandlerFunc(rpcgen.Handler(gen.TSClient(nil))))
+}
+
+// registerReviewctlAPIHandlers mounts the internal reviewctl JSON-RPC server at
+// /v1/reviewctl/rpc/. This is a CI-only, network-internal path: its ReviewConfig
+// method returns the real runner-profile token, so unlike /v1/rpc/ it deliberately
+// exposes no openrpc.json / api.ts / doc artifacts that could leak the schema.
+func (a *App) registerReviewctlAPIHandlers() {
+	a.echo.Any("/v1/reviewctl/rpc/", appkit.EchoHandler(appkit.XRequestID(a.reviewctlsrv)))
 }
 
 // registerSPAHandlers serves an embedded SPA at the given prefix.

@@ -11,12 +11,13 @@ import (
 )
 
 var RPC = struct {
-	ProjectService      struct{ Count, Get, GetByID, Add, Update, Delete, GitlabCI, Validate string }
-	PromptService       struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
-	SlackChannelService struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
-	TaskTrackerService  struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
-	AuthService         struct{ Login, Logout, Profile, ChangePassword, VfsAuthToken string }
-	UserService         struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
+	ProjectService       struct{ Count, Get, GetByID, Add, Update, Delete, GitlabCI, Validate string }
+	PromptService        struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
+	SlackChannelService  struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
+	TaskTrackerService   struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
+	RunnerProfileService struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
+	AuthService          struct{ Login, Logout, Profile, ChangePassword, VfsAuthToken string }
+	UserService          struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }
 }{
 	ProjectService: struct{ Count, Get, GetByID, Add, Update, Delete, GitlabCI, Validate string }{
 		Count:    "count",
@@ -47,6 +48,15 @@ var RPC = struct {
 		Validate: "validate",
 	},
 	TaskTrackerService: struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }{
+		Count:    "count",
+		Get:      "get",
+		GetByID:  "getbyid",
+		Add:      "add",
+		Update:   "update",
+		Delete:   "delete",
+		Validate: "validate",
+	},
+	RunnerProfileService: struct{ Count, Get, GetByID, Add, Update, Delete, Validate string }{
 		Count:    "count",
 		Get:      "get",
 		GetByID:  "getbyid",
@@ -127,6 +137,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.Integer,
 							},
 							{
+								Name:     "runnerProfileId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
 								Name:     "statusId",
 								Optional: true,
 								Type:     smd.Integer,
@@ -196,6 +211,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "slackChannelId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
+								Name:     "runnerProfileId",
 								Optional: true,
 								Type:     smd.Integer,
 							},
@@ -289,6 +309,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type:     smd.Integer,
 								},
 								{
+									Name:     "runnerProfileId",
+									Optional: true,
+									Type:     smd.Integer,
+								},
+								{
 									Name:     "prompt",
 									Optional: true,
 									Ref:      "#/definitions/PromptSummary",
@@ -304,6 +329,12 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Name:     "slackChannel",
 									Optional: true,
 									Ref:      "#/definitions/SlackChannelSummary",
+									Type:     smd.Object,
+								},
+								{
+									Name:     "runnerProfile",
+									Optional: true,
+									Ref:      "#/definitions/RunnerProfileSummary",
 									Type:     smd.Object,
 								},
 								{
@@ -390,11 +421,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -422,8 +448,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "webhookURL",
+									Name:     "status",
+									Optional: true,
+									Ref:      "#/definitions/Status",
+									Type:     smd.Object,
+								},
+							},
+						},
+						"RunnerProfileSummary": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
 									Type: smd.String,
+								},
+								{
+									Name: "runner",
+									Type: smd.String,
+								},
+								{
+									Name:     "model",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name:     "effort",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name: "isDefault",
+									Type: smd.Boolean,
 								},
 								{
 									Name:     "status",
@@ -489,6 +548,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Type:     smd.Integer,
 						},
 						{
+							Name:     "runnerProfileId",
+							Optional: true,
+							Type:     smd.Integer,
+						},
+						{
 							Name: "statusId",
 							Type: smd.Integer,
 						},
@@ -496,6 +560,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Name:     "instructions",
 							Optional: true,
 							Type:     smd.String,
+						},
+						{
+							Name:        "runnerProfileIds",
+							Description: `additional panel members (ordered, duplicates allowed)`,
+							Type:        smd.Array,
+							Items: map[string]string{
+								"type": smd.Integer,
+							},
+						},
+						{
+							Name:        "judgeRunnerProfileId",
+							Optional:    true,
+							Description: `judge; its presence turns multi-review on`,
+							Type:        smd.Integer,
 						},
 						{
 							Name:     "prompt",
@@ -513,6 +591,18 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Name:     "slackChannel",
 							Optional: true,
 							Ref:      "#/definitions/SlackChannelSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "runnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "judgeRunnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
 							Type:     smd.Object,
 						},
 						{
@@ -599,11 +689,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -631,8 +716,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "webhookURL",
+									Name:     "status",
+									Optional: true,
+									Ref:      "#/definitions/Status",
+									Type:     smd.Object,
+								},
+							},
+						},
+						"RunnerProfileSummary": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
 									Type: smd.String,
+								},
+								{
+									Name: "runner",
+									Type: smd.String,
+								},
+								{
+									Name:     "model",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name:     "effort",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name: "isDefault",
+									Type: smd.Boolean,
 								},
 								{
 									Name:     "status",
@@ -693,6 +811,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.Integer,
 							},
 							{
+								Name:     "runnerProfileId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
 								Name: "statusId",
 								Type: smd.Integer,
 							},
@@ -700,6 +823,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "instructions",
 								Optional: true,
 								Type:     smd.String,
+							},
+							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
 							},
 							{
 								Name:     "prompt",
@@ -717,6 +854,18 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "slackChannel",
 								Optional: true,
 								Ref:      "#/definitions/SlackChannelSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,
 							},
 							{
@@ -803,11 +952,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -835,8 +979,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "webhookURL",
+										Name:     "status",
+										Optional: true,
+										Ref:      "#/definitions/Status",
+										Type:     smd.Object,
+									},
+								},
+							},
+							"RunnerProfileSummary": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "title",
 										Type: smd.String,
+									},
+									{
+										Name: "runner",
+										Type: smd.String,
+									},
+									{
+										Name:     "model",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name:     "effort",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name: "isDefault",
+										Type: smd.Boolean,
 									},
 									{
 										Name:     "status",
@@ -890,6 +1067,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Type:     smd.Integer,
 						},
 						{
+							Name:     "runnerProfileId",
+							Optional: true,
+							Type:     smd.Integer,
+						},
+						{
 							Name: "statusId",
 							Type: smd.Integer,
 						},
@@ -897,6 +1079,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Name:     "instructions",
 							Optional: true,
 							Type:     smd.String,
+						},
+						{
+							Name:        "runnerProfileIds",
+							Description: `additional panel members (ordered, duplicates allowed)`,
+							Type:        smd.Array,
+							Items: map[string]string{
+								"type": smd.Integer,
+							},
+						},
+						{
+							Name:        "judgeRunnerProfileId",
+							Optional:    true,
+							Description: `judge; its presence turns multi-review on`,
+							Type:        smd.Integer,
 						},
 						{
 							Name:     "prompt",
@@ -914,6 +1110,18 @@ func (ProjectService) SMD() smd.ServiceInfo {
 							Name:     "slackChannel",
 							Optional: true,
 							Ref:      "#/definitions/SlackChannelSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "runnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
+							Type:     smd.Object,
+						},
+						{
+							Name:     "judgeRunnerProfile",
+							Optional: true,
+							Ref:      "#/definitions/RunnerProfileSummary",
 							Type:     smd.Object,
 						},
 						{
@@ -1000,11 +1208,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -1032,8 +1235,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "webhookURL",
+									Name:     "status",
+									Optional: true,
+									Ref:      "#/definitions/Status",
+									Type:     smd.Object,
+								},
+							},
+						},
+						"RunnerProfileSummary": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
 									Type: smd.String,
+								},
+								{
+									Name: "runner",
+									Type: smd.String,
+								},
+								{
+									Name:     "model",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name:     "effort",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name: "isDefault",
+									Type: smd.Boolean,
 								},
 								{
 									Name:     "status",
@@ -1093,6 +1329,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.Integer,
 							},
 							{
+								Name:     "runnerProfileId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
 								Name: "statusId",
 								Type: smd.Integer,
 							},
@@ -1100,6 +1341,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "instructions",
 								Optional: true,
 								Type:     smd.String,
+							},
+							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
 							},
 							{
 								Name:     "prompt",
@@ -1117,6 +1372,18 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "slackChannel",
 								Optional: true,
 								Ref:      "#/definitions/SlackChannelSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,
 							},
 							{
@@ -1203,11 +1470,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -1235,8 +1497,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "webhookURL",
+										Name:     "status",
+										Optional: true,
+										Ref:      "#/definitions/Status",
+										Type:     smd.Object,
+									},
+								},
+							},
+							"RunnerProfileSummary": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "title",
 										Type: smd.String,
+									},
+									{
+										Name: "runner",
+										Type: smd.String,
+									},
+									{
+										Name:     "model",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name:     "effort",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name: "isDefault",
+										Type: smd.Boolean,
 									},
 									{
 										Name:     "status",
@@ -1353,6 +1648,11 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Type:     smd.Integer,
 							},
 							{
+								Name:     "runnerProfileId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
 								Name: "statusId",
 								Type: smd.Integer,
 							},
@@ -1360,6 +1660,20 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "instructions",
 								Optional: true,
 								Type:     smd.String,
+							},
+							{
+								Name:        "runnerProfileIds",
+								Description: `additional panel members (ordered, duplicates allowed)`,
+								Type:        smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+							{
+								Name:        "judgeRunnerProfileId",
+								Optional:    true,
+								Description: `judge; its presence turns multi-review on`,
+								Type:        smd.Integer,
 							},
 							{
 								Name:     "prompt",
@@ -1377,6 +1691,18 @@ func (ProjectService) SMD() smd.ServiceInfo {
 								Name:     "slackChannel",
 								Optional: true,
 								Ref:      "#/definitions/SlackChannelSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "runnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
+								Type:     smd.Object,
+							},
+							{
+								Name:     "judgeRunnerProfile",
+								Optional: true,
+								Ref:      "#/definitions/RunnerProfileSummary",
 								Type:     smd.Object,
 							},
 							{
@@ -1463,11 +1789,6 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name:     "authToken",
-										Optional: true,
-										Type:     smd.String,
-									},
-									{
 										Name: "fetchPrompt",
 										Type: smd.String,
 									},
@@ -1495,8 +1816,41 @@ func (ProjectService) SMD() smd.ServiceInfo {
 										Type: smd.String,
 									},
 									{
-										Name: "webhookURL",
+										Name:     "status",
+										Optional: true,
+										Ref:      "#/definitions/Status",
+										Type:     smd.Object,
+									},
+								},
+							},
+							"RunnerProfileSummary": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "title",
 										Type: smd.String,
+									},
+									{
+										Name: "runner",
+										Type: smd.String,
+									},
+									{
+										Name:     "model",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name:     "effort",
+										Optional: true,
+										Type:     smd.String,
+									},
+									{
+										Name: "isDefault",
+										Type: smd.Boolean,
 									},
 									{
 										Name:     "status",
@@ -2590,11 +2944,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "webhookURL",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
 								Name:     "statusId",
 								Optional: true,
 								Type:     smd.Integer,
@@ -2639,11 +2988,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "channel",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
-								Name:     "webhookURL",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -2715,10 +3059,6 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name: "webhookURL",
-									Type: smd.String,
-								},
-								{
 									Name:     "status",
 									Optional: true,
 									Ref:      "#/definitions/Status",
@@ -2777,8 +3117,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "webhookURL",
-							Type: smd.String,
+							Name:        "webhookURL",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "webhookURLMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasWebhookURL",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "statusId",
@@ -2838,8 +3190,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -2892,8 +3256,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name: "webhookURL",
-							Type: smd.String,
+							Name:        "webhookURL",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "webhookURLMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasWebhookURL",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "statusId",
@@ -2952,8 +3328,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -3039,8 +3427,20 @@ func (SlackChannelService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name: "webhookURL",
-								Type: smd.String,
+								Name:        "webhookURL",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "webhookURLMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasWebhookURL",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "statusId",
@@ -3303,11 +3703,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type:     smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
 								Name:     "fetchPrompt",
 								Optional: true,
 								Type:     smd.String,
@@ -3357,11 +3752,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							},
 							{
 								Name:     "url",
-								Optional: true,
-								Type:     smd.String,
-							},
-							{
-								Name:     "authToken",
 								Optional: true,
 								Type:     smd.String,
 							},
@@ -3438,11 +3828,6 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 									Type: smd.String,
 								},
 								{
-									Name:     "authToken",
-									Optional: true,
-									Type:     smd.String,
-								},
-								{
 									Name: "fetchPrompt",
 									Type: smd.String,
 								},
@@ -3505,9 +3890,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name:     "authToken",
-							Optional: true,
-							Type:     smd.String,
+							Name:        "authToken",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "fetchPrompt",
@@ -3571,9 +3967,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",
@@ -3630,9 +4037,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 							Type: smd.String,
 						},
 						{
-							Name:     "authToken",
-							Optional: true,
-							Type:     smd.String,
+							Name:        "authToken",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
 						},
 						{
 							Name: "fetchPrompt",
@@ -3695,9 +4113,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",
@@ -3787,9 +4216,20 @@ func (TaskTrackerService) SMD() smd.ServiceInfo {
 								Type: smd.String,
 							},
 							{
-								Name:     "authToken",
-								Optional: true,
-								Type:     smd.String,
+								Name:        "authToken",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
 							},
 							{
 								Name: "fetchPrompt",
@@ -4019,6 +4459,969 @@ func (s TaskTrackerService) Invoke(ctx context.Context, method string, params js
 		}
 
 		resp.Set(s.Validate(ctx, args.TaskTracker))
+
+	default:
+		resp = zenrpc.NewResponseError(nil, zenrpc.MethodNotFound, "", nil)
+	}
+
+	return resp
+}
+
+func (RunnerProfileService) SMD() smd.ServiceInfo {
+	return smd.ServiceInfo{
+		Methods: map[string]smd.Service{
+			"Count": {
+				Description: `Count returns count RunnerProfiles according to conditions in search params.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "search",
+						Optional:    true,
+						Description: `RunnerProfileSearch`,
+						Type:        smd.Object,
+						TypeName:    "RunnerProfileSearch",
+						Properties: smd.PropertyList{
+							{
+								Name:     "id",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
+								Name:     "title",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "runner",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "statusId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
+								Name: "ids",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+						},
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `int`,
+					Type:        smd.Integer,
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+				},
+			},
+			"Get": {
+				Description: `Get returns а list of RunnerProfiles according to conditions in search params.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "search",
+						Optional:    true,
+						Description: `RunnerProfileSearch`,
+						Type:        smd.Object,
+						TypeName:    "RunnerProfileSearch",
+						Properties: smd.PropertyList{
+							{
+								Name:     "id",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
+								Name:     "title",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "runner",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "statusId",
+								Optional: true,
+								Type:     smd.Integer,
+							},
+							{
+								Name: "ids",
+								Type: smd.Array,
+								Items: map[string]string{
+									"type": smd.Integer,
+								},
+							},
+						},
+					},
+					{
+						Name:        "viewOps",
+						Optional:    true,
+						Description: `ViewOps`,
+						Type:        smd.Object,
+						TypeName:    "ViewOps",
+						Properties: smd.PropertyList{
+							{
+								Name:        "page",
+								Description: `page number, default - 1`,
+								Type:        smd.Integer,
+							},
+							{
+								Name:        "pageSize",
+								Description: `items count per page, max - 500`,
+								Type:        smd.Integer,
+							},
+							{
+								Name:        "sortColumn",
+								Description: `sort by column name`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "sortDesc",
+								Description: `descending sort`,
+								Type:        smd.Boolean,
+							},
+						},
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `[]RunnerProfileSummary`,
+					Type:        smd.Array,
+					TypeName:    "[]RunnerProfileSummary",
+					Items: map[string]string{
+						"$ref": "#/definitions/RunnerProfileSummary",
+					},
+					Definitions: map[string]smd.Definition{
+						"RunnerProfileSummary": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+								{
+									Name: "runner",
+									Type: smd.String,
+								},
+								{
+									Name:     "model",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name:     "effort",
+									Optional: true,
+									Type:     smd.String,
+								},
+								{
+									Name: "isDefault",
+									Type: smd.Boolean,
+								},
+								{
+									Name:     "status",
+									Optional: true,
+									Ref:      "#/definitions/Status",
+									Type:     smd.Object,
+								},
+							},
+						},
+						"Status": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "alias",
+									Type: smd.String,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+							},
+						},
+					},
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+				},
+			},
+			"GetByID": {
+				Description: `GetByID returns a RunnerProfile by its ID.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "id",
+						Description: `int`,
+						Type:        smd.Integer,
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `RunnerProfile`,
+					Optional:    true,
+					Type:        smd.Object,
+					TypeName:    "RunnerProfile",
+					Properties: smd.PropertyList{
+						{
+							Name: "id",
+							Type: smd.Integer,
+						},
+						{
+							Name: "title",
+							Type: smd.String,
+						},
+						{
+							Name: "runner",
+							Type: smd.String,
+						},
+						{
+							Name:     "model",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "effort",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "apiProvider",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "apiBaseURL",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:        "token",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
+						},
+						{
+							Name: "params",
+							Ref:  "#/definitions/RunnerProfileParams",
+							Type: smd.Object,
+						},
+						{
+							Name: "isDefault",
+							Type: smd.Boolean,
+						},
+						{
+							Name: "statusId",
+							Type: smd.Integer,
+						},
+						{
+							Name:     "status",
+							Optional: true,
+							Ref:      "#/definitions/Status",
+							Type:     smd.Object,
+						},
+					},
+					Definitions: map[string]smd.Definition{
+						"RunnerProfileParams": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "allowDangerousPermissions",
+									Type: smd.Boolean,
+								},
+							},
+						},
+						"Status": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "alias",
+									Type: smd.String,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+							},
+						},
+					},
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+					404: "Not Found",
+				},
+			},
+			"Add": {
+				Description: `Add adds a RunnerProfile from the query.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "runnerProfile",
+						Description: `RunnerProfile`,
+						Type:        smd.Object,
+						TypeName:    "RunnerProfile",
+						Properties: smd.PropertyList{
+							{
+								Name: "id",
+								Type: smd.Integer,
+							},
+							{
+								Name: "title",
+								Type: smd.String,
+							},
+							{
+								Name: "runner",
+								Type: smd.String,
+							},
+							{
+								Name:     "model",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "effort",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiProvider",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiBaseURL",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:        "token",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
+							},
+							{
+								Name: "params",
+								Ref:  "#/definitions/RunnerProfileParams",
+								Type: smd.Object,
+							},
+							{
+								Name: "isDefault",
+								Type: smd.Boolean,
+							},
+							{
+								Name: "statusId",
+								Type: smd.Integer,
+							},
+							{
+								Name:     "status",
+								Optional: true,
+								Ref:      "#/definitions/Status",
+								Type:     smd.Object,
+							},
+						},
+						Definitions: map[string]smd.Definition{
+							"RunnerProfileParams": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
+									},
+								},
+							},
+							"Status": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "alias",
+										Type: smd.String,
+									},
+									{
+										Name: "title",
+										Type: smd.String,
+									},
+								},
+							},
+						},
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `RunnerProfile`,
+					Optional:    true,
+					Type:        smd.Object,
+					TypeName:    "RunnerProfile",
+					Properties: smd.PropertyList{
+						{
+							Name: "id",
+							Type: smd.Integer,
+						},
+						{
+							Name: "title",
+							Type: smd.String,
+						},
+						{
+							Name: "runner",
+							Type: smd.String,
+						},
+						{
+							Name:     "model",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "effort",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "apiProvider",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:     "apiBaseURL",
+							Optional: true,
+							Type:     smd.String,
+						},
+						{
+							Name:        "token",
+							Optional:    true,
+							Description: `write-only: nil on read, set-or-keep on write`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "tokenMasked",
+							Description: `read-only masked display`,
+							Type:        smd.String,
+						},
+						{
+							Name:        "hasToken",
+							Description: `read-only`,
+							Type:        smd.Boolean,
+						},
+						{
+							Name: "params",
+							Ref:  "#/definitions/RunnerProfileParams",
+							Type: smd.Object,
+						},
+						{
+							Name: "isDefault",
+							Type: smd.Boolean,
+						},
+						{
+							Name: "statusId",
+							Type: smd.Integer,
+						},
+						{
+							Name:     "status",
+							Optional: true,
+							Ref:      "#/definitions/Status",
+							Type:     smd.Object,
+						},
+					},
+					Definitions: map[string]smd.Definition{
+						"RunnerProfileParams": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "allowDangerousPermissions",
+									Type: smd.Boolean,
+								},
+							},
+						},
+						"Status": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "id",
+									Type: smd.Integer,
+								},
+								{
+									Name: "alias",
+									Type: smd.String,
+								},
+								{
+									Name: "title",
+									Type: smd.String,
+								},
+							},
+						},
+					},
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+					400: "Validation Error",
+				},
+			},
+			"Update": {
+				Description: `Update updates the RunnerProfile data identified by id from the query.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:     "runnerProfile",
+						Type:     smd.Object,
+						TypeName: "RunnerProfile",
+						Properties: smd.PropertyList{
+							{
+								Name: "id",
+								Type: smd.Integer,
+							},
+							{
+								Name: "title",
+								Type: smd.String,
+							},
+							{
+								Name: "runner",
+								Type: smd.String,
+							},
+							{
+								Name:     "model",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "effort",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiProvider",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiBaseURL",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:        "token",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
+							},
+							{
+								Name: "params",
+								Ref:  "#/definitions/RunnerProfileParams",
+								Type: smd.Object,
+							},
+							{
+								Name: "isDefault",
+								Type: smd.Boolean,
+							},
+							{
+								Name: "statusId",
+								Type: smd.Integer,
+							},
+							{
+								Name:     "status",
+								Optional: true,
+								Ref:      "#/definitions/Status",
+								Type:     smd.Object,
+							},
+						},
+						Definitions: map[string]smd.Definition{
+							"RunnerProfileParams": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
+									},
+								},
+							},
+							"Status": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "alias",
+										Type: smd.String,
+									},
+									{
+										Name: "title",
+										Type: smd.String,
+									},
+								},
+							},
+						},
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `RunnerProfile`,
+					Type:        smd.Boolean,
+					TypeName:    "RunnerProfile",
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+					400: "Validation Error",
+					404: "Not Found",
+				},
+			},
+			"Delete": {
+				Description: `Delete deletes the RunnerProfile by its ID.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "id",
+						Description: `int`,
+						Type:        smd.Integer,
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `isDeleted`,
+					Type:        smd.Boolean,
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+					400: "Validation Error",
+					404: "Not Found",
+				},
+			},
+			"Validate": {
+				Description: `Validate verifies that RunnerProfile data is valid.`,
+				Parameters: []smd.JSONSchema{
+					{
+						Name:        "runnerProfile",
+						Description: `RunnerProfile`,
+						Type:        smd.Object,
+						TypeName:    "RunnerProfile",
+						Properties: smd.PropertyList{
+							{
+								Name: "id",
+								Type: smd.Integer,
+							},
+							{
+								Name: "title",
+								Type: smd.String,
+							},
+							{
+								Name: "runner",
+								Type: smd.String,
+							},
+							{
+								Name:     "model",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "effort",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiProvider",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:     "apiBaseURL",
+								Optional: true,
+								Type:     smd.String,
+							},
+							{
+								Name:        "token",
+								Optional:    true,
+								Description: `write-only: nil on read, set-or-keep on write`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "tokenMasked",
+								Description: `read-only masked display`,
+								Type:        smd.String,
+							},
+							{
+								Name:        "hasToken",
+								Description: `read-only`,
+								Type:        smd.Boolean,
+							},
+							{
+								Name: "params",
+								Ref:  "#/definitions/RunnerProfileParams",
+								Type: smd.Object,
+							},
+							{
+								Name: "isDefault",
+								Type: smd.Boolean,
+							},
+							{
+								Name: "statusId",
+								Type: smd.Integer,
+							},
+							{
+								Name:     "status",
+								Optional: true,
+								Ref:      "#/definitions/Status",
+								Type:     smd.Object,
+							},
+						},
+						Definitions: map[string]smd.Definition{
+							"RunnerProfileParams": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "allowDangerousPermissions",
+										Type: smd.Boolean,
+									},
+								},
+							},
+							"Status": {
+								Type: "object",
+								Properties: smd.PropertyList{
+									{
+										Name: "id",
+										Type: smd.Integer,
+									},
+									{
+										Name: "alias",
+										Type: smd.String,
+									},
+									{
+										Name: "title",
+										Type: smd.String,
+									},
+								},
+							},
+						},
+					},
+				},
+				Returns: smd.JSONSchema{
+					Description: `[]FieldError`,
+					Type:        smd.Array,
+					TypeName:    "[]FieldError",
+					Items: map[string]string{
+						"$ref": "#/definitions/FieldError",
+					},
+					Definitions: map[string]smd.Definition{
+						"FieldError": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name: "field",
+									Type: smd.String,
+								},
+								{
+									Name: "error",
+									Type: smd.String,
+								},
+								{
+									Name:        "constraint",
+									Optional:    true,
+									Description: `Help with generating an error message.`,
+									Ref:         "#/definitions/FieldErrorConstraint",
+									Type:        smd.Object,
+								},
+							},
+						},
+						"FieldErrorConstraint": {
+							Type: "object",
+							Properties: smd.PropertyList{
+								{
+									Name:        "max",
+									Description: `Max value for field.`,
+									Type:        smd.Integer,
+								},
+								{
+									Name:        "min",
+									Description: `Min value for field.`,
+									Type:        smd.Integer,
+								},
+							},
+						},
+					},
+				},
+				Errors: map[int]string{
+					500: "Internal Error",
+				},
+			},
+		},
+	}
+}
+
+// Invoke is as generated code from zenrpc cmd
+func (s RunnerProfileService) Invoke(ctx context.Context, method string, params json.RawMessage) zenrpc.Response {
+	resp := zenrpc.Response{}
+	var err error
+
+	switch method {
+	case RPC.RunnerProfileService.Count:
+		var args = struct {
+			Search *RunnerProfileSearch `json:"search"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"search"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Count(ctx, args.Search))
+
+	case RPC.RunnerProfileService.Get:
+		var args = struct {
+			Search  *RunnerProfileSearch `json:"search"`
+			ViewOps *ViewOps             `json:"viewOps"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"search", "viewOps"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Get(ctx, args.Search, args.ViewOps))
+
+	case RPC.RunnerProfileService.GetByID:
+		var args = struct {
+			Id int `json:"id"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"id"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.GetByID(ctx, args.Id))
+
+	case RPC.RunnerProfileService.Add:
+		var args = struct {
+			RunnerProfile RunnerProfile `json:"runnerProfile"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"runnerProfile"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Add(ctx, args.RunnerProfile))
+
+	case RPC.RunnerProfileService.Update:
+		var args = struct {
+			RunnerProfile RunnerProfile `json:"runnerProfile"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"runnerProfile"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Update(ctx, args.RunnerProfile))
+
+	case RPC.RunnerProfileService.Delete:
+		var args = struct {
+			Id int `json:"id"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"id"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Delete(ctx, args.Id))
+
+	case RPC.RunnerProfileService.Validate:
+		var args = struct {
+			RunnerProfile RunnerProfile `json:"runnerProfile"`
+		}{}
+
+		if zenrpc.IsArray(params) {
+			if params, err = zenrpc.ConvertToObject([]string{"runnerProfile"}, params); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &args); err != nil {
+				return zenrpc.NewResponseError(nil, zenrpc.InvalidParams, "", err.Error())
+			}
+		}
+
+		resp.Set(s.Validate(ctx, args.RunnerProfile))
 
 	default:
 		resp = zenrpc.NewResponseError(nil, zenrpc.MethodNotFound, "", nil)

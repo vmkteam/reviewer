@@ -1,7 +1,7 @@
 <template>
   <select
     :value="modelValue"
-    class="px-3 py-1.5 text-sm bg-surface border border-edge rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors"
+    class="app-select cursor-pointer px-3 py-1.5 text-sm bg-surface border border-edge rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors"
     v-bind="$attrs"
     @change="onChange"
   >
