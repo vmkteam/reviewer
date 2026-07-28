@@ -38,7 +38,7 @@
       <rule pattern="#.*?\n">
         <token type="Comment"/>
       </rule>
-      <rule pattern="@.*?\n">
+      <rule pattern="^@.*?\n">
         <token type="CommentPreproc"/>
       </rule>
       <rule pattern="(body)(\s+)(\S+)(\s+)(control)">
@@ -70,24 +70,18 @@
           <token type="NameFunction"/>
         </bygroups>
       </rule>
-      <rule pattern="(&#34;)([^&#34;]+)(&#34;)(\s+)(string|slist|int|real)(\s*)(=&gt;)(\s*)">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="NameVariable"/>
-          <token type="Punctuation"/>
-          <token type="Text"/>
-          <token type="KeywordType"/>
-          <token type="Text"/>
-          <token type="Operator"/>
-          <token type="Text"/>
-        </bygroups>
-      </rule>
       <rule pattern="(\S+)(\s*)(=&gt;)(\s*)">
         <bygroups>
           <token type="KeywordReserved"/>
           <token type="Text"/>
           <token type="Operator"/>
           <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([\w.!&amp;|()&#34;&#36;]+)(::)">
+        <bygroups>
+          <token type="NameClass"/>
+          <token type="Punctuation"/>
         </bygroups>
       </rule>
       <rule pattern="&#34;">
@@ -108,12 +102,6 @@
           <token type="Punctuation"/>
         </bygroups>
       </rule>
-      <rule pattern="([\w.!&amp;|()]+)(::)">
-        <bygroups>
-          <token type="NameClass"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
       <rule pattern="(\w+)(:)">
         <bygroups>
           <token type="KeywordDeclaration"/>
@@ -121,6 +109,9 @@
         </bygroups>
       </rule>
       <rule pattern="@[{(][^)}]+[})]">
+        <token type="NameVariable"/>
+      </rule>
+      <rule pattern="\$[(][^)]+[)]">
         <token type="NameVariable"/>
       </rule>
       <rule pattern="[(){},;]">

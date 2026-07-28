@@ -147,6 +147,10 @@ func (t Type) DefaultTmpl() string {
 		}
 	}
 
+	if result == "null" && !t.Optional {
+		result = "null!"
+	}
+
 	return result
 }
 
@@ -337,6 +341,10 @@ func convertTSType(models *tsModels, interfacesCache map[string]interface{}, in 
 			Type:        d.Type,
 			Properties:  d.Properties,
 		}, typeMapper)
+	}
+
+	if result.Optional {
+		result.Type += " | null"
 	}
 
 	// apply hook

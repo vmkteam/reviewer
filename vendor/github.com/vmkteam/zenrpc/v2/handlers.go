@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b, err := json.Marshal(s.SMD())
 		s.printErr("json marshal", err)
 
+		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
 		_, err = w.Write(b)
 		s.printErr("response write", err)
 		return
@@ -94,6 +96,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// write response
 	w.Header().Set("Content-Type", contentTypeJSON)
+	w.Header().Set("Content-Length", strconv.Itoa(len(resp)))
 	if _, err = w.Write(resp); err != nil {
 		s.printErr("response write", err)
 		s.httpError(w, http.StatusInternalServerError)
@@ -146,16 +149,18 @@ func (s *Server) ServeWS(w http.ResponseWriter, r *http.Request) {
 // This provides a web-based interface for exploring and testing the JSON-RPC API.
 func SMDBoxHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(`
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SMD Box</title>
-    <link rel="stylesheet" href="https://bootswatch.com/3/paper/bootstrap.min.css">
-	<link href="https://cdn.jsdelivr.net/gh/vmkteam/smdbox@latest/dist/app.css" rel="stylesheet"></head>
-<body>
-<div id="json-rpc-root"></div>
-<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/vmkteam/smdbox@latest/dist/app.js"></script></body>
+    <link rel="stylesheet" href="https://vmkteam.github.io/smdbox/app.css" />
+  </head>
+  <body>
+    <div id="json-rpc-root"></div>
+    <script src="https://vmkteam.github.io/smdbox/app.js"></script>
+  </body>
 </html>
 	`))
 }

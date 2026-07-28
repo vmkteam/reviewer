@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"unicode"
 
 	"github.com/vmkteam/zenrpc/v2/smd"
 
@@ -133,17 +132,28 @@ func (s *Server) SetLogger(printer Printer) {
 }
 
 // process processes JSON-RPC 2.0 message, invokes correct method for namespace and returns JSON-RPC 2.0 Response.
-func (s *Server) process(ctx context.Context, message json.RawMessage) interface{} {
-	var requests []Request
+func (s *Server) process(ctx context.Context, message json.RawMessage) any {
 	// parsing batch requests
 	batch := IsArray(message)
 
-	// making not batch request looks like batch to simplify further code
+	// fast path: single request — parse directly without wrapping in array
 	if !batch {
-		message = append(append([]byte{'['}, message...), ']')
+		var req Request
+		if err := json.Unmarshal(message, &req); err != nil {
+			return NewResponseError(nil, ParseError, "", nil)
+		}
+
+		if req.ID == nil {
+			// notification — fire and forget
+			go s.processRequest(ctx, req)
+			return nil
+		}
+
+		return s.processRequest(ctx, req)
 	}
 
-	// unmarshal request(s)
+	// batch path
+	var requests []Request
 	if err := json.Unmarshal(message, &requests); err != nil {
 		return NewResponseError(nil, ParseError, "", nil)
 	}
@@ -156,14 +166,7 @@ func (s *Server) process(ctx context.Context, message json.RawMessage) interface
 	}
 
 	// set batch methods in request
-	if batch {
-		ctx = newBatchMethodsContext(ctx, methodsFromRequests(requests))
-	}
-
-	// process single request: if request single and not notification  - just run it and return result
-	if !batch && requests[0].ID != nil {
-		return s.processRequest(ctx, requests[0])
-	}
+	ctx = newBatchMethodsContext(ctx, methodsFromRequests(requests))
 
 	// process batch requests
 	if res := s.processBatch(ctx, requests); len(res) > 0 {
@@ -223,10 +226,9 @@ func (s *Server) processRequest(ctx context.Context, req Request) Response {
 
 	// convert method to lower and find namespace
 	lowerM := strings.ToLower(req.Method)
-	sp := strings.SplitN(lowerM, ".", 2)
-	namespace, method := "", lowerM
-	if len(sp) == 2 {
-		namespace, method = sp[0], sp[1]
+	namespace, method, found := strings.Cut(lowerM, ".")
+	if !found {
+		namespace, method = "", namespace
 	}
 
 	if _, ok := s.services[namespace]; !ok {
@@ -306,7 +308,7 @@ func (s *Server) SMD() smd.Schema {
 // IsArray checks json message if it arrays or object.
 func IsArray(message json.RawMessage) bool {
 	for _, b := range message {
-		if unicode.IsSpace(rune(b)) {
+		if b == ' ' || b == '\t' || b == '\n' || b == '\r' {
 			continue
 		}
 
@@ -333,33 +335,20 @@ func ConvertToObject(keys []string, params json.RawMessage) (json.RawMessage, er
 		return nil, fmt.Errorf("invalid params number, expected %d, got %d", paramCount, len(rawParams))
 	}
 
-	buf := bytes.Buffer{}
-	if _, err := buf.WriteString(`{`); err != nil {
-		return nil, err
-	}
+	buf := bytes.NewBuffer(make([]byte, 0, len(params)+64))
+	buf.WriteByte('{')
 
 	for i, p := range rawParams {
-		// Writing key
-		if _, err := buf.WriteString(`"` + keys[i] + `":`); err != nil {
-			return nil, err
+		if i > 0 {
+			buf.WriteByte(',')
 		}
-
-		// Writing value
-		if _, err := buf.Write(p); err != nil {
-			return nil, err
-		}
-
-		// Writing trailing comma if not last argument
-		if i != rawParamCount-1 {
-			if _, err := buf.WriteString(`,`); err != nil {
-				return nil, err
-			}
-		}
+		buf.WriteByte('"')
+		buf.WriteString(keys[i])
+		buf.WriteString(`":`)
+		buf.Write(p)
 	}
 
-	if _, err := buf.WriteString(`}`); err != nil {
-		return nil, err
-	}
+	buf.WriteByte('}')
 
 	return buf.Bytes(), nil
 }
