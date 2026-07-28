@@ -187,10 +187,24 @@ const localRunProject = ref<ProjectSummary | null>(null)
 const localRunCopied = ref(false)
 
 // Base image (Claude Code CLI + settings + HTML template) is built by
-// vmkteam/docker-claude-ci. We only layer the latest reviewctl release on top.
+// vmkteam/docker-claude-ci. We layer ast-index (AST navigation for the direct
+// runner) and the latest reviewctl release on top.
 // Build this, push to your registry, then point the template's `dockerimage` at it.
 const dockerfileContent = `# Claude Code CLI + settings, built by vmkteam/docker-claude-ci.
 FROM vmkteam/claude-ci:latest
+
+# ast-index — AST navigation for the direct runner's ast_* tools.
+# Static-pie binary, works on musl/alpine as is; optional (skipped when absent).
+ARG AST_INDEX_VERSION=v3.49.2
+RUN set -eux; \\
+    case "$(uname -m)" in \\
+      x86_64)  arch=x86_64 ;; \\
+      aarch64) arch=arm64 ;; \\
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \\
+    esac; \\
+    curl -fsSL "https://github.com/defendend/Claude-ast-index-search/releases/download/\${AST_INDEX_VERSION}/ast-index-\${AST_INDEX_VERSION}-linux-\${arch}.tar.gz" \\
+      | tar -xz -C /usr/local/bin ast-index; \\
+    ast-index version
 
 # reviewctl — always the latest release from GitHub.
 RUN set -eux; \\
