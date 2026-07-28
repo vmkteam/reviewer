@@ -1,12 +1,12 @@
 # reviewctl
 
-Go CLI orchestrator for AI code review. Single binary for the full review cycle: prompt → Claude → upload → MR comments → HTML.
+Go CLI orchestrator for AI code review. Single binary for the full review cycle: prompt → runner (claude / opencode / codex / direct) → upload → MR comments → HTML.
 
 ## Subcommands
 
 | Command | Description |
 |---------|-------------|
-| `reviewctl review` | Full cycle: fetch prompt → Claude → parse → upload → MR comment → HTML |
+| `reviewctl review` | Full cycle: fetch prompt → runner → parse → upload → MR comment → HTML |
 | `reviewctl upload` | Upload local `review.json` + `R*.md` to server |
 | `reviewctl comment` | Post MR comments for an existing review |
 | `reviewctl version` | Print version |
@@ -43,7 +43,7 @@ Most flags have an environment-variable default for CI.
 |------|-------------|---------|-------------|
 | `--runner` | `$REVIEW_RUNNER` | `claude` | Runner: `claude` \| `opencode` \| `codex` \| `direct` |
 | `--model` | `$REVIEW_MODEL` | *runner default* | Model name |
-| `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort for the `direct` Anthropic runner: `low`..`max` |
+| `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort `low`..`max` (honored by the `claude` and `direct` Anthropic runners; others ignore it) |
 | `--api-provider` | `$REVIEW_API_PROVIDER` | `deepseek` | `direct` runner provider: `deepseek` \| `openai-compat` \| `anthropic` |
 | `--api-base-url` | `$REVIEW_API_BASE_URL` | *provider default* | `direct` runner API base URL |
 | `--allow-dangerous-permissions` | `$REVIEW_ALLOW_DANGEROUS_PERMISSIONS` | `true` | Pass `--dangerously-skip-permissions` to opencode (needed for unattended CI) |
@@ -94,7 +94,7 @@ review:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
 
-Required CI variables: `PROJECT_KEY`, `REVIEWSRV_URL`, `REVIEWER_GITLAB_TOKEN`. The LLM
+Required CI variables: `PROJECT_KEY`, `REVIEWSRV_URL` (plus `REVIEWER_GITLAB_TOKEN` for MR comments). The LLM
 API key is optional — the runner profile supplies the runner, model and an optional token;
 set `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY`) only
 when the profile has no token.
@@ -122,17 +122,17 @@ reviewctl comment --review-id 42
 
 | File | Description |
 |------|-------------|
-| `review.json` | Structured review data (created by Claude) |
+| `review.json` | Structured review data (created by the runner) |
 | `R1.*.md` — `R5.*.md` | Review files: architecture, code, security, tests, operability |
 | `review.html` | HTML artifact with syntax highlighting and mermaid diagrams |
-| `claude-output.json` | Raw Claude CLI output for diagnostics |
+| `claude-output.json`, `opencode-output.jsonl`, `codex-output.jsonl`, `direct-output.jsonl` | Raw runner transcript for diagnostics (one per runner type) |
 
 ## GitLab MR Comments
 
 When `$REVIEWER_GITLAB_TOKEN` is set, reviewctl posts:
 
 1. **Summary comment** — traffic light, cost, duration, per-type stats, link to full review
-2. **Inline comments** — critical issues as discussions on specific lines with suggested fixes (falls back to plain notes if line is outside diff)
+2. **Inline comments** — critical and high issues as discussions on specific lines with suggested fixes (falls back to plain notes if line is outside diff)
 
 ### Token Setup
 
@@ -167,12 +167,35 @@ go test ./pkg/reviewer/ctl/... # run tests
 
 ## Docker CI Image
 
-```dockerfile
-FROM vmkteam/reviewer:latest AS source
+The base image (Claude Code CLI + settings + HTML template) is built by
+[vmkteam/docker-claude-ci](https://github.com/vmkteam/docker-claude-ci); layer
+`ast-index` and the latest `reviewctl` release on top (the same Dockerfile is
+shown in the admin panel's **CI Setup** dialog):
 
-FROM node:20-alpine
-RUN apk add --no-cache git bash curl
-RUN npm install -g @anthropic-ai/claude-code
-COPY --from=source /reviewctl /usr/local/bin/reviewctl
+```dockerfile
+# Claude Code CLI + settings, built by vmkteam/docker-claude-ci.
+FROM vmkteam/claude-ci:latest
+
+# ast-index — AST navigation for the direct runner's ast_* tools.
+# Static-pie binary, works on musl/alpine as is; optional (skipped when absent).
+ARG AST_INDEX_VERSION=v3.49.2
+RUN set -eux; \
+    case "$(uname -m)" in \
+      x86_64)  arch=x86_64 ;; \
+      aarch64) arch=arm64 ;; \
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/defendend/Claude-ast-index-search/releases/download/${AST_INDEX_VERSION}/ast-index-${AST_INDEX_VERSION}-linux-${arch}.tar.gz" \
+      | tar -xz -C /usr/local/bin ast-index; \
+    ast-index version
+
+# reviewctl — always the latest release from GitHub.
+RUN set -eux; \
+    tag="$(curl -fsSL https://api.github.com/repos/vmkteam/reviewer/releases/latest \
+      | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"; \
+    curl -fsSL "https://github.com/vmkteam/reviewer/releases/download/${tag}/reviewctl_${tag#v}_linux_amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin reviewctl; \
+    reviewctl version
+
 WORKDIR /workspace
 ```

@@ -1,6 +1,6 @@
 # reviewer
 
-AI-powered code review platform using Claude. Collects, stores and displays code review results from CI pipelines.
+AI-powered code review platform. Collects, stores and displays code review results from CI pipelines; reviews run on Claude, Codex, DeepSeek or any OpenAI-compatible LLM via pluggable runners.
 
 ## Features
 
@@ -35,7 +35,7 @@ GitLab CI (merge request)
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - PostgreSQL
 - Node.js 20+ (for frontend build)
 
@@ -159,7 +159,7 @@ Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `dire
 - `claude` (default) — Claude Code CLI, full agentic exploration.
 - `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`.
 - `codex` — `codex exec` CLI (OpenAI Codex), `--model gpt-5.1-codex`.
-- `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast, plus `http_fetch` scoped to the project's task tracker). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`).
+- `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast, plus `http_fetch` scoped to the project's task tracker). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`). The `ast_*` navigation tools shell out to the optional [`ast-index`](https://github.com/defendend/Claude-ast-index-search) binary — auto-detected on `PATH` (the generated CI image installs it), with the index rebuilt per run; when absent the tools are simply not offered.
 
 **Task tracker access:** the tracker token never appears in the prompt. reviewctl fetches it with the review config and hands it to runners out-of-band: CLI runners get it as the `REVIEW_TRACKER_TOKEN` env var (prompts reference `$REVIEW_TRACKER_TOKEN` in curl instructions), the `direct` runner offers the model an `http_fetch` tool locked to the tracker origin that injects the `Authorization` header itself. A `REVIEW_TRACKER_TOKEN` CI variable overrides the server-stored token. Backward compatible in both directions: a legacy reviewctl (which doesn't export the env var) receives the old-style prompt with the token substituted in, and a new reviewctl against an older server falls back to the same legacy prompt.
 
@@ -211,25 +211,33 @@ When deploying behind a reverse proxy, URLs should be split by access level:
 | `/v1/rpc/` | Review JSON-RPC API |
 | `/v1/vt/` | Admin JSON-RPC API |
 
-**Internal (CI only, must not be exposed externally):**
+**Internal (CI and ops only, must not be exposed externally):**
 
 | Path | Description |
 |------|-------------|
 | `/v1/reviewctl/` | reviewctl internal API (config, prompt, upload) |
-| `/v1/upload/` | Deprecated upload aliases (older CI images) |
+| `/v1/upload/` | Deprecated upload aliases + debug bundle upload (older CI images) |
+| `/v1/debug/` | Debug bundle viewer — raw runner transcripts and artifacts |
+| `/debug/` | pprof and service metadata |
+| `/status` | Healthcheck (DB ping) |
 
 Example nginx configuration:
 
 ```nginx
 # Public URLs — accessible within the closed network
-location /reviews/ { proxy_pass http://reviewer:8075; }
-location /vt/       { proxy_pass http://reviewer:8075; }
-location /v1/rpc/   { proxy_pass http://reviewer:8075; }
-location /v1/vt/    { proxy_pass http://reviewer:8075; }
+location = /            { proxy_pass http://reviewer:8075; }  # redirects to /reviews/
+location /reviews/      { proxy_pass http://reviewer:8075; }
+location /vt/           { proxy_pass http://reviewer:8075; }
+location /v1/rpc/       { proxy_pass http://reviewer:8075; }
+location /v1/vt/        { proxy_pass http://reviewer:8075; }
 
-# Internal URLs — accessible only from CI runners
+# Internal URLs — deny on the public proxy; CI runners and monitoring
+# reach the service directly (REVIEWSRV_URL), bypassing this proxy
 location /v1/reviewctl/ { deny all; }
 location /v1/upload/    { deny all; }
+location /v1/debug/     { deny all; }
+location /debug/        { deny all; }
+location /status        { deny all; }
 ```
 
 ## Development
