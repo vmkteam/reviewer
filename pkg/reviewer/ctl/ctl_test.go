@@ -277,6 +277,37 @@ func TestController_Review_FailsOnUnfilledReview(t *testing.T) {
 	assert.Equal(t, "4.175053", dc.field("costUsd"), "both runs are billed")
 }
 
+func TestController_Review_KeepsStep2RetryFailureReason(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		err            error
+		status, reason string
+	}{
+		{"cancelled", context.Canceled, reviewer.RunStatusCancelled, reviewer.RunReasonCancelled},
+		{"billing", reviewer.WithRunReason(reviewer.RunReasonBilling, errors.New("credit balance is too low")), reviewer.RunStatusFailed, reviewer.RunReasonBilling},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, dc := newDebugCaptureServer(t, nil)
+			cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: t.TempDir(), Runner: runner.RunnerClaude}
+			// The run leaves review.json untouched; the Step 2 retry fails.
+			var runs int
+			rr := &testClaudeRunner{fixturePath: "testdata/claude_result.json", beforeRun: func() error {
+				runs++
+				if runs == 2 {
+					return tt.err
+				}
+				return nil
+			}}
+
+			err := NewController(cfg, rr, slog.Default()).Review(context.Background())
+			require.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.status, dc.field("status"))
+			assert.Equal(t, tt.reason, dc.field("reason"))
+			assert.Equal(t, "2.0875265", dc.field("costUsd"), "the first run stays billed")
+		})
+	}
+}
+
 func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 	srv, dc := newDebugCaptureServer(t, nil)
 

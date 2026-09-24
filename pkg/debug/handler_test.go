@@ -186,6 +186,36 @@ func TestHandler_UploadRejectsMalformedGzip(t *testing.T) {
 	}
 }
 
+// The decompressed size is checked once, at upload: File streams a stored
+// artifact without a limit of its own.
+func TestHandler_UploadLimitsDecompressedSize(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		size    int
+		want    int
+		bundles int
+	}{
+		{"at the limit", maxFileBytes, http.StatusOK, 1},
+		{"over the limit", maxFileBytes + 1, http.StatusBadRequest, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			storage, e := newTestHandler(t)
+			body, ct := buildMultipart(t, nil, map[string][]byte{"runner.log": bytes.Repeat([]byte("x"), tt.size)})
+			req := httptest.NewRequest(http.MethodPost, "/v1/upload/debug/"+uuid.NewString()+"/", body)
+			req.Header.Set("Content-Type", ct)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if got := len(storage.List()); got != tt.bundles {
+				t.Errorf("bundles = %d, want %d", got, tt.bundles)
+			}
+		})
+	}
+}
+
 func TestHandler_ListAndBundleHTML(t *testing.T) {
 	storage, e := newTestHandler(t)
 	storage.Add(&Bundle{

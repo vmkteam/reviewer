@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -248,6 +251,19 @@ func TestMemberConfigInheritsTracker(t *testing.T) {
 	assert.True(t, mc.AllowDangerousPermissions)
 }
 
+func TestMemberConfigKeepsPassedMaxRounds(t *testing.T) {
+	member := MemberSpec{Runner: "direct", Model: "m", Profile: &ResolvedProfile{Params: RunnerProfileParams{MaxRounds: 120}}}
+
+	c := NewController(&Config{MaxRounds: 10, MaxRoundsSet: true}, nil, slog.Default())
+	assert.Equal(t, 10, c.memberConfig("/tmp/wt", member).MaxRounds, "--max-rounds overrides the member's profile")
+
+	c = NewController(&Config{MaxRoundsSet: true}, nil, slog.Default())
+	assert.Zero(t, c.memberConfig("/tmp/wt", member).MaxRounds, "an explicit 0 (the default) too")
+
+	c = NewController(&Config{MaxRounds: 10}, nil, slog.Default())
+	assert.Equal(t, 120, c.memberConfig("/tmp/wt", member).MaxRounds, "the primary profile's budget does not")
+}
+
 func TestMemberLabel(t *testing.T) {
 	assert.Equal(t, "1-codex-gpt-5.5", memberLabel(0, MemberSpec{Runner: "codex", Model: "gpt-5.5"}))
 	// duplicates stay distinct by index
@@ -292,6 +308,121 @@ func TestRunJudge_FailureShipsDebugBundle(t *testing.T) {
 	assert.Equal(t, reviewer.RunReasonNotSubmitted, dc.field("reason"))
 	assert.Equal(t, "1", dc.field("costUsd"), "both judge attempts are billed")
 	assert.Equal(t, runner.RunnerClaude, dc.field("runner"))
+}
+
+// uploadCapture answers review uploads with sequential ids and records each
+// one's role; failAt fails that upload (1-based) with a 500.
+type uploadCapture struct {
+	mu     sync.Mutex
+	roles  []string
+	failAt int
+}
+
+func (u *uploadCapture) handle(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.Count(strings.Trim(r.URL.Path, "/"), "/") != 3 { // an R*.md upload
+			return
+		}
+		var d rest.ReviewDraft
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&d)) {
+			return
+		}
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		if len(u.roles)+1 == u.failAt {
+			u.failAt = 0
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		u.roles = append(u.roles, d.Review.ReviewRole)
+		_, _ = w.Write([]byte(strconv.Itoa(len(u.roles))))
+	}
+}
+
+func testOutputs() []*memberOutput {
+	return []*memberOutput{{label: "a", draft: &rest.ReviewDraft{}}, {label: "b", draft: &rest.ReviewDraft{}}}
+}
+
+func TestFuse_JudgeNotStartedUploadsEveryMember(t *testing.T) {
+	uc := &uploadCapture{}
+	srv, dc := newDebugCaptureServer(t, uc.handle(t))
+	// Not a repository: the judge worktree can't be created.
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: t.TempDir(), Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "opus"}}
+
+	id, err := NewController(cfg, nil, slog.Default()).fuse(t.Context(), t.TempDir(), "HEAD", testOutputs())
+	require.NoError(t, err, "a judge failure never fails the panel")
+	assert.Equal(t, 1, id, "the primary member is the review")
+	assert.Equal(t, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}, uc.roles, "every member run is reported")
+	assert.Equal(t, 1, dc.count(), "the judge that never ran is reported too")
+	assert.Equal(t, runner.RunnerClaude, dc.field("runner"))
+	assert.Contains(t, dc.field("errorMsg"), "judge worktree add")
+}
+
+func TestUploadUnfused(t *testing.T) {
+	cause := errors.New("judge failed")
+	for _, tt := range []struct {
+		name    string
+		failAt  int
+		wantErr bool
+		roles   []string
+	}{
+		{"all uploaded", 0, false, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}},
+		{"a lost member upload is tolerated", 2, false, []string{reviewer.ReviewRoleSingle}},
+		{"a lost primary upload fails the panel", 1, true, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			uc := &uploadCapture{failAt: tt.failAt}
+			srv := httptest.NewServer(uc.handle(t))
+			t.Cleanup(srv.Close)
+
+			_, err := NewController(&Config{Key: "k", URL: srv.URL}, nil, slog.Default()).uploadUnfused(t.Context(), testOutputs(), cause)
+			assert.Equal(t, tt.wantErr, err != nil, "err = %v", err)
+			assert.Equal(t, tt.roles, uc.roles)
+		})
+	}
+
+	t.Run("a cancelled job uploads nothing", func(t *testing.T) {
+		uc := &uploadCapture{}
+		srv := httptest.NewServer(uc.handle(t))
+		t.Cleanup(srv.Close)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := NewController(&Config{Key: "k", URL: srv.URL}, nil, slog.Default()).uploadUnfused(ctx, testOutputs(), cause)
+		require.ErrorIs(t, err, cause)
+		assert.Empty(t, uc.roles)
+	})
+}
+
+func TestReviewPanel_JudgeFailureUploadsEveryMember(t *testing.T) {
+	uc := &uploadCapture{}
+	srv, dc := newDebugCaptureServer(t, uc.handle(t))
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-q")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "file.txt"), []byte("hi"), 0o600))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init")
+	profile := &ResolvedProfile{Params: RunnerProfileParams{MaxRounds: 120}}
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: repo, Commit: "HEAD", Runner: runner.RunnerClaude, MaxRounds: 10, MaxRoundsSet: true,
+		Multi: []MemberSpec{{Runner: runner.RunnerClaude, Model: "a", Profile: profile}, {Runner: runner.RunnerCodex, Model: "b", Profile: profile}},
+		Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "j", Profile: profile}}
+	var mu sync.Mutex
+	var maxRounds []int
+	c := NewController(cfg, nil, slog.Default(), WithRunnerFactory(func(mc *Config) (runner.ReviewRunner, error) {
+		mu.Lock()
+		maxRounds = append(maxRounds, mc.MaxRounds)
+		mu.Unlock()
+		if mc.Label == "judge" { // leaves the skeleton untouched, on both attempts
+			return failingRunner{name: runner.RunnerClaude}, nil
+		}
+		return &fakeRunner{name: mc.Runner, dir: mc.Dir}, nil
+	}))
+
+	require.NoError(t, c.Review(t.Context()))
+	assert.Equal(t, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}, uc.roles, "every member run is reported")
+	assert.Equal(t, 1, dc.count(), "one bundle, the judge's")
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, dc.field("reason"))
+	assert.Equal(t, []int{10, 10, 10}, maxRounds, "--max-rounds overrides every member's and the judge's profile")
 }
 
 func TestReviewPanel_ShipsPanelLevelFailure(t *testing.T) {

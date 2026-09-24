@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"reviewsrv/pkg/reviewer"
 
@@ -66,4 +67,14 @@ echo 'AI_APICallError: statusCode: 429' >&2; exit 1`,
 			assert.Equal(t, tt.want, reason)
 		})
 	}
+}
+
+func TestFetchOpenCodeSessionModelIgnoresLeftoverChild(t *testing.T) {
+	setWaitDelay(t, 100*time.Millisecond)
+	// A plugin's background process keeps export's stdout open after it exits.
+	fakeCLI(t, "opencode", `sleep 60 & printf '{"messages":[{"info":{"model":{"providerID":"p","modelID":"m"}}}]}'`)
+
+	start := time.Now()
+	assert.Equal(t, "p/m", fetchOpenCodeSessionModel(t.Context(), slog.New(slog.DiscardHandler), t.TempDir(), "ses_1", nil))
+	assert.Less(t, time.Since(start), 10*time.Second)
 }

@@ -73,7 +73,7 @@ type Handler struct {
 // upload). Either may be nil.
 func NewHandler(storage *Storage, log *slog.Logger, projectTitle func(ctx context.Context, projectKey string) (string, error), metrics *reviewer.RunMetrics) *Handler {
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
-		"shortKey":   shortKey,
+		"shortKey":   reviewer.ShortKey,
 		"preview":    preview,
 		"storageURL": func() string { return StoragePathPrefix },
 	}).ParseFS(templatesFS, "templates/*.html"))
@@ -96,7 +96,7 @@ func (h *Handler) Upload(c echo.Context) error {
 		title, err := h.projectTitle(ctx, projectKey)
 		switch {
 		case err != nil:
-			h.log.ErrorContext(ctx, "debug upload: resolve project", "projectKey", shortKey(projectKey), "err", err)
+			h.log.ErrorContext(ctx, "debug upload: resolve project", "projectKey", reviewer.ShortKey(projectKey), "err", err)
 			return echo.NewHTTPError(http.StatusServiceUnavailable, "resolve project")
 		case title == "":
 			return echo.NewHTTPError(http.StatusNotFound, "unknown project")
@@ -122,9 +122,8 @@ func (h *Handler) Upload(c echo.Context) error {
 		ExternalID:   field(FieldExternalID, maxFieldBytes),
 		Runner:       field(FieldRunner, maxFieldBytes),
 		Model:        field(FieldModel, maxFieldBytes),
-		// The key authorizes project config (runner-profile and tracker
-		// tokens): an upload URL quoted in an error must not reveal it.
-		ErrorMsg:     strings.ReplaceAll(field(FieldErrorMsg, maxErrorMsgBytes), projectKey, shortKey(projectKey)+"…"),
+		// An upload URL quoted in an error must not reveal the key.
+		ErrorMsg:     reviewer.MaskKey(field(FieldErrorMsg, maxErrorMsgBytes), projectKey),
 		SourceBranch: field(FieldSourceBranch, maxFieldBytes),
 		TargetBranch: field(FieldTargetBranch, maxFieldBytes),
 		CommitHash:   field(FieldCommitHash, maxFieldBytes),
@@ -155,7 +154,7 @@ func (h *Handler) Upload(c echo.Context) error {
 	// on that upload: counting its later failure too would double both.
 	counted := b.Status != reviewer.RunStatusOK && b.ReviewID == ""
 	h.log.Log(ctx, lvl, "debug bundle stored",
-		"id", b.ID, "projectKey", shortKey(projectKey), "project", b.ProjectTitle, "files", len(b.Files), "hasError", b.ErrorMsg != "",
+		"id", b.ID, "projectKey", reviewer.ShortKey(projectKey), "project", b.ProjectTitle, "files", len(b.Files), "hasError", b.ErrorMsg != "",
 		"status", b.Status, "reason", b.Reason, "runner", b.Runner, "model", b.Model, "costUsd", b.CostUsd,
 		"reviewId", b.ReviewID, "countedInMetrics", counted, "errorMsg", preview(b.ErrorMsg, 300),
 	)
@@ -292,14 +291,6 @@ func contentTypeFor(name string) string {
 		return "application/json"
 	}
 	return "text/plain; charset=utf-8"
-}
-
-// shortKey returns the first 8 chars of a UUID for compact display.
-func shortKey(s string) string {
-	if len(s) <= 8 {
-		return s
-	}
-	return s[:8]
 }
 
 // preview truncates a string to n bytes, on a rune boundary, for the index

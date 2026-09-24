@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,22 +47,33 @@ func NewUploadClient(log *slog.Logger) *UploadClient {
 	}
 }
 
+// do sends an upload request, masking the project key in the URL that
+// http.Client quotes in a transport error.
+func (c *UploadClient) do(req *http.Request, projectKey string) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		ue.URL = reviewer.MaskKey(ue.URL, projectKey)
+	}
+	return resp, err
+}
+
 // UploadReview uploads review.json and returns the reviewId.
 func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey string, draft *rest.ReviewDraft) (int, error) {
-	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	endpoint := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
 
 	body, err := json.Marshal(draft)
 	if err != nil {
 		return 0, fmt.Errorf("marshal review draft: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("create upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return 0, fmt.Errorf("upload review: %w", err)
 	}
@@ -88,15 +100,15 @@ func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey s
 
 // UploadFile uploads a single review file (markdown content).
 func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey string, reviewID int, reviewType string, content []byte) error {
-	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
+	endpoint := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(content))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(content))
 	if err != nil {
 		return fmt.Errorf("create file upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return fmt.Errorf("upload file %s: %w", reviewType, err)
 	}
@@ -205,14 +217,14 @@ func (c *UploadClient) UploadDebugBundle(ctx context.Context, serverURL, project
 		return "", fmt.Errorf("build multipart: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/upload/debug/%s/", strings.TrimRight(serverURL, "/"), projectKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	endpoint := fmt.Sprintf("%s/v1/upload/debug/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return "", fmt.Errorf("create debug upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", contentType)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return "", fmt.Errorf("post debug bundle: %w", err)
 	}

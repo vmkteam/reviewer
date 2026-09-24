@@ -63,7 +63,7 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) (err erro
 	if c.cfg.Judge != nil {
 		judge = c.cfg.Judge.String()
 	}
-	c.log.InfoContext(ctx, "starting panel review", "projectKey", c.cfg.Key, "members", members, "judge", judge)
+	c.log.InfoContext(ctx, "starting panel review", "projectKey", reviewer.ShortKey(c.cfg.Key), "members", members, "judge", judge)
 
 	prompt, err := c.prompt.FetchPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
@@ -196,27 +196,26 @@ func (c *Controller) finishPanel(ctx context.Context, base, commit string, outpu
 }
 
 // fuse runs the judge over the staged member outputs and uploads one fused
-// review that links the members as children. If the judge fails after a retry,
-// it degrades to a single review from the primary member so CI never goes red on
-// a judge flap.
+// review that links the members as children. If the judge can't run or fails
+// after a retry, it degrades to uploadUnfused so CI never goes red on a judge
+// flap.
 func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*memberOutput) (int, error) {
 	// The judge prompt is a server built-in (served via the reviewctl RPC) so a
 	// future per-project override needs no client change — same as the member prompt.
 	fusionPrompt, err := c.prompt.FetchFusionPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
-		return 0, fmt.Errorf("fetch fusion prompt: %w", err)
+		return c.judgeNotRun(ctx, outputs, fmt.Errorf("fetch fusion prompt: %w", err))
 	}
 
 	judgeDir := filepath.Join(base, "wt-judge")
 	if err = c.gitWorktreeAdd(ctx, judgeDir, commit); err != nil {
-		return 0, fmt.Errorf("judge worktree add: %w", err)
+		return c.judgeNotRun(ctx, outputs, fmt.Errorf("judge worktree add: %w", err))
 	}
 	defer c.gitWorktreeRemove(ctx, judgeDir)
 
 	fusion, err := c.runJudge(ctx, judgeDir, fusionPrompt, outputs)
 	if err != nil {
-		c.log.ErrorContext(ctx, "judge failed, promoting primary member to single", "err", err)
-		return c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+		return c.uploadUnfused(ctx, outputs, err)
 	}
 
 	// Upload members first to get their ids, then the fusion that links them.
@@ -239,6 +238,45 @@ func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*m
 	return id, nil
 }
 
+// judgeNotRun reports a judge that could not start as a failed judge run
+// (runJudge settles only the runs it starts), then degrades to uploadUnfused.
+func (c *Controller) judgeNotRun(ctx context.Context, outputs []*memberOutput, err error) (int, error) {
+	jc := c.judgeConfig("") // no worktree: the bundle carries the error only
+	c.settleRun(ctx, &jc, nil, err)
+	return c.uploadUnfused(ctx, outputs, err)
+}
+
+// uploadUnfused uploads the primary member as a single review and the others
+// as member reviews: only an uploaded review reports an ok run, with its cost,
+// to the server's run metrics. A cancelled job uploads nothing more.
+func (c *Controller) uploadUnfused(ctx context.Context, outputs []*memberOutput, cause error) (int, error) {
+	if ctx.Err() != nil {
+		return 0, cause
+	}
+	c.log.ErrorContext(ctx, "no fused review, promoting primary member to single", "err", cause)
+	id, err := c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+	if err != nil {
+		return 0, err
+	}
+	for _, o := range outputs[1:] {
+		// The review is out: a lost member upload costs its metrics, not the run.
+		mid, err := c.uploadMember(ctx, o, reviewer.ReviewRoleMember)
+		if err != nil {
+			c.log.WarnContext(ctx, "upload unfused member", "member", o.label, "err", err)
+			continue
+		}
+		c.log.InfoContext(ctx, "unfused member uploaded", "member", o.label, "reviewId", mid)
+	}
+	return id, nil
+}
+
+// judgeConfig is the judge's run config, working in dir.
+func (c *Controller) judgeConfig(dir string) Config {
+	jc := c.memberConfig(dir, *c.cfg.Judge)
+	jc.Label = "judge"
+	return jc
+}
+
 // memberConfig clones the base config for one panel member (or the judge): its own
 // working dir + runner/model, the panel fields cleared, and — for a server-driven
 // member — its resolved profile's credentials/settings overlaid (nil profile = the
@@ -256,7 +294,9 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 		mc.APIProvider = p.APIProvider
 		mc.APIBaseURL = p.APIBaseURL
 		mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
-		mc.MaxRounds = p.Params.MaxRounds
+		if !mc.MaxRoundsSet {
+			mc.MaxRounds = p.Params.MaxRounds
+		}
 		mc.RunnerProfileID = p.RunnerProfileID
 		mc.RunnerProfileTitle = p.Title
 	}
@@ -311,8 +351,7 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 // worktree, then runs the judge with the fusion prompt (one retry) and returns
 // the fused draft + R*.md.
 func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (_ *memberOutput, err error) {
-	jc := c.memberConfig(judgeDir, *c.cfg.Judge)
-	jc.Label = "judge"
+	jc := c.judgeConfig(judgeDir)
 	var rr *spendTracker
 	// The panel survives a failed judge (the primary member is promoted), but
 	// the judge's run and spend must not vanish with its worktree.

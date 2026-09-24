@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/ctl/reviewctlclient"
 )
 
@@ -134,7 +135,7 @@ func (c *PromptClient) FetchConfig(ctx context.Context, serverURL, projectKey st
 	}
 
 	judging := rc.Judge != nil
-	c.log.InfoContext(ctx, "fetched review config", "projectKey", projectKey,
+	c.log.InfoContext(ctx, "fetched review config", "projectKey", reviewer.ShortKey(projectKey),
 		"panelMembers", 1+len(rc.Panel), "judging", judging)
 	return rc, nil
 }
@@ -146,7 +147,7 @@ func (c *PromptClient) FetchFusionPrompt(ctx context.Context, serverURL, project
 	if err != nil {
 		return "", err
 	}
-	c.log.InfoContext(ctx, "fetched fusion prompt", "projectKey", projectKey, "length", len(prompt))
+	c.log.InfoContext(ctx, "fetched fusion prompt", "projectKey", reviewer.ShortKey(projectKey), "length", len(prompt))
 	return prompt, nil
 }
 
@@ -161,7 +162,7 @@ func (c *PromptClient) FetchPrompt(ctx context.Context, serverURL, projectKey st
 	if err != nil {
 		return "", err
 	}
-	c.log.InfoContext(ctx, "fetched prompt", "projectKey", projectKey, "length", len(prompt))
+	c.log.InfoContext(ctx, "fetched prompt", "projectKey", reviewer.ShortKey(projectKey), "length", len(prompt))
 	return prompt, nil
 }
 

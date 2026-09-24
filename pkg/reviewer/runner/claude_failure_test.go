@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"reviewsrv/pkg/reviewer"
 
@@ -105,6 +106,37 @@ func TestRunExecTagsContextCause(t *testing.T) {
 	require.Error(t, out.err)
 	status, _ := reviewer.RunOutcome(out.err)
 	assert.Equal(t, reviewer.RunStatusCancelled, status)
+}
+
+// setWaitDelay overrides cliWaitDelay for one test.
+func setWaitDelay(t *testing.T, d time.Duration) {
+	t.Helper()
+	old := cliWaitDelay
+	cliWaitDelay = d
+	t.Cleanup(func() { cliWaitDelay = old })
+}
+
+func TestRunExecCancelKillsLeftoverChildren(t *testing.T) {
+	setWaitDelay(t, time.Minute) // only the process-group kill ends the run in time
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	// The background sleep inherits the CLI's stdout and would hold it open.
+	out := runExec(ctx, slog.New(slog.DiscardHandler), "sh", t.TempDir(), []string{"-c", "sleep 60 & sleep 60"}, "", nil, nil)
+	assert.Less(t, time.Since(start), 10*time.Second)
+	status, _ := reviewer.RunOutcome(out.err)
+	assert.Equal(t, reviewer.RunStatusTimeout, status)
+}
+
+func TestRunExecDoesNotWaitForLeftoverChild(t *testing.T) {
+	setWaitDelay(t, 100*time.Millisecond)
+
+	start := time.Now()
+	out := runExec(t.Context(), slog.New(slog.DiscardHandler), "sh", t.TempDir(), []string{"-c", "sleep 60 & echo done"}, "", nil, nil)
+	require.NoError(t, out.err, "the CLI itself succeeded")
+	assert.Equal(t, "done\n", out.stdout.String())
+	assert.Less(t, time.Since(start), 10*time.Second)
 }
 
 func TestClaudeReason(t *testing.T) {

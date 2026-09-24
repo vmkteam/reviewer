@@ -123,8 +123,10 @@ func main() {
 	rootCmd.AddCommand(reviewCmd, uploadCmd, commentCmd, versionCmd)
 	// A cancelled CI job sends SIGTERM: cancel the run context instead of dying
 	// mid-flight, so the runner stops and the debug bundle still ships, marked
-	// cancelled rather than failed.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// cancelled rather than failed. The runner CLIs sit in process groups of
+	// their own, beyond the terminal's signals: a closed terminal (SIGHUP) must
+	// stop them the same way.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	// After the first signal, restore the default handling: a second Ctrl+C or
 	// SIGTERM ends reviewctl even while it still ships bundles and cleans up.
 	context.AfterFunc(ctx, stop)
@@ -243,6 +245,7 @@ func applyProfile(changed func(string) bool, cfg *ctl.Config, p *ctl.ResolvedPro
 	if !changed("allow-dangerous-permissions") {
 		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
 	}
+	cfg.MaxRoundsSet = changed("max-rounds")
 	serverDefault(changed, "max-rounds", p.Params.MaxRounds, &cfg.MaxRounds)
 }
 

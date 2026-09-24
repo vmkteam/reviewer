@@ -135,7 +135,7 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	if len(c.cfg.Multi) > 0 {
 		return c.reviewPanel(ctx, start)
 	}
-	c.log.InfoContext(ctx, "starting review", "projectKey", c.cfg.Key, "runner", c.cfg.Runner, "model", c.cfg.Model)
+	c.log.InfoContext(ctx, "starting review", "projectKey", reviewer.ShortKey(c.cfg.Key), "runner", c.cfg.Runner, "model", c.cfg.Model)
 
 	retried := false
 
@@ -176,14 +176,9 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 
 	if isReviewJSONUnfilled(draft) {
 		retried = true
-		d2 := c.runStep2Recovery(ctx, draft, result)
-		if d2 == nil {
-			// Like an empty panel member: an untouched skeleton is no review, so
-			// the run fails (and ships its debug bundle) instead of uploading it.
-			return reviewer.WithRunReason(reviewer.RunReasonNotSubmitted,
-				errors.New("empty review: the runner left review.json unfilled, and the Step 2 retry did not fill it"))
+		if draft, err = c.runStep2Recovery(ctx, draft, result); err != nil {
+			return err
 		}
-		draft = d2
 	}
 
 	mdFiles, err := FindMDFiles(c.cfg.Dir)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,4 +30,18 @@ func TestAPIBodyLimit(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, post("/v1/upload/debug/key/", 21*mb))
 	assert.Equal(t, http.StatusOK, post("/v1/reviewctl/upload/key/", mb))
 	assert.Equal(t, http.StatusRequestEntityTooLarge, post("/v1/reviewctl/upload/key/", 3*mb), "other routes keep the 2MB cap")
+}
+
+func TestRequestLoggerMasksProjectKey(t *testing.T) {
+	var buf bytes.Buffer
+	e := echo.New()
+	e.POST("/v1/reviewctl/upload/:projectKey/", func(c echo.Context) error {
+		return echo.NewHTTPError(http.StatusBadRequest, "bad draft")
+	}, requestLogger(slog.New(slog.NewTextHandler(&buf, nil))))
+
+	const key = "11111111-2222-3333-4444-555555555555"
+	e.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/reviewctl/upload/"+key+"/", nil))
+
+	assert.NotContains(t, buf.String(), key)
+	assert.Contains(t, buf.String(), "/v1/reviewctl/upload/11111111…/")
 }

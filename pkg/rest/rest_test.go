@@ -6,17 +6,20 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"reviewsrv/pkg/db"
 	dbtest "reviewsrv/pkg/db/test"
 	"reviewsrv/pkg/reviewer"
+	"reviewsrv/pkg/slack"
 
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmkteam/embedlog"
 )
 
 // newTestHandler bootstraps the test DB and a Handler wired without a Slack
@@ -229,4 +232,18 @@ func okRunCounters(t *testing.T, reg *prometheus.Registry, project, runner strin
 		}
 	}
 	return runs, cost
+}
+
+func TestNotifySlackSkipsMemberReviews(t *testing.T) {
+	var posts atomic.Int32
+	webhook := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { posts.Add(1) }))
+	t.Cleanup(webhook.Close)
+	h := &Handler{notifier: slack.NewNotifier(embedlog.NewDevLogger()), baseURL: "http://localhost"}
+	project := &reviewer.Project{Project: db.Project{Title: "p", SlackChannel: &db.SlackChannel{WebhookURL: webhook.URL}}}
+
+	h.notifySlack(project, &reviewer.Review{Review: db.Review{ID: 1, ReviewRole: reviewer.ReviewRoleMember}})
+	h.notifySlack(project, &reviewer.Review{Review: db.Review{ID: 2, ReviewRole: reviewer.ReviewRoleSingle}})
+
+	require.Eventually(t, func() bool { return posts.Load() == 1 }, 5*time.Second, 10*time.Millisecond)
+	assert.Never(t, func() bool { return posts.Load() > 1 }, 200*time.Millisecond, 10*time.Millisecond, "a member review is not announced")
 }

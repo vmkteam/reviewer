@@ -563,6 +563,7 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = reviewer.ChildEnv(extraEnv...)
+	prepareCLI(cmd)
 
 	out := &runOutput{}
 	var lw *lineWriter
@@ -577,7 +578,7 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
 
 	start := time.Now()
-	out.err = cmd.Run()
+	out.err = finishCLI(ctx, log, cmd, cmd.Run())
 	out.elapsed = time.Since(start)
 	// Killed by the context (runnerTimeout, the caller's deadline or a cancelled
 	// job): keep the cause in the chain so a timeout/cancel is not reported as a
@@ -585,8 +586,9 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	if out.err != nil && ctx.Err() != nil {
 		out.err = fmt.Errorf("%w: %w", ctx.Err(), out.err)
 	}
-	// Stopped by SIGTERM/SIGINT from outside (a cancelled CI job reaches the
-	// runner before, or instead of, reviewctl itself): not a runner failure.
+	// Stopped by SIGTERM/SIGINT from outside — the CLI runs in a process group
+	// of its own, so from whatever signals every process, e.g. a container
+	// stop on a cancelled CI job: not a runner failure.
 	if isInterrupted(out.err) {
 		out.err = reviewer.WithRunReason(reviewer.RunReasonCancelled, out.err)
 	}

@@ -83,6 +83,7 @@ func TestApplyProfile(t *testing.T) {
 	applyProfile(passed("runner", "max-rounds"), cfg, p)
 	assert.Equal(t, "codex", cfg.Runner, "an explicit flag wins")
 	assert.Zero(t, cfg.MaxRounds, "an explicit --max-rounds 0 (the default) wins too")
+	assert.True(t, cfg.MaxRoundsSet, "and overrides the panel members' profiles")
 
 	cfg = &ctl.Config{MaxRounds: 200}
 	applyProfile(passed("max-rounds"), cfg, &ctl.ResolvedProfile{})

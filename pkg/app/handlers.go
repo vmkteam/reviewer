@@ -45,15 +45,9 @@ func apiBodyLimit() echo.MiddlewareFunc {
 	})
 }
 
-// registerHandlers register echo handlers.
-func (a *App) registerHandlers() {
-	a.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{echo.GET, echo.PUT, echo.POST, echo.DELETE},
-		AllowHeaders: []string{"Authorization", "Authorization2", "Origin", "X-Requested-With", "Content-Type", "Accept", "Platform", "Version"},
-	}), apiBodyLimit())
-
-	lg := middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+// requestLogger logs every request of the routes it is attached to.
+func requestLogger(log *slog.Logger) echo.MiddlewareFunc {
+	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:    true,
 		LogURI:       true,
 		LogError:     true,
@@ -65,7 +59,8 @@ func (a *App) registerHandlers() {
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			attrs := []slog.Attr{
 				slog.String("ip", v.RemoteIP),
-				slog.String("uri", v.URI),
+				// The upload routes carry the project key.
+				slog.String("uri", reviewer.MaskKey(v.URI, c.Param("projectKey"))),
 				slog.Int("status", v.Status),
 				slog.String("userAgent", v.UserAgent),
 				slog.String("duration", v.Latency.String()),
@@ -73,13 +68,24 @@ func (a *App) registerHandlers() {
 			}
 
 			if v.Error == nil {
-				a.Log().LogAttrs(context.Background(), slog.LevelInfo, "http request", attrs...)
+				log.LogAttrs(context.Background(), slog.LevelInfo, "http request", attrs...)
 			} else {
-				a.Log().LogAttrs(context.Background(), slog.LevelError, "http request error", append(attrs, slog.String("err", v.Error.Error()))...)
+				log.LogAttrs(context.Background(), slog.LevelError, "http request error", append(attrs, slog.String("err", v.Error.Error()))...)
 			}
 			return nil
 		},
 	})
+}
+
+// registerHandlers register echo handlers.
+func (a *App) registerHandlers() {
+	a.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{echo.GET, echo.PUT, echo.POST, echo.DELETE},
+		AllowHeaders: []string{"Authorization", "Authorization2", "Origin", "X-Requested-With", "Content-Type", "Accept", "Platform", "Version"},
+	}), apiBodyLimit())
+
+	lg := requestLogger(a.Log())
 
 	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL, a.runMetrics)
 

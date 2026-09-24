@@ -277,3 +277,12 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		assert.Empty(t, result)
 	})
 }
+
+func TestMaskKey(t *testing.T) {
+	const key = "11111111-2222-3333-4444-555555555555"
+	assert.Equal(t, "POST /v1/upload/11111111…/ → /v1/upload/11111111…/42/", MaskKey("POST /v1/upload/"+key+"/ → /v1/upload/"+key+"/42/", key))
+	assert.Equal(t, "no key here", MaskKey("no key here", ""), "an empty key masks nothing")
+	assert.JSONEq(t, `{"projectKey":"11111111…","other":"AAAAAAAA…"}`,
+		MaskKeys(`{"projectKey":"`+key+`","other":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"}`), "every key, the case aside")
+	assert.Equal(t, "short", ShortKey("short"))
+}

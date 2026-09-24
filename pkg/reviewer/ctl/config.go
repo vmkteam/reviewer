@@ -48,6 +48,9 @@ type Config struct {
 	APIBaseURL  string
 	Effort      string
 	MaxRounds   int // direct runner round budget (--max-rounds / profile); 0 = default
+	// MaxRoundsSet marks MaxRounds as passed (--max-rounds / REVIEW_MAX_ROUNDS):
+	// it then overrides every profile, the panel members' and the judge's too.
+	MaxRoundsSet bool
 
 	// Resolved runner profile (fetched from the server over /v1/reviewctl/rpc/).
 	// Token is the optional API-key fallback used only when the matching env var

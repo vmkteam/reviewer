@@ -88,8 +88,10 @@ func (h *Handler) CreateReview(c echo.Context) error {
 	return c.String(http.StatusOK, strconv.Itoa(rv.ID))
 }
 
+// notifySlack announces a review. A member review is link-only, hidden from
+// the lists: its fusion (or the promoted single review) is announced instead.
 func (h *Handler) notifySlack(project *reviewer.Project, rv *reviewer.Review) {
-	if h.notifier == nil || !project.HasSlackWebhook() {
+	if h.notifier == nil || !project.HasSlackWebhook() || rv.ReviewRole == reviewer.ReviewRoleMember {
 		return
 	}
 

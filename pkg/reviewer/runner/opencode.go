@@ -211,7 +211,7 @@ func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *Claude
 	if len(cr.ModelUsage) > 0 || cr.SessionID == "" {
 		return
 	}
-	name := fetchOpenCodeSessionModel(ctx, r.Dir, cr.SessionID, isolation)
+	name := fetchOpenCodeSessionModel(ctx, r.Log, r.Dir, cr.SessionID, isolation)
 	if name == "" {
 		r.Log.WarnContext(ctx, "opencode session model not resolved", "sessionId", cr.SessionID)
 		return
@@ -231,7 +231,7 @@ func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *Claude
 // fetchOpenCodeSessionModel queries `opencode export <sessionID>` to extract
 // the model used in the session. Returns "" on any failure — caller must
 // treat the result as optional (it's a best-effort enrichment).
-func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string, isolation []string) string {
+func fetchOpenCodeSessionModel(ctx context.Context, log *slog.Logger, dir, sessionID string, isolation []string) string {
 	if sessionID == "" {
 		return ""
 	}
@@ -245,8 +245,9 @@ func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string, isola
 	// plugins, so run it in the dir Run vetted, under the same isolation.
 	cmd.Dir = dir
 	cmd.Env = reviewer.ChildEnv(isolation...)
+	prepareCLI(cmd)
 	out, err := cmd.Output()
-	if err != nil {
+	if err = finishCLI(ctx, log, cmd, err); err != nil {
 		return ""
 	}
 	// `opencode export` prints "Exporting session: <id>\n" before the JSON body.
