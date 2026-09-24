@@ -19,6 +19,13 @@ import (
 // far below the overall runner budget.
 const exportTimeout = 60 * time.Second
 
+// opencodeProjectConfig lists the entries opencode loads from the working dir
+// and its ancestors up to the git root. In a reviewed MR checkout they are
+// attacker-controlled and execute code with the job's secrets: .opencode/
+// holds plugin/*.ts and a package.json that opencode npm-installs,
+// opencode.json(c) declares plugins, MCP commands, formatters and LSP servers.
+var opencodeProjectConfig = []string{".opencode", "opencode.json", "opencode.jsonc"}
+
 // ExecOpenCodeRunner runs the real opencode CLI subprocess.
 // Implements ReviewRunner so the rest of the controller stays runner-agnostic.
 //
@@ -30,9 +37,9 @@ type ExecOpenCodeRunner struct {
 	Dir             string
 	SessionID       string // if set, uses -s to continue a specific session
 	ContinueSession bool   // if true, uses -c to continue the last session
-	// AllowDangerousPermissions toggles `--dangerously-skip-permissions`, which
-	// disables interactive permission prompts. Required for unattended CI runs
-	// but should stay off when the reviewer config trusts the working tree less.
+	// AllowDangerousPermissions toggles `--auto`, which auto-approves every
+	// permission not explicitly denied. Required for unattended CI runs but should
+	// stay off when the reviewer config trusts the working tree less.
 	AllowDangerousPermissions bool
 	// TrackerToken is injected as REVIEW_TRACKER_TOKEN (env wins; see ExecClaudeRunner).
 	TrackerToken string
@@ -64,7 +71,7 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 	}
 
 	if r.AllowDangerousPermissions {
-		args = append(args, "--dangerously-skip-permissions")
+		args = append(args, "--auto")
 	}
 
 	if r.Model != "" {
@@ -82,11 +89,24 @@ func (r *ExecOpenCodeRunner) buildArgs() []string {
 
 // Run executes `opencode run --format json` and parses the streamed events.
 func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
+	// OPENCODE_DISABLE_PROJECT_CONFIG only covers the legacy config loader: the
+	// session still boots the v2 one, which imports .opencode/plugin/*.ts and
+	// opencode.json plugins regardless of that flag or --pure (verified on
+	// 1.18.32). Nothing turns it off, so refuse a checkout that ships them.
+	cfgPath, err := findOpenCodeProjectConfig(r.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("check opencode project config: %w", err)
+	}
+	if cfgPath != "" {
+		return nil, fmt.Errorf("refusing to run opencode: the checkout ships %s, and opencode would execute its plugins and commands with this job's secrets; review this repository with the claude or codex runner", cfgPath)
+	}
+
 	args := r.buildArgs()
 	// opencode reads its own stored provider credentials, so no API token is
 	// injected — only the tracker token the prompt references.
+	env := append(credEnv(envTrackerToken, r.TrackerToken), opencodeIsolationEnv()...)
 	// Surface significant events (tool calls, per-step usage) live as opencode streams.
-	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, credEnv(envTrackerToken, r.TrackerToken), func(line []byte) { r.logEvent(ctx, line) })
+	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
@@ -172,14 +192,14 @@ func (r *ExecOpenCodeRunner) logEvent(ctx context.Context, line []byte) {
 	}
 }
 
-// resolveSessionModel enriches cr.ModelUsage when streaming events did not expose
-// the model — opencode v1.4.x omits it. Falls back to `opencode export <sessionID>`,
-// which reliably returns messages[*].info.model.
+// resolveSessionModel enriches cr.ModelUsage when neither -m nor the stream named
+// the model — opencode's step_finish events carry none. Falls back to
+// `opencode export <sessionID>`, which reliably returns messages[*].info.model.
 func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *ClaudeResult) {
 	if len(cr.ModelUsage) > 0 || cr.SessionID == "" {
 		return
 	}
-	name := fetchOpenCodeSessionModel(ctx, cr.SessionID)
+	name := fetchOpenCodeSessionModel(ctx, r.Dir, cr.SessionID)
 	if name == "" {
 		r.Log.WarnContext(ctx, "opencode session model not resolved", "sessionId", cr.SessionID)
 		return
@@ -199,7 +219,7 @@ func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *Claude
 // fetchOpenCodeSessionModel queries `opencode export <sessionID>` to extract
 // the model used in the session. Returns "" on any failure — caller must
 // treat the result as optional (it's a best-effort enrichment).
-func fetchOpenCodeSessionModel(ctx context.Context, sessionID string) string {
+func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string) string {
 	if sessionID == "" {
 		return ""
 	}
@@ -209,6 +229,12 @@ func fetchOpenCodeSessionModel(ctx context.Context, sessionID string) string {
 	// opencode's internal 128 KiB cap and arrive truncated, breaking json.Unmarshal.
 	// We only need messages[*].info.model, which --sanitize preserves.
 	cmd := exec.CommandContext(exportCtx, "opencode", "export", "--sanitize", sessionID)
+	// export boots an instance in its working dir and loads that project's
+	// plugins, so run it in the dir Run vetted, under the same isolation.
+	cmd.Dir = dir
+	if env := opencodeIsolationEnv(); len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -240,6 +266,47 @@ func fetchOpenCodeSessionModel(ctx context.Context, sessionID string) string {
 		return m.Info.Model.ModelID
 	}
 	return ""
+}
+
+// opencodeIsolationEnv keeps opencode on the operator's own config. Project
+// config (the legacy loader, plus AGENTS.md auto-loading) is off. Formatters
+// and LSP servers are off too, even if the operator's config enables them:
+// prettier and eslint run the repo's JS configs, rust-analyzer its build.rs.
+// Each var is only a default, like credEnv: the operator's env wins.
+func opencodeIsolationEnv() []string {
+	return append(credEnv("OPENCODE_DISABLE_PROJECT_CONFIG", "1"),
+		credEnv("OPENCODE_CONFIG_CONTENT", `{"formatter":false,"lsp":false}`)...)
+}
+
+// findOpenCodeProjectConfig returns the first opencodeProjectConfig entry found
+// in dir or its ancestors up to the enclosing git root (where opencode stops
+// looking), or "" if there is none.
+func findOpenCodeProjectConfig(dir string) (string, error) {
+	cur, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	for {
+		for _, name := range opencodeProjectConfig {
+			if p := filepath.Join(cur, name); pathExists(p) {
+				return p, nil
+			}
+		}
+		// .git is a dir in a clone and a file in a linked worktree.
+		if pathExists(filepath.Join(cur, ".git")) {
+			return "", nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", nil
+		}
+		cur = parent
+	}
+}
+
+func pathExists(p string) bool {
+	_, err := os.Lstat(p)
+	return err == nil
 }
 
 func (r *ExecOpenCodeRunner) logResult(ctx context.Context, cr *ClaudeResult) {

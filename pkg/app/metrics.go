@@ -23,6 +23,8 @@ func (a *App) registerMetrics() {
 	)
 	a.mon.Open()
 
+	a.runMetrics.Register(prometheus.DefaultRegisterer)
+
 	a.echo.Use(appkit.HTTPMetrics(appkit.DefaultServerName))
 	a.echo.Any("/metrics", echo.WrapHandler(promhttp.Handler()))
 }

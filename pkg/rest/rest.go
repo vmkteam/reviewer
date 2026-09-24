@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -21,15 +22,18 @@ type Handler struct {
 	pm       *reviewer.ProjectManager
 	rm       *reviewer.ReviewManager
 	notifier *slack.Notifier
+	metrics  *reviewer.RunMetrics
 	baseURL  string
 }
 
-// NewHandler creates a REST handler with review management and Slack notifications.
-func NewHandler(dbc db.DB, notifier *slack.Notifier, baseURL string) *Handler {
+// NewHandler creates a REST handler with review management and Slack
+// notifications. metrics counts completed runs (nil = off).
+func NewHandler(dbc db.DB, notifier *slack.Notifier, baseURL string, metrics *reviewer.RunMetrics) *Handler {
 	return &Handler{
 		pm:       reviewer.NewProjectManager(dbc),
 		rm:       reviewer.NewReviewManager(dbc),
 		notifier: notifier,
+		metrics:  metrics,
 		baseURL:  baseURL,
 	}
 }
@@ -77,6 +81,9 @@ func (h *Handler) CreateReview(c echo.Context) error {
 	}
 
 	h.notifySlack(project, rv)
+	// A run that got its review uploaded completed; the others arrive as debug bundles.
+	meta := draft.Review
+	h.metrics.Observe(project.Title, cmp.Or(meta.RunnerProfile.Runner, meta.ModelInfo.Runner), reviewer.RunStatusOK, "", meta.ModelInfo.CostUsd)
 
 	return c.String(http.StatusOK, strconv.Itoa(rv.ID))
 }

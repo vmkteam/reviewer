@@ -3,6 +3,7 @@ package runner
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"reviewsrv/pkg/reviewer/direct"
 )
 
 // Compile-time assertion that ExecCodexRunner satisfies ReviewRunner.
@@ -21,14 +25,20 @@ var _ ReviewRunner = (*ExecCodexRunner)(nil)
 // codex emits a JSONL event stream (`--json`): thread.started (session id),
 // item.started/command_execution (tool calls), item.completed/agent_message
 // (final text), turn.completed (token usage). codex does NOT report a dollar
-// cost, so it is estimated from tokens (see codexEstimateCostUSD). Note codex
+// cost, so it is estimated from tokens (see toClaudeResult). Note codex
 // input_tokens already include cached tokens — we split them out to match the
 // rest of the pipeline (InputTokens = fresh, CacheReadInputTokens = cached).
 //
 // The reviewer must write review.json + R*.md into the workspace, so codex runs
 // with the workspace-write sandbox (writes to the working dir, network disabled).
 type ExecCodexRunner struct {
-	Model           string
+	Model string
+	// Effort sets model_reasoning_effort; empty keeps the model's own default.
+	// Supported levels vary by model and codex does not validate them.
+	Effort string
+	// Sandbox overrides the sandbox mode (default codexSandbox). Use
+	// danger-full-access inside containers, where bubblewrap cannot start.
+	Sandbox         string
 	Dir             string
 	SessionID       string // if set, resumes the thread via `exec resume <id>`
 	ContinueSession bool   // codex has no auto-continue; kept for interface symmetry
@@ -36,10 +46,15 @@ type ExecCodexRunner struct {
 	// OPENAI_API_KEY when that env var is not already set (env wins).
 	Token string
 	// TrackerToken is injected as REVIEW_TRACKER_TOKEN (env wins; see
-	// ExecClaudeRunner). Codex's sandbox blocks network today, so it only
-	// matters if that changes.
+	// ExecClaudeRunner). The default workspace-write sandbox blocks network, so it
+	// only matters with a Sandbox that allows it (danger-full-access).
 	TrackerToken string
 	Log          *slog.Logger
+
+	// lastThreadID/lastUsage remember the previous run's cumulative usage so a
+	// resumed run of the same thread is billed for its own tokens only.
+	lastThreadID string
+	lastUsage    codexUsage
 }
 
 // Name implements ReviewRunner.
@@ -62,25 +77,29 @@ const codexExecCmd = "exec"
 // thread (round-2 follow-up); `exec resume` rejects --sandbox/--color, so the
 // sandbox is set via `-c sandbox_mode=...` there.
 func (r *ExecCodexRunner) buildArgs() []string {
+	sandbox := cmp.Or(r.Sandbox, codexSandbox)
 	var args []string
 	if r.SessionID != "" {
 		args = []string{
 			codexExecCmd, "resume", r.SessionID,
 			"--json",
 			"--skip-git-repo-check",
-			"-c", fmt.Sprintf("sandbox_mode=%q", codexSandbox),
+			"-c", fmt.Sprintf("sandbox_mode=%q", sandbox),
 		}
 	} else {
 		args = []string{
 			codexExecCmd,
 			"--json",
-			"--sandbox", codexSandbox,
+			"--sandbox", sandbox,
 			"--skip-git-repo-check",
 			"--color", "never",
 		}
 	}
 	if r.Model != "" {
 		args = append(args, "-m", r.Model)
+	}
+	if r.Effort != "" {
+		args = append(args, "-c", fmt.Sprintf("model_reasoning_effort=%q", r.Effort))
 	}
 	return append(args, "-") // prompt is read from stdin
 }
@@ -102,7 +121,7 @@ func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult
 		return nil, errors.New("codex produced empty output")
 	}
 
-	cr := ParseCodexResult(out.stdout.Bytes(), r.Model)
+	cr := r.result(parseCodexStream(out.stdout.Bytes()))
 	// codex can report a structured failure with a zero exit code; conversely a
 	// non-zero exit without a structured error is still a failure.
 	if out.err != nil {
@@ -115,6 +134,22 @@ func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult
 		return cr, fmt.Errorf("codex exited with error: %w", out.err)
 	}
 	return cr, nil
+}
+
+// result converts a parsed stream into this run's ClaudeResult. codex reports the
+// thread's cumulative usage, so resuming the thread of the previous run (the
+// Step 2 retry) subtracts that run's totals instead of billing them twice. A
+// thread resumed from another process (--session) has no baseline and still
+// reports the thread total.
+func (r *ExecCodexRunner) result(agg *codexAggregate) *ClaudeResult {
+	var base codexUsage
+	if r.SessionID == r.lastThreadID {
+		base = r.lastUsage
+	}
+	if agg.sessionID != "" {
+		r.lastThreadID, r.lastUsage = agg.sessionID, agg.usage
+	}
+	return agg.toClaudeResult(r.Model, base)
 }
 
 // logEvent surfaces a significant codex stream event to the runner log: tool
@@ -179,16 +214,31 @@ func (r *ExecCodexRunner) saveOutput(ctx context.Context, data []byte) {
 	}
 }
 
+// codexUsage is codex token usage as reported by turn.completed: the thread's
+// cumulative total_token_usage, so after `exec resume` it includes every earlier
+// run of the thread. input includes the cached and cacheWrite tokens.
+type codexUsage struct {
+	input, cached, cacheWrite, output int
+}
+
+// since returns the usage accrued after base (a previous total of the thread).
+func (u codexUsage) since(base codexUsage) codexUsage {
+	return codexUsage{
+		input:      max(u.input-base.input, 0),
+		cached:     max(u.cached-base.cached, 0),
+		cacheWrite: max(u.cacheWrite-base.cacheWrite, 0),
+		output:     max(u.output-base.output, 0),
+	}
+}
+
 // codexAggregate accumulates state while scanning the codex `--json` stream.
 type codexAggregate struct {
-	text       strings.Builder
-	sessionID  string
-	turns      int
-	inputTotal int // includes cached
-	cached     int
-	output     int
-	isError    bool
-	errMsg     string
+	text      strings.Builder
+	sessionID string
+	turns     int
+	usage     codexUsage
+	isError   bool
+	errMsg    string
 }
 
 // applyLine folds one JSONL event into the aggregate.
@@ -222,16 +272,25 @@ func (a *codexAggregate) applyLine(line []byte) {
 	case "turn.completed":
 		var ev struct {
 			Usage struct {
-				InputTokens       int `json:"input_tokens"`
-				CachedInputTokens int `json:"cached_input_tokens"`
-				OutputTokens      int `json:"output_tokens"`
+				InputTokens           int `json:"input_tokens"`
+				CachedInputTokens     int `json:"cached_input_tokens"`
+				CacheWriteInputTokens int `json:"cache_write_input_tokens"`
+				OutputTokens          int `json:"output_tokens"`
 			} `json:"usage"`
 		}
 		if json.Unmarshal(line, &ev) == nil {
 			a.turns++
-			a.inputTotal += ev.Usage.InputTokens
-			a.cached += ev.Usage.CachedInputTokens
-			a.output += ev.Usage.OutputTokens
+			// Cumulative for the thread, so the last event wins.
+			a.usage = codexUsage{
+				input:      ev.Usage.InputTokens,
+				cached:     ev.Usage.CachedInputTokens,
+				cacheWrite: ev.Usage.CacheWriteInputTokens,
+				output:     ev.Usage.OutputTokens,
+			}
+			// codex also emits transient `error` events ("Reconnecting... 2/5")
+			// before a successful retry; a completed turn means it recovered.
+			a.isError = false
+			a.errMsg = ""
 		}
 	case "error":
 		var ev struct {
@@ -254,14 +313,13 @@ func (a *codexAggregate) applyLine(line []byte) {
 	}
 }
 
-func (a *codexAggregate) toClaudeResult(fallbackModel string) *ClaudeResult {
-	// codex input_tokens include cached; split so InputTokens is the fresh count.
-	cached := a.cached
-	if cached > a.inputTotal {
-		cached = a.inputTotal
-	}
-	freshInput := a.inputTotal - cached
-	cost := codexEstimateCostUSD(fallbackModel, freshInput, a.output, cached)
+// toClaudeResult bills the usage accrued since base (zero for a fresh thread).
+func (a *codexAggregate) toClaudeResult(fallbackModel string, base codexUsage) *ClaudeResult {
+	d := a.usage.since(base)
+	// codex input_tokens include cache reads and writes; codex reports no cost,
+	// so it is estimated from the shared price table (unknown models cost 0).
+	u := direct.SplitInput(d.input, d.cached, d.cacheWrite, d.output)
+	cost := direct.PricingFor(strings.TrimSpace(fallbackModel), time.Now()).Cost(u)
 
 	stop, subtype := "end_turn", directSubtypeSuccess
 	if a.isError {
@@ -277,31 +335,19 @@ func (a *codexAggregate) toClaudeResult(fallbackModel string) *ClaudeResult {
 		SessionID:    a.sessionID,
 		IsError:      a.isError,
 		StopReason:   stop,
-		Usage: ClaudeUsage{
-			InputTokens:          freshInput,
-			OutputTokens:         a.output,
-			CacheReadInputTokens: cached,
-		},
+		Usage:        claudeUsage(u),
 	}
 	if a.errMsg != "" && cr.Result == "" {
 		cr.Result = a.errMsg
 	}
 	if fallbackModel != "" {
-		cr.ModelUsage = map[string]ClaudeModelUse{
-			fallbackModel: {
-				InputTokens:          freshInput,
-				OutputTokens:         a.output,
-				CacheReadInputTokens: cached,
-				CostUSD:              cost,
-			},
-		}
+		cr.ModelUsage = map[string]ClaudeModelUse{fallbackModel: modelUse(u, cost)}
 	}
 	return cr
 }
 
-// ParseCodexResult aggregates the codex `--json` event stream into a ClaudeResult.
-// The fallback model names the run for cost estimation (codex reports no cost).
-func ParseCodexResult(data []byte, fallbackModel string) *ClaudeResult {
+// parseCodexStream folds the codex `--json` event stream into an aggregate.
+func parseCodexStream(data []byte) *codexAggregate {
 	var agg codexAggregate
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	// Events can be large (long text chunks). Bump the buffer to 4 MiB to be safe.
@@ -313,44 +359,5 @@ func ParseCodexResult(data []byte, fallbackModel string) *ClaudeResult {
 		}
 		agg.applyLine(line)
 	}
-	return agg.toClaudeResult(fallbackModel)
-}
-
-// codexTokenPrice is the USD-per-MTok rate for a codex/OpenAI model. cached input
-// is a subset of input (the caller passes fresh and cached separately).
-type codexTokenPrice struct {
-	input, cachedInput, output float64
-}
-
-// codexModelPrices mirrors published OpenAI/codex token rates
-// (USD per 1M tokens). Unknown models estimate to 0 (cost reported as 0).
-var codexModelPrices = map[string]codexTokenPrice{
-	"codex-default":     {1.75, 0.175, 14.00},
-	"gpt-5.3-codex":     {1.75, 0.175, 14.00},
-	"gpt-5.2-codex":     {1.75, 0.175, 14.00},
-	"gpt-5.1-codex-max": {1.25, 0.125, 10.00},
-	"gpt-5.1-codex":     {1.25, 0.125, 10.00},
-	"gpt-5-codex":       {1.25, 0.125, 10.00},
-	"gpt-5.6":           {5.00, 0.50, 30.00}, // bare alias routes to Sol
-	"gpt-5.6-sol":       {5.00, 0.50, 30.00},
-	"gpt-5.6-terra":     {2.50, 0.25, 15.00},
-	"gpt-5.6-luna":      {1.00, 0.10, 6.00},
-	"gpt-5.5":           {5.00, 0.50, 30.00},
-	"gpt-5.5-pro":       {30.00, 30.00, 180.00},
-	"gpt-5.4":           {2.50, 0.25, 15.00},
-	"gpt-5.4-mini":      {0.75, 0.075, 4.50},
-	"gpt-5.4-nano":      {0.20, 0.02, 1.25},
-	"gpt-5.4-pro":       {30.00, 30.00, 180.00},
-}
-
-// codexEstimateCostUSD estimates a codex run's cost from tokens. freshInput must
-// exclude cached tokens (cached is billed at the lower cachedInput rate).
-func codexEstimateCostUSD(model string, freshInput, output, cached int) float64 {
-	p, ok := codexModelPrices[strings.TrimSpace(model)]
-	if !ok {
-		return 0
-	}
-	return (float64(freshInput)*p.input +
-		float64(cached)*p.cachedInput +
-		float64(output)*p.output) / 1_000_000
+	return &agg
 }

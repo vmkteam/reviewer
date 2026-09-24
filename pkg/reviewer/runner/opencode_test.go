@@ -1,6 +1,9 @@
 package runner
 
 import (
+	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -90,4 +93,69 @@ func TestOpenCodeBuildArgsPinsDir(t *testing.T) {
 
 	r = &ExecOpenCodeRunner{}
 	assert.NotContains(t, r.buildArgs(), "--dir", "no dir configured → no flag")
+}
+
+func TestFindOpenCodeProjectConfig(t *testing.T) {
+	// outer/.opencode sits above the git root: opencode stops before it.
+	outer := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(outer, ".opencode"), 0o755))
+	repo := filepath.Join(outer, "repo")
+	sub := filepath.Join(repo, "pkg")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
+	require.NoError(t, os.MkdirAll(sub, 0o755))
+
+	t.Run("clean checkout", func(t *testing.T) {
+		p, err := findOpenCodeProjectConfig(sub)
+		require.NoError(t, err)
+		assert.Empty(t, p)
+	})
+
+	for _, name := range opencodeProjectConfig {
+		t.Run(name, func(t *testing.T) {
+			p := filepath.Join(repo, name)
+			if name == ".opencode" {
+				require.NoError(t, os.Mkdir(p, 0o755))
+			} else {
+				require.NoError(t, os.WriteFile(p, []byte("{}"), 0o644))
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(p) })
+
+			got, err := findOpenCodeProjectConfig(sub)
+			require.NoError(t, err)
+			assert.Equal(t, p, got, "found from a subdir up to the git root")
+		})
+	}
+
+	t.Run("linked worktree root", func(t *testing.T) {
+		wt := filepath.Join(outer, "wt")
+		require.NoError(t, os.Mkdir(wt, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: /x/.git/worktrees/wt\n"), 0o644))
+
+		p, err := findOpenCodeProjectConfig(wt)
+		require.NoError(t, err)
+		assert.Empty(t, p, "a .git file ends the walk like a .git dir")
+	})
+}
+
+func TestExecOpenCodeRunnerRefusesProjectConfig(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".opencode", "plugin"), 0o755))
+
+	r := &ExecOpenCodeRunner{Dir: dir, Log: slog.New(slog.DiscardHandler)}
+	cr, err := r.Run(t.Context(), "review")
+	require.ErrorContains(t, err, "refusing to run opencode")
+	assert.Nil(t, cr)
+}
+
+func TestOpenCodeIsolationEnv(t *testing.T) {
+	t.Setenv("OPENCODE_DISABLE_PROJECT_CONFIG", "")
+	t.Setenv("OPENCODE_CONFIG_CONTENT", "")
+	assert.Equal(t, []string{
+		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
+		`OPENCODE_CONFIG_CONTENT={"formatter":false,"lsp":false}`,
+	}, opencodeIsolationEnv())
+
+	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"share":"disabled"}`)
+	assert.Equal(t, []string{"OPENCODE_DISABLE_PROJECT_CONFIG=1"}, opencodeIsolationEnv(), "the operator's env wins")
 }

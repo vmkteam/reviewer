@@ -13,6 +13,7 @@ import (
 
 	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer"
+	"reviewsrv/pkg/reviewer/runner"
 )
 
 // panelConcurrency bounds how many members review at once. Panels are small
@@ -231,6 +232,7 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 		mc.APIProvider = p.APIProvider
 		mc.APIBaseURL = p.APIBaseURL
 		mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+		mc.MaxRounds = p.Params.MaxRounds
 		mc.RunnerProfileID = p.RunnerProfileID
 		mc.RunnerProfileTitle = p.Title
 	}
@@ -244,6 +246,7 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 // worktree, which is otherwise the only place the runner transcript exists.
 func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (out *memberOutput, err error) {
 	mc := c.memberConfig(dir, m)
+	var rr *spendTracker
 	defer func() {
 		if err == nil {
 			return
@@ -252,13 +255,14 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 		// should explain, and by then ctx is already cancelled.
 		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		c.uploadDebugBundle(upCtx, &mc, err)
+		c.uploadDebugBundle(upCtx, &mc, err, rr.total())
 	}()
 
-	rr, err := c.runnerFactory(&mc)
+	built, err := c.runnerFactory(&mc)
 	if err != nil {
 		return nil, fmt.Errorf("build runner: %w", err)
 	}
+	rr = trackSpend(built)
 	if err = WriteReviewSkeleton(mc.Dir, &mc); err != nil {
 		return nil, fmt.Errorf("write review.json skeleton: %w", err)
 	}
@@ -304,6 +308,7 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 	prompt := SubstituteVariables(fusionPrompt, &jc)
 
 	var lastErr error
+	var failed []*runner.ClaudeResult           // attempts that ran but failed: billed all the same
 	for attempt := 1; attempt <= 2; attempt++ { // initial run + one retry
 		// Wipe the previous attempt's root artifacts; the staged members/ subdirs
 		// are untouched (CleanReviewArtifacts only looks at the dir root).
@@ -319,21 +324,26 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 		cancel()
 		if err != nil {
 			lastErr = err
+			if result != nil {
+				failed = append(failed, result)
+			}
 			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", err)
 			continue
 		}
 		draft, err := ReadReviewJSON(jc.Dir)
 		if err != nil {
 			lastErr = err
+			failed = append(failed, result)
 			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
 			continue
 		}
 		if isReviewJSONUnfilled(draft) {
 			lastErr = errors.New("judge produced an empty review")
+			failed = append(failed, result)
 			c.log.WarnContext(ctx, "judge review empty, retrying", "attempt", attempt)
 			continue
 		}
-		c.applyRunResult(ctx, draft, &jc, rr, result)
+		c.applyRunResult(ctx, draft, &jc, rr, result, failed...)
 
 		mdFiles, err := FindMDFiles(jc.Dir)
 		if err != nil {

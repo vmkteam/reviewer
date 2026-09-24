@@ -20,29 +20,33 @@ func EnvDefault(key, fallback string) string {
 // or unparseable rather than guessing — bad input is more actionable as a
 // no-op-with-default than a silent flip.
 func EnvBool(key string, fallback bool) bool {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return fallback
-	}
-	return b
+	return envParse(key, fallback, strconv.ParseBool)
+}
+
+// EnvInt parses an integer env var. Falls back when the var is unset or
+// unparseable.
+func EnvInt(key string, fallback int) int {
+	return envParse(key, fallback, strconv.Atoi)
 }
 
 // EnvDuration parses an env var via time.ParseDuration ("30m", "1h30m"). Falls
 // back when the var is unset or unparseable.
 func EnvDuration(key string, fallback time.Duration) time.Duration {
+	return envParse(key, fallback, time.ParseDuration)
+}
+
+// envParse parses env var key with parse, falling back when the var is unset or
+// unparseable.
+func envParse[T any](key string, fallback T, parse func(string) (T, error)) T {
 	v := os.Getenv(key)
 	if v == "" {
 		return fallback
 	}
-	d, err := time.ParseDuration(v)
+	x, err := parse(v)
 	if err != nil {
 		return fallback
 	}
-	return d
+	return x
 }
 
 // AuthorName extracts the display name from "Name <email>" (CI_COMMIT_AUTHOR

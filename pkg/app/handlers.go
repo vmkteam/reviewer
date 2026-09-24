@@ -11,6 +11,7 @@ import (
 	"reviewsrv/frontend"
 	"reviewsrv/pkg/debug"
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/slack"
 
 	"github.com/labstack/echo/v4"
@@ -30,13 +31,27 @@ func (a *App) runHTTPServer(ctx context.Context, host string, port int) error {
 	return a.echo.Start(listenAddress)
 }
 
+// debugUploadPath receives debug bundles, whose runner transcripts (opencode
+// NDJSON streams) outgrow the 2MB API body cap; the route has its own 20MB cap.
+const debugUploadPath = "/v1/upload/debug/:projectKey/"
+
+// apiBodyLimit caps request bodies at 2MB, skipping debugUploadPath: a
+// route-level BodyLimit runs after this one, so it can lower the cap but never
+// raise it.
+func apiBodyLimit() echo.MiddlewareFunc {
+	return middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		Limit:   "2M",
+		Skipper: func(c echo.Context) bool { return c.Path() == debugUploadPath },
+	})
+}
+
 // registerHandlers register echo handlers.
 func (a *App) registerHandlers() {
 	a.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{echo.GET, echo.PUT, echo.POST, echo.DELETE},
 		AllowHeaders: []string{"Authorization", "Authorization2", "Origin", "X-Requested-With", "Content-Type", "Accept", "Platform", "Version"},
-	}), middleware.BodyLimit("2M"))
+	}), apiBodyLimit())
 
 	lg := middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:    true,
@@ -66,7 +81,7 @@ func (a *App) registerHandlers() {
 		},
 	})
 
-	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL)
+	h := rest.NewHandler(a.db, slack.NewNotifier(a.Logger), a.cfg.Server.BaseURL, a.runMetrics)
 
 	// Internal reviewctl API: config + prompt over JSON-RPC (registered as a
 	// separate zenrpc server in registerReviewctlAPIHandlers), plus review upload.
@@ -80,9 +95,12 @@ func (a *App) registerHandlers() {
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
 	a.echo.GET("/v1/rpc/project-instructions-:id", h.ProjectInstructionsMarkdown, lg)
 
-	dh := debug.NewHandler(a.debugStorage, a.Log())
-	// Per-route 20MB limit overrides the global 2MB cap so opencode NDJSON streams fit.
-	a.echo.POST("/v1/upload/debug/:projectKey/", dh.Upload, lg, middleware.BodyLimit("20M"))
+	pm := reviewer.NewProjectManager(a.db)
+	dh := debug.NewHandler(a.debugStorage, a.Log(), func(ctx context.Context, projectKey string) string {
+		title, _ := pm.TitleByKey(ctx, projectKey)
+		return title
+	}, a.runMetrics)
+	a.echo.POST(debugUploadPath, dh.Upload, lg, middleware.BodyLimit("20M"))
 	a.echo.GET(debug.StoragePathPrefix, dh.List, lg)
 	a.echo.GET(debug.StoragePathPrefix+":id/", dh.Bundle, lg)
 	a.echo.GET(debug.StoragePathPrefix+":id/:filename", dh.File, lg)

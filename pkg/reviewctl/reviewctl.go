@@ -29,6 +29,7 @@ func NewService(dbc db.DB) *Service {
 // name would generate DbRunnerProfileParams.
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+	MaxRounds                 int  `json:"maxRounds"` // direct runner round budget; 0 = default
 }
 
 // Config is the resolved run configuration returned to reviewctl. It carries the
@@ -78,7 +79,7 @@ func newConfig(rp *reviewer.RunnerProfile) *Config {
 		APIProvider:     derefString(rp.APIProvider),
 		APIBaseURL:      derefString(rp.APIBaseURL),
 		Token:           derefString(rp.Token),
-		Params:          RunnerProfileParams{AllowDangerousPermissions: rp.Params.AllowDangerousPermissions},
+		Params:          RunnerProfileParams(rp.Params),
 	}
 }
 

@@ -7,15 +7,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"reviewsrv/pkg/reviewer"
 )
 
 // errMaxRounds is returned when the loop exhausts MaxRounds without a submit.
-var errMaxRounds = errors.New("direct: max rounds reached without submit_review")
+var errMaxRounds = reviewer.WithRunReason(reviewer.RunReasonMaxRounds,
+	errors.New("direct: max rounds reached without submit_review"))
 
 // errTruncatedRounds aborts the loop when several rounds in a row are cut by the
 // output-token cap — each such round burns the full max_tokens budget without
 // making progress, so grinding on to MaxRounds only wastes money.
-var errTruncatedRounds = errors.New("direct: consecutive rounds truncated by the output-token limit")
+var errTruncatedRounds = reviewer.WithRunReason(reviewer.RunReasonTruncated,
+	errors.New("direct: consecutive rounds truncated by the output-token limit"))
 
 // maxConsecutiveTruncated is how many truncated rounds in a row abort the run.
 const maxConsecutiveTruncated = 3
@@ -43,15 +47,45 @@ func IsTruncated(stopReason string) bool {
 	return stopReason == stopMaxTokens || stopReason == stopLength
 }
 
-// noteTruncated folds the truncation notice into the last tool result, so the
-// model learns its turn was cut without an extra user message (which would put
-// two consecutive user turns in the history — the Anthropic API rejects that).
-func noteTruncated(results []ToolResult) {
+// Round budget. At budgetWarnAt rounds left the model is told to start
+// delivering the review, at budgetFinalAt to deliver it now. Once MaxRounds is
+// spent, up to graceRounds more rounds run with only the review tools working:
+// a review that is mid-delivery still lands instead of being thrown away with
+// everything it cost.
+const (
+	budgetWarnAt  = 10
+	budgetFinalAt = 3
+	graceRounds   = 5
+)
+
+// budgetDenied is the tool error for a read/search call during the grace rounds.
+const budgetDenied = "round budget spent — only set_group, add_issues and submit_review work now; deliver the review from what you have"
+
+// budgetNotice returns the notice for the given number of rounds left, or "".
+func budgetNotice(left int) string {
+	switch left {
+	case budgetWarnAt:
+		return fmt.Sprintf("NOTE: %d rounds of your round budget are left. Wrap up exploring and start delivering the review: "+
+			"set_group for all five groups and add_issues, then submit_review.", left)
+	case budgetFinalAt:
+		return fmt.Sprintf("NOTE: only %d rounds are left. Stop exploring and deliver the review now with set_group, add_issues "+
+			"and submit_review, batching the calls in the same step.", left)
+	case 0:
+		return fmt.Sprintf("NOTE: the round budget is spent — read and search tools are disabled from now on. Deliver the review "+
+			"from what you have within %d steps: set_group for all five groups, add_issues, then submit_review.", graceRounds)
+	}
+	return ""
+}
+
+// appendNotice folds a harness notice into the last tool result, so the model
+// gets it without an extra user message (which would put two consecutive user
+// turns in the history — the Anthropic API rejects that).
+func appendNotice(results []ToolResult, notice string) {
 	if len(results) == 0 {
 		return
 	}
 	last := &results[len(results)-1]
-	last.Content = strings.TrimSpace(last.Content + "\n\n" + noticeTruncated)
+	last.Content = strings.TrimSpace(last.Content + "\n\n" + notice)
 }
 
 // Result is the outcome of a direct run, mapped to ClaudeResult by the ctl adapter.
@@ -67,7 +101,8 @@ type Result struct {
 
 // Run drives the agent loop: send system + history + tools to the provider, run
 // any requested tools, feed results back, and repeat until the model calls
-// submit_review (success), stops without tools (end_turn), or MaxRounds is hit.
+// submit_review (success), stops without tools (end_turn), or MaxRounds plus the
+// review-only grace rounds are spent.
 func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt string, opts Options) (*Result, error) {
 	if opts.MaxRounds <= 0 {
 		opts.MaxRounds = DefaultOptions().MaxRounds
@@ -93,15 +128,20 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		return r
 	}
 
-	for round := range opts.MaxRounds {
+	limit := opts.MaxRounds + graceRounds
+	for round := range limit {
 		if err := ctx.Err(); err != nil {
 			return finish(round, "cancelled", reg.Submitted()), err
+		}
+		if round == opts.MaxRounds {
+			reg.restrict(budgetDenied, toolSetGroup, toolAddIssues, toolSubmitReview)
 		}
 		t0 := time.Now()
 		resp, err := p.Complete(ctx, Request{System: system, Messages: msgs, Tools: reg.Defs(), Effort: opts.Effort})
 		apiMs += int(time.Since(t0).Milliseconds())
+		emitRetries(opts.OnEvent, round, resp.Retries)
 		if err != nil {
-			return finish(round, "error", reg.Submitted()), fmt.Errorf("round %d: %w", round, err)
+			return finish(round, "error", reg.Submitted()), reviewer.WithRunReason(providerReason(err), fmt.Errorf("round %d: %w", round, err))
 		}
 		total = sumUsage(total, resp.Usage)
 		emitRound(opts.OnEvent, round, resp)
@@ -136,12 +176,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 			return finish(round+1, "end_turn", reg.Submitted()), nil
 		}
 
-		results := dispatchParallel(ctx, reg, resp.ToolCalls)
-		if truncated {
-			noteTruncated(results)
-		}
-		emitToolResults(opts.OnEvent, round, results)
-		msgs = append(msgs, Message{Role: RoleTool, ToolResults: results})
+		msgs = append(msgs, runTools(ctx, reg, opts, round, resp.ToolCalls, truncated))
 
 		if reg.Submitted() {
 			return finish(round+1, "submitted", true), nil
@@ -152,7 +187,40 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		msgs = maybeCompact(msgs, opts, round)
 	}
 
-	return finish(opts.MaxRounds, "max_rounds", reg.Submitted()), errMaxRounds
+	return finish(limit, "max_rounds", reg.Submitted()), errMaxRounds
+}
+
+// runTools dispatches a round's tool calls and returns the tool message fed back
+// to the model, with any harness notices (truncation, round budget) folded into
+// its last result.
+func runTools(ctx context.Context, reg *Registry, opts Options, round int, calls []ToolCall, truncated bool) Message {
+	results := dispatchParallel(ctx, reg, calls)
+	if truncated {
+		appendNotice(results, noticeTruncated)
+	}
+	if !reg.Submitted() {
+		noteBudget(opts, round, results)
+	}
+	emitToolResults(opts.OnEvent, round, results)
+	return Message{Role: RoleTool, ToolResults: results}
+}
+
+// noteBudget folds the round-budget notice due after this round (if any) into
+// its tool results and records it in the transcript.
+func noteBudget(opts Options, round int, results []ToolResult) {
+	notice := budgetNotice(opts.MaxRounds - (round + 1))
+	if notice == "" {
+		return
+	}
+	appendNotice(results, notice)
+	opts.OnEvent.emit(Event{Round: round, Kind: "notice", Text: notice})
+}
+
+// emitRetries records the transient provider failures retried within a round.
+func emitRetries(s Sink, round int, retries []string) {
+	for _, r := range retries {
+		s.emit(Event{Round: round, Kind: "retry", Text: r})
+	}
 }
 
 // emitToolResults records each tool result in the transcript, clipped to keep
@@ -209,7 +277,7 @@ func makeResult(total Usage, rounds int, stop string, submitted bool, p LLMProvi
 		StopReason: stop,
 		Submitted:  submitted,
 		Model:      p.Model(),
-		CostUsd:    computeCost(total, p.Pricing()),
+		CostUsd:    p.Pricing().Cost(total),
 	}
 }
 
@@ -299,6 +367,13 @@ func compactMessages(msgs []Message, keepTail int) []Message {
 	out := make([]Message, 0, 1+(len(msgs)-cut))
 	out = append(out, msgs[0]) // keepHead == 1
 	out = append(out, msgs[cut:]...)
+	// Drop the provider-native snapshots of the kept assistant turns so they are
+	// rebuilt from Text+ToolCalls: their reasoning is bound to the pre-compaction
+	// history, and Anthropic rejects replayed thinking blocks whose prefix
+	// changed. Turns appended afterwards keep theirs.
+	for i := range out {
+		out[i].Raw = nil
+	}
 	// Place the marker inside the tail, keeping the head byte-identical: mutating
 	// the head changes the first bytes after system+tools and invalidates the
 	// provider prompt cache for the ENTIRE history, while the tail is re-written

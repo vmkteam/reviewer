@@ -31,7 +31,7 @@
       <FormField label="Effort" :error="fieldError('effort')">
         <VSelect v-model="entity.effort">
           <option :value="''">— default —</option>
-          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
+          <option v-for="e in efforts" :key="e" :value="e">{{ e }}</option>
         </VSelect>
         <p v-if="!effortUsed" class="mt-1 text-xs text-fg-subtle">Ignored by this runner/provider.</p>
       </FormField>
@@ -47,13 +47,18 @@
         <FormField label="API Base URL" :error="fieldError('apiBaseURL')">
           <VInput v-model="entity.apiBaseURL" type="text" :placeholder="apiBaseURLPlaceholder" />
         </FormField>
+
+        <FormField label="Max rounds" :error="fieldError('params.maxRounds')">
+          <VInput v-model.number="entity.params.maxRounds" type="number" min="0" max="500" placeholder="60" />
+          <p class="mt-1 text-xs text-fg-subtle">Round budget of the review loop, 10–500. Empty or 0 = default (60).</p>
+        </FormField>
       </template>
 
       <template v-if="entity.runner === 'opencode'">
         <FormField label="Permissions">
           <label class="flex items-center gap-2 text-sm text-fg-secondary">
             <input type="checkbox" v-model="entity.params.allowDangerousPermissions" class="rounded border-edge" />
-            Allow dangerous permissions (--dangerously-skip-permissions)
+            Allow dangerous permissions (--auto)
           </label>
         </FormField>
       </template>
@@ -115,19 +120,20 @@ const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
 const providers = ['anthropic', 'deepseek', 'openai', 'openai-compat']
 
 // Runner-dependent model suggestions for the datalist (free text still allowed).
-// Keep in sync with ResolveDefaults and the price tables in codex.go /
-// provider_factory.go. As of 2026-07.
+// Keep in sync with ResolveDefaults and the price table (PricingFor in
+// pkg/reviewer/direct/provider_factory.go). As of 2026-09.
 const MODEL_SUGGESTIONS: Record<string, string[]> = {
-  claude: ['opus', 'sonnet', 'haiku', 'claude-opus-5', 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  codex: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex'],
-  opencode: ['anthropic/claude-opus-5', 'anthropic/claude-opus-4-8', 'openai/gpt-5.6-sol', 'openai/gpt-5.5', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash'],
+  claude: ['opus', 'sonnet', 'haiku', 'fable', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-haiku-4-5'],
+  codex: ['gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'],
+  opencode: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5', 'openai/gpt-6-sol', 'openai/gpt-6-astra', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-flash'],
 }
 // For the direct runner, suggestions depend on the selected API provider.
-// deepseek-chat/reasoner are intentionally omitted — they retire 2026-07-24.
+// Retired DeepSeek names (deepseek-v4-flash, deepseek-chat/reasoner) are omitted —
+// they are served as deepseek-flash.
 const DIRECT_MODEL_SUGGESTIONS: Record<string, string[]> = {
-  anthropic: ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  deepseek: ['deepseek-v4-pro', 'deepseek-v4-flash'],
-  openai: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+  anthropic: ['claude-opus-5-5', 'claude-fable-5-1', 'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-haiku-4-5'],
+  deepseek: ['deepseek-v4-pro', 'deepseek-flash'],
+  openai: ['gpt-6-sol', 'gpt-6-astra', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'],
   'openai-compat': [],
 }
 // Default API base URL per direct provider, shown as the input placeholder.
@@ -140,7 +146,7 @@ const PROVIDER_BASE_URL: Record<string, string> = {
 
 const { entity, loading, saving, error, fieldError, load, save, remove } = useForm<RunnerProfile>(vtApi.runnerprofile, 'runnerProfile', () => ({
   id: 0, title: '', runner: 'claude', model: '', effort: '', apiProvider: '', apiBaseURL: '',
-  params: { allowDangerousPermissions: false }, isDefault: false, statusId: 1, tokenMasked: '', hasToken: false,
+  params: { allowDangerousPermissions: false, maxRounds: 0 }, isDefault: false, statusId: 1, tokenMasked: '', hasToken: false,
 }))
 
 // Token is write-only: bind a separate input so an untouched field stays "keep".
@@ -161,16 +167,12 @@ const modelPlaceholder = computed(() => {
 
 const apiBaseURLPlaceholder = computed(() => PROVIDER_BASE_URL[entity.apiProvider ?? ''] || 'https://...')
 
-// Effort is honoured by the claude/codex CLIs and, for the direct runner, only by
-// the Anthropic provider; deepseek/openai-compat and opencode ignore it. codex has
-// no "max" level.
-const effortUsed = computed(() => {
-  if (entity.runner === 'claude' || entity.runner === 'codex') return true
-  if (entity.runner === 'direct') return entity.apiProvider === 'anthropic'
-  return false
-})
-const effortOptions = computed(() =>
-  entity.runner === 'codex' ? efforts.filter((e) => e !== 'max') : efforts,
+// Effort is honoured by the claude/codex CLIs and by the direct runner's
+// anthropic/openai/deepseek providers (DeepSeek maps medium/xhigh to high
+// itself); opencode and openai-compat ignore it. Supported levels vary by model
+// (e.g. gpt-5.5 stops at xhigh).
+const effortUsed = computed(
+  () => entity.runner !== 'opencode' && !(entity.runner === 'direct' && entity.apiProvider === 'openai-compat'),
 )
 
 onMounted(() => {
@@ -180,7 +182,9 @@ onMounted(() => {
 async function handleSave() {
   // Empty token input means "keep existing" (update) or "none" (add): omit it.
   entity.token = tokenInput.value ? tokenInput.value : undefined
-  if (!entity.params) entity.params = { allowDangerousPermissions: false }
+  if (!entity.params) entity.params = { allowDangerousPermissions: false, maxRounds: 0 }
+  // A cleared number input yields ""; the API expects an integer (0 = default).
+  entity.params.maxRounds = Number(entity.params.maxRounds) || 0
   if (await save()) router.push('/runner-profiles')
 }
 

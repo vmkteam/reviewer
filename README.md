@@ -106,6 +106,10 @@ PoolSize = 5
 [Sentry]
 DSN         = ""
 Environment = ""
+
+[Debug]               # optional; defaults shown
+Capacity      = 200   # runs kept at /v1/debug/storage/ (metadata)
+FilesCapacity = 20    # newest runs that keep their artifact files
 ```
 
 ## API Endpoints
@@ -152,14 +156,14 @@ reviewctl comment   # Post MR comments for an existing review
 reviewctl version   # Print version
 ```
 
-Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `direct`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--dangerously-skip-permissions`, default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
+Key flags: `--key`, `--url`, `--runner` (`claude` | `opencode` | `codex` | `direct`), `--model`, `--session` (prompt cache reuse), `--continue` (resume last session), `--allow-dangerous-permissions` (opencode `--auto`; default `true` for unattended CI). All flags have env variable equivalents for CI. See `reviewctl --help` for details.
 
 **Runners:** the runner and its model/effort/provider come from the project's **runner profile** (configured in the admin panel and fetched at run time); CI does not pass them. The `--runner`/`--model`/`--effort`/`--api-*` flags still override the profile for local runs.
 
 - `claude` (default) — Claude Code CLI, full agentic exploration.
-- `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`.
-- `codex` — `codex exec` CLI (OpenAI Codex), `--model gpt-5.1-codex`.
-- `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast, plus `http_fetch` scoped to the project's task tracker). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`). The `ast_*` navigation tools shell out to the optional [`ast-index`](https://github.com/defendend/Claude-ast-index-search) binary — auto-detected on `PATH` (the generated CI image installs it), with the index rebuilt per run; when absent the tools are simply not offered.
+- `opencode` — opencode CLI (any provider configured in opencode, incl. OpenRouter), `--model provider/model`. Runs on the operator's own opencode config only (project config, formatters and LSP off) and refuses a checkout that ships `.opencode/` or `opencode.json(c)`: opencode would execute their plugins with the job's secrets, and no opencode switch prevents it.
+- `codex` — `codex exec` CLI (OpenAI Codex), `--model gpt-6-sol` by default; `--effort` maps to `model_reasoning_effort`.
+- `direct` — calls the LLM API itself (no CLI) with a narrow review tool set (read/grep/glob/git_diff/ast, plus `http_fetch` scoped to the project's task tracker). Prompt caching + diff preload make it the cheapest and fastest path. Adds `--api-provider` (`deepseek` | `openai` (Responses API) | `openai-compat` | `anthropic`), `--api-base-url`, `--effort` (`low`..`max`); the API key comes from `REVIEW_API_KEY` (or `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`). The `ast_*` navigation tools shell out to the optional [`ast-index`](https://github.com/defendend/Claude-ast-index-search) binary — auto-detected on `PATH` (the generated CI image installs it), with the index rebuilt per run; when absent the tools are simply not offered.
 
 **Task tracker access:** the tracker token never appears in the prompt. reviewctl fetches it with the review config and hands it to runners out-of-band: CLI runners get it as the `REVIEW_TRACKER_TOKEN` env var (prompts reference `$REVIEW_TRACKER_TOKEN` in curl instructions), the `direct` runner offers the model an `http_fetch` tool locked to the tracker origin that injects the `Authorization` header itself. A `REVIEW_TRACKER_TOKEN` CI variable overrides the server-stored token. Backward compatible in both directions: a legacy reviewctl (which doesn't export the env var) receives the old-style prompt with the token substituted in, and a new reviewctl against an older server falls back to the same legacy prompt.
 
@@ -219,6 +223,7 @@ When deploying behind a reverse proxy, URLs should be split by access level:
 | `/v1/upload/` | Deprecated upload aliases + debug bundle upload (older CI images) |
 | `/v1/debug/` | Debug bundle viewer — raw runner transcripts and artifacts |
 | `/debug/` | pprof and service metadata |
+| `/metrics` | Prometheus metrics (incl. per-project run outcomes and spend) |
 | `/status` | Healthcheck (DB ping) |
 
 Example nginx configuration:
@@ -237,8 +242,34 @@ location /v1/reviewctl/ { deny all; }
 location /v1/upload/    { deny all; }
 location /v1/debug/     { deny all; }
 location /debug/        { deny all; }
+location /metrics       { deny all; }
 location /status        { deny all; }
 ```
+
+### Monitoring
+
+Besides HTTP and DB-pool metrics, `/metrics` (Prometheus) exposes the outcome of every reviewctl run:
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `reviewer_runs_total` | `project`, `runner`, `status`, `reason` | Runs by outcome: `ok` is counted when the review is uploaded, any other status when reviewctl uploads the run's debug bundle |
+| `reviewer_run_cost_usd_total` | `project`, `runner`, `status` | Dollars spent by runs, failed ones included |
+
+- `status`: `ok` \| `failed` \| `cancelled` (the CI job was cancelled — not a failure) \| `timeout`.
+- `reason` (for `failed`): `billing` (provider credit balance exhausted), `auth`, `rate_limit`, `api_error` (provider 5xx / overload / dropped stream, after retries), `max_rounds`, `truncated`, `not_submitted` (the last three from the `direct` runner), `other`.
+- `project` is the project title (`unknown` for an unknown key); a runner outside `claude`/`opencode`/`codex`/`direct` is `other`.
+
+Alerting examples:
+
+```promql
+# Credit balance exhausted — every review fails until it is topped up
+increase(reviewer_runs_total{reason="billing"}[15m]) > 0
+
+# A project keeps failing (cancelled jobs excluded)
+sum by (project) (increase(reviewer_runs_total{status=~"failed|timeout"}[1h])) >= 3
+```
+
+Counters live in memory and reset on restart (`increase()` handles that). For the details of a run, failed runs upload their artifacts (runner transcript, `review.json`, `R*.md`) to `/v1/debug/storage/`: the list shows status, reason, cost and error of the last 200 runs, the newest 20 keep their files (see `[Debug]`); the buffer is dropped on restart. reviewsrv logs each such upload as `debug bundle stored` — at WARN for `failed`/`timeout`, at INFO for a cancelled job.
 
 ## Development
 

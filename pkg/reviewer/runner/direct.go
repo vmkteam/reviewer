@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/direct"
 )
 
@@ -32,9 +33,14 @@ var _ ReviewRunner = (*DirectRunner)(nil)
 type DirectRunner struct {
 	Provider direct.LLMProvider
 	Dir      string
-	DiffBase string // git_diff default base (target branch)
-	DiffHead string // git_diff default head (source branch)
-	Effort   string
+	DiffBase string // target branch (CI_MERGE_REQUEST_TARGET_BRANCH_NAME)
+	DiffHead string // source branch (CI_MERGE_REQUEST_SOURCE_BRANCH_NAME)
+	// DiffBaseSHA is the MR diff base (CI_MERGE_REQUEST_DIFF_BASE_SHA), the
+	// preferred base: branch names often don't resolve in a CI clone.
+	DiffBaseSHA string
+	Effort      string
+	// MaxRounds overrides the loop's round budget; zero keeps the direct default.
+	MaxRounds int
 	// CompactAt overrides the loop's compaction threshold (estimated tokens);
 	// zero keeps the direct package default. Set to direct.CompactAtLargeContext
 	// for 1M-context providers so mid-run compaction (a full cache re-write)
@@ -60,26 +66,36 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
 
+	// CI branch names rarely resolve in a CI clone; map them onto refs that do.
 	// Local runs carry no CI branch metadata; without a base the preload and the
 	// git_diff defaults degrade to "working tree vs HEAD" — an empty diff on a
 	// committed branch, and the model reviews the wrong thing. Detect the
 	// integration branch from git instead.
-	diffBase := r.DiffBase
+	diffBase, diffHead := direct.ResolveDiffRange(ctx, r.Dir, r.DiffBaseSHA, r.DiffBase, r.DiffHead)
 	if diffBase == "" {
 		if diffBase = direct.DetectBaseRef(ctx, r.Dir); diffBase != "" && r.Log != nil {
-			r.Log.InfoContext(ctx, "diff base not configured, detected from git", "base", diffBase)
+			r.Log.InfoContext(ctx, "diff base not resolved from CI metadata, detected from git", "base", diffBase, "target", r.DiffBase)
 		}
 	}
 
 	// Pre-load the diff and the full content of changed files into the kickoff so
 	// the model reviews from them instead of fanning out one read_file per turn.
 	// The pre-loaded paths seed read-dedup so the model isn't re-served them.
-	preloadBlock, preloadedPaths := direct.PreloadContext(ctx, r.Dir, diffBase, r.DiffHead)
+	preloadBlock, preloadedPaths := direct.PreloadContext(ctx, r.Dir, diffBase, diffHead)
+	if r.Log != nil {
+		if preloadBlock == "" {
+			// Without the preload a review takes several times the rounds and cost.
+			r.Log.WarnContext(ctx, "direct: diff preload is empty — the model will read every file itself",
+				"base", diffBase, "head", diffHead, "target", r.DiffBase, "source", r.DiffHead, "baseSha", r.DiffBaseSHA)
+		} else {
+			r.Log.InfoContext(ctx, "direct: diff preloaded", "base", diffBase, "head", diffHead, "files", len(preloadedPaths), "bytes", len(preloadBlock))
+		}
+	}
 
 	reg := direct.NewReviewRegistry(direct.ReviewToolsConfig{
 		Dir:            r.Dir,
 		DiffBase:       diffBase,
-		DiffHead:       r.DiffHead,
+		DiffHead:       diffHead,
 		PreloadedPaths: preloadedPaths,
 		Tracker:        r.Tracker,
 	})
@@ -94,6 +110,9 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 
 	opts := direct.DefaultOptions()
 	opts.Effort = r.Effort
+	if r.MaxRounds > 0 {
+		opts.MaxRounds = r.MaxRounds
+	}
 	if r.CompactAt > 0 {
 		opts.CompactAt = r.CompactAt
 	}
@@ -133,7 +152,7 @@ func (r *DirectRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, e
 		if r.Log != nil {
 			r.Log.ErrorContext(ctx, "direct: review not submitted", "stopReason", res.StopReason, "rounds", res.Rounds)
 		}
-		return cr, fmt.Errorf("direct: review not submitted (stop=%s)", res.StopReason)
+		return cr, reviewer.WithRunReason(reviewer.RunReasonNotSubmitted, fmt.Errorf("direct: review not submitted (stop=%s)", res.StopReason))
 	}
 	return cr, nil
 }
@@ -228,20 +247,28 @@ func directToClaudeResult(res *direct.Result) *ClaudeResult {
 		NumTurns:     res.Rounds,
 		StopReason:   res.StopReason,
 		IsError:      !res.Submitted,
-		Usage: ClaudeUsage{
-			InputTokens:              res.Usage.InputTokens,
-			OutputTokens:             res.Usage.OutputTokens,
-			CacheReadInputTokens:     res.Usage.CacheReadTokens,
-			CacheCreationInputTokens: res.Usage.CacheWriteTokens,
-		},
-		ModelUsage: map[string]ClaudeModelUse{
-			res.Model: {
-				InputTokens:              res.Usage.InputTokens,
-				OutputTokens:             res.Usage.OutputTokens,
-				CacheReadInputTokens:     res.Usage.CacheReadTokens,
-				CacheCreationInputTokens: res.Usage.CacheWriteTokens,
-				CostUSD:                  res.CostUsd,
-			},
-		},
+		Usage:        claudeUsage(res.Usage),
+		ModelUsage:   map[string]ClaudeModelUse{res.Model: modelUse(res.Usage, res.CostUsd)},
+	}
+}
+
+// claudeUsage maps direct token usage onto the ClaudeResult usage shape.
+func claudeUsage(u direct.Usage) ClaudeUsage {
+	return ClaudeUsage{
+		InputTokens:              u.InputTokens,
+		OutputTokens:             u.OutputTokens,
+		CacheReadInputTokens:     u.CacheReadTokens,
+		CacheCreationInputTokens: u.CacheWriteTokens,
+	}
+}
+
+// modelUse maps direct token usage and its cost onto a ClaudeResult.ModelUsage entry.
+func modelUse(u direct.Usage, cost float64) ClaudeModelUse {
+	return ClaudeModelUse{
+		InputTokens:              u.InputTokens,
+		OutputTokens:             u.OutputTokens,
+		CacheReadInputTokens:     u.CacheReadTokens,
+		CacheCreationInputTokens: u.CacheWriteTokens,
+		CostUSD:                  cost,
 	}
 }

@@ -50,11 +50,11 @@ func TestConfigResolveDefaults(t *testing.T) {
 		{"claude effort preserved, no default", runner.RunnerClaude, "", "", "high", "opus", "high"},
 		{"opencode empty model stays empty", runner.RunnerOpenCode, "", "", "", "", ""},
 		{"opencode explicit model preserved", runner.RunnerOpenCode, "", "anthropic/claude-opus-4", "", "anthropic/claude-opus-4", ""},
-		{"direct+anthropic pins model and xhigh effort", runner.RunnerDirect, "anthropic", "", "", "claude-opus-4-8", "xhigh"},
-		{"direct+anthropic explicit effort preserved", runner.RunnerDirect, "anthropic", "", "max", "claude-opus-4-8", "max"},
+		{"direct+anthropic pins model and xhigh effort", runner.RunnerDirect, "anthropic", "", "", "claude-opus-5-5", "xhigh"},
+		{"direct+anthropic explicit effort preserved", runner.RunnerDirect, "anthropic", "", "max", "claude-opus-5-5", "max"},
 		{"direct+deepseek leaves model/effort untouched", runner.RunnerDirect, "deepseek", "", "", "", ""},
-		{"codex pins a default model", runner.RunnerCodex, "", "", "", "gpt-5.1-codex", ""},
-		{"codex explicit model preserved", runner.RunnerCodex, "", "gpt-5-codex", "", "gpt-5-codex", ""},
+		{"codex pins a default model", runner.RunnerCodex, "", "", "", "gpt-6-sol", ""},
+		{"codex explicit model preserved", runner.RunnerCodex, "", "gpt-5.5", "", "gpt-5.5", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

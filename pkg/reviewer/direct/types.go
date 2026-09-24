@@ -30,10 +30,12 @@ type Message struct {
 	ToolResults []ToolResult
 
 	// Raw is an opaque, provider-native snapshot of an assistant turn used to
-	// replay it verbatim on later requests. The Anthropic provider stores the
-	// SDK MessageParam here so signed thinking blocks survive the round-trip
-	// (rebuilding from Text+ToolCalls alone would drop them). Nil for messages
-	// the loop creates itself; providers that don't set it just reconstruct.
+	// replay it verbatim on later requests, so reasoning survives the round-trip
+	// (Anthropic: SDK MessageParam with signed thinking blocks; OpenAI Responses:
+	// output items with encrypted reasoning). Rebuilding from Text+ToolCalls
+	// alone drops that reasoning. A snapshot is valid only for the history it
+	// was produced in — compaction clears it. Nil for messages the loop creates
+	// itself; providers that don't set it just reconstruct.
 	Raw any
 }
 
@@ -63,8 +65,9 @@ type Usage struct {
 }
 
 // Request is one provider call: stable system prompt + accumulated history + the
-// tool set. Effort is honoured by providers that support it (Anthropic), ignored
-// otherwise.
+// tool set. Effort, when set, is passed to Anthropic (output_config.effort),
+// OpenAI (Responses reasoning effort) and DeepSeek (reasoning_effort); other
+// OpenAI-compatible backends ignore it.
 type Request struct {
 	System   string
 	Messages []Message
@@ -81,8 +84,27 @@ type Response struct {
 
 	// Raw is the provider-native assistant turn (see Message.Raw). The loop
 	// copies it into the assistant Message it appends so the next request can
-	// replay it verbatim, preserving e.g. signed thinking blocks.
+	// replay it verbatim, preserving signed thinking / encrypted reasoning.
 	Raw any
+
+	// Retries holds the errors of transient failures the provider retried
+	// before this response, recorded in the transcript. Their partial usage is
+	// billed by the provider but not counted in Usage.
+	Retries []string
+}
+
+// SplitInput builds a Usage from OpenAI-style counters, where input includes the
+// cached and cache-written tokens, so InputTokens is the uncached remainder —
+// the Anthropic semantics Pricing.Cost expects.
+func SplitInput(input, cached, written, output int) Usage {
+	cached = min(max(cached, 0), input)
+	written = min(max(written, 0), input-cached)
+	return Usage{
+		InputTokens:      input - cached - written,
+		OutputTokens:     output,
+		CacheReadTokens:  cached,
+		CacheWriteTokens: written,
+	}
 }
 
 // sumUsage accumulates token counters across rounds.

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"reviewsrv/pkg/reviewer"
@@ -60,12 +63,14 @@ func main() {
 	pf.StringVar(&cfg.SessionID, "session", "", "Claude session ID for --resume (reuses prompt cache)")
 	pf.BoolVar(&cfg.ContinueSession, "continue", false, "continue last Claude session (auto-detect)")
 	pf.BoolVar(&cfg.DebugUpload, "debug-upload", ctl.EnvBool("REVIEW_DEBUG_UPLOAD", false), "always upload artifacts to /v1/upload/debug/ (failures upload regardless)")
-	pf.BoolVar(&cfg.AllowDangerousPermissions, "allow-dangerous-permissions", ctl.EnvBool("REVIEW_ALLOW_DANGEROUS_PERMISSIONS", true), "pass --dangerously-skip-permissions to opencode (default true; required for unattended CI)")
-	pf.StringVar(&cfg.APIProvider, "api-provider", ctl.EnvDefault("REVIEW_API_PROVIDER", "deepseek"), "direct runner provider: deepseek | openai-compat | anthropic (key from ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env)")
+	pf.BoolVar(&cfg.AllowDangerousPermissions, "allow-dangerous-permissions", ctl.EnvBool("REVIEW_ALLOW_DANGEROUS_PERMISSIONS", true), "pass --auto to opencode, auto-approving permission prompts (default true; required for unattended CI)")
+	pf.StringVar(&cfg.CodexSandbox, "codex-sandbox", os.Getenv("REVIEW_CODEX_SANDBOX"), "codex --sandbox mode: workspace-write (default) | read-only | danger-full-access (for containers, where codex's bubblewrap sandbox can't start)")
+	pf.StringVar(&cfg.APIProvider, "api-provider", ctl.EnvDefault("REVIEW_API_PROVIDER", "deepseek"), "direct runner provider: deepseek | openai | openai-compat | anthropic (key from ANTHROPIC_API_KEY/OPENAI_API_KEY/DEEPSEEK_API_KEY env)")
 	pf.StringVar(&cfg.APIBaseURL, "api-base-url", os.Getenv("REVIEW_API_BASE_URL"), "direct runner API base URL (defaults to provider's standard endpoint)")
-	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "direct runner reasoning effort for Anthropic: low|medium|high|xhigh|max")
-	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-5.5,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
+	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "reasoning effort for claude, codex and direct: low|medium|high|xhigh|max")
+	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-6-sol,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
 	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
+	pf.IntVar(&cfg.MaxRounds, "max-rounds", ctl.EnvInt("REVIEW_MAX_ROUNDS", 0), "direct runner round budget (0 = default 60); overrides the runner profile")
 	pf.DurationVar(&cfg.Timeout, "timeout", ctl.EnvDuration("REVIEW_TIMEOUT", 30*time.Minute), "per-member/judge run timeout (e.g. 30m, 1h); 0 = no timeout")
 	// --multi/--judge are local debug overrides (ambient creds, bypass the server
 	// panel config). Keep them working but hidden so they don't become a stable CLI
@@ -116,7 +121,13 @@ func main() {
 	}
 
 	rootCmd.AddCommand(reviewCmd, uploadCmd, commentCmd, versionCmd)
-	if err := rootCmd.Execute(); err != nil {
+	// A cancelled CI job sends SIGTERM: cancel the run context instead of dying
+	// mid-flight, so the runner stops and the debug bundle still ships, marked
+	// cancelled rather than failed.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := rootCmd.ExecuteContext(ctx)
+	stop()
+	if err != nil {
 		os.Exit(1)
 	}
 }
@@ -184,6 +195,9 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 	serverDefault(fl.Changed, "api-base-url", p.APIBaseURL, &cfg.APIBaseURL)
 	if !fl.Changed("allow-dangerous-permissions") {
 		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+	}
+	if cfg.MaxRounds == 0 {
+		cfg.MaxRounds = p.Params.MaxRounds
 	}
 
 	// Task-tracker access: the URL comes from the server config; the CI env var
@@ -263,11 +277,11 @@ func buildRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, error)
 			Log:                       log,
 		}, nil
 	case runner.RunnerCodex:
-		return &runner.ExecCodexRunner{Model: cfg.Model, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
+		return &runner.ExecCodexRunner{Model: cfg.Model, Effort: cfg.Effort, Sandbox: cfg.CodexSandbox, Dir: cfg.Dir, SessionID: cfg.SessionID, ContinueSession: cfg.ContinueSession, Token: cfg.Token, TrackerToken: cfg.TrackerToken, Log: log}, nil
 	case runner.RunnerDirect:
 		return buildDirectRunner(cfg, log)
 	default:
-		return nil, fmt.Errorf("unknown --runner %q (supported: %s, %s, %s, %s)", cfg.Runner, runner.RunnerClaude, runner.RunnerOpenCode, runner.RunnerCodex, runner.RunnerDirect)
+		return nil, fmt.Errorf("unknown --runner %q (supported: %s)", cfg.Runner, strings.Join(runner.Names, ", "))
 	}
 }
 
@@ -295,14 +309,16 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 		tracker = &direct.TrackerConfig{URL: cfg.TrackerURL, Token: cfg.TrackerToken}
 	}
 	return &runner.DirectRunner{
-		Provider:  prov,
-		Dir:       cfg.Dir,
-		DiffBase:  cfg.TargetBranch,
-		DiffHead:  cfg.SourceBranch,
-		Effort:    cfg.Effort,
-		CompactAt: direct.DefaultCompactAt(cfg.APIProvider),
-		Tracker:   tracker,
-		Log:       log,
+		Provider:    prov,
+		Dir:         cfg.Dir,
+		DiffBase:    cfg.TargetBranch,
+		DiffHead:    cfg.SourceBranch,
+		DiffBaseSHA: cfg.DiffBaseSHA,
+		Effort:      cfg.Effort,
+		MaxRounds:   cfg.MaxRounds,
+		CompactAt:   direct.DefaultCompactAt(cfg.APIProvider),
+		Tracker:     tracker,
+		Log:         log,
 	}, nil
 }
 

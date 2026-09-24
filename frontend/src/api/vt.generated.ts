@@ -194,7 +194,8 @@ export interface IRunnerProfile {
 }
 
 export interface IRunnerProfileParams {
-  allowDangerousPermissions: boolean
+  allowDangerousPermissions: boolean,
+  maxRounds: number // direct runner round budget; 0 = default
 }
 
 export interface IRunnerProfileSearch {
@@ -683,6 +684,7 @@ export class RunnerProfileParams implements IRunnerProfileParams {
   static entityName = "runnerprofileparams";
 
   allowDangerousPermissions: boolean = false;
+  maxRounds: number = 0;
 }
 
 export class RunnerProfileSearch implements IRunnerProfileSearch {

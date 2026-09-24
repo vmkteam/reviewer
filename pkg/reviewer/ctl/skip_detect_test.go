@@ -125,7 +125,7 @@ func TestRetryStep2(t *testing.T) {
 		c := &Controller{
 			cfg:    &Config{Dir: t.TempDir()},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
 		draft, res := c.retryStep2(context.Background(), "")
 		assert.Nil(t, draft)
@@ -149,7 +149,7 @@ func TestRetryStep2(t *testing.T) {
 		c := &Controller{
 			cfg:    &Config{Dir: t.TempDir()},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
 		draft, res := c.retryStep2(context.Background(), "ses_123")
 		assert.Nil(t, draft)
@@ -173,7 +173,7 @@ func TestRetryStep2(t *testing.T) {
 		c := &Controller{
 			cfg:    &Config{Dir: dir},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
 		draft, res := c.retryStep2(context.Background(), "ses_abc")
 		require.NotNil(t, draft, "expected non-nil draft after successful retry")

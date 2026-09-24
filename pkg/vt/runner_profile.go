@@ -2,6 +2,7 @@ package vt
 
 import (
 	"context"
+	"slices"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/reviewer/direct"
@@ -13,10 +14,9 @@ import (
 
 // Allowed enum values for a runner profile, validated here so the admin can't save
 // an unusable profile. Runners and providers reuse the canonical sources of truth
-// (runner.Runner* constants and direct.IsValidProvider); efforts have no shared
+// (runner.Names and direct.IsValidProvider); efforts have no shared
 // constant and stay in sync with the runner's effort handling by hand.
 var (
-	validRunners = map[string]bool{runner.RunnerClaude: true, runner.RunnerOpenCode: true, runner.RunnerCodex: true, runner.RunnerDirect: true}
 	//nolint:goconst // "max" here is an effort level, not the FieldErrorMax error code
 	validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 )
@@ -215,7 +215,7 @@ func (s RunnerProfileService) isValid(ctx context.Context, runnerProfile RunnerP
 	}
 
 	// custom validation starts here
-	if runnerProfile.Runner != "" && !validRunners[runnerProfile.Runner] {
+	if runnerProfile.Runner != "" && !slices.Contains(runner.Names, runnerProfile.Runner) {
 		v.Append("runner", FieldErrorIncorrect)
 	}
 	if runnerProfile.APIProvider != nil && *runnerProfile.APIProvider != "" && !direct.IsValidProvider(*runnerProfile.APIProvider) {
@@ -223,6 +223,9 @@ func (s RunnerProfileService) isValid(ctx context.Context, runnerProfile RunnerP
 	}
 	if runnerProfile.Effort != nil && *runnerProfile.Effort != "" && !validEfforts[*runnerProfile.Effort] {
 		v.Append("effort", FieldErrorIncorrect)
+	}
+	if n := runnerProfile.Params.MaxRounds; n != 0 && !direct.IsValidMaxRounds(n) {
+		v.Append("params.maxRounds", FieldErrorIncorrect)
 	}
 
 	return v

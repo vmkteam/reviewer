@@ -64,6 +64,8 @@ type ReviewSetup struct {
 
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+	// direct runner round budget; 0 = default
+	MaxRounds int `json:"maxRounds"`
 }
 
 type TrackerConfig struct {

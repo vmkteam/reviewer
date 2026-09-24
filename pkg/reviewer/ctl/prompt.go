@@ -51,6 +51,7 @@ func NewPromptClient(log *slog.Logger) *PromptClient {
 // RunnerProfileParams mirrors the server's params payload.
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+	MaxRounds                 int  `json:"maxRounds"` // direct runner round budget; 0 = default
 }
 
 // ResolvedProfile is one resolved runner profile from the server (with its real
@@ -109,7 +110,7 @@ func newResolvedProfile(cfg *reviewctlclient.Config) *ResolvedProfile {
 		APIProvider:     cfg.ApiProvider,
 		APIBaseURL:      cfg.ApiBaseURL,
 		Token:           cfg.Token,
-		Params:          RunnerProfileParams{AllowDangerousPermissions: cfg.Params.AllowDangerousPermissions},
+		Params:          RunnerProfileParams(cfg.Params),
 	}
 }
 

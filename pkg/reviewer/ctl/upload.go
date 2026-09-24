@@ -177,6 +177,9 @@ type DebugMeta struct {
 	SourceBranch string
 	TargetBranch string
 	CommitHash   string
+	Status       string  // reviewer.RunStatus*
+	Reason       string  // reviewer.RunReason*; empty for an ok run
+	CostUsd      float64 // what the run spent, including a failed run
 }
 
 // UploadDebugBundle posts artifacts as a multipart form with each file
@@ -236,6 +239,9 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 		{debug.FieldSourceBranch, meta.SourceBranch},
 		{debug.FieldTargetBranch, meta.TargetBranch},
 		{debug.FieldCommitHash, meta.CommitHash},
+		{debug.FieldStatus, meta.Status},
+		{debug.FieldReason, meta.Reason},
+		{debug.FieldCostUsd, formatCost(meta.CostUsd)},
 	}
 	for _, f := range fields {
 		if f.value == "" {
@@ -269,6 +275,14 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 		return nil, "", fmt.Errorf("close multipart: %w", err)
 	}
 	return &buf, mw.FormDataContentType(), nil
+}
+
+// formatCost renders a dollar cost for a form field; "" (field omitted) for zero.
+func formatCost(usd float64) string {
+	if usd <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(usd, 'f', -1, 64)
 }
 
 // reviewArtifactFiles are the fixed-name outputs a runner writes into the review

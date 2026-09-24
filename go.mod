@@ -16,7 +16,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/namsral/flag v1.7.4-pre
 	github.com/prometheus/client_golang v1.24.1
-	github.com/sashabaranov/go-openai v1.41.2
+	github.com/sashabaranov/go-openai v1.42.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vmkteam/appkit v0.1.2

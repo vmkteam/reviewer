@@ -1,12 +1,15 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"time"
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/debug"
 	"reviewsrv/pkg/reviewctl"
+	"reviewsrv/pkg/reviewer"
+	"reviewsrv/pkg/reviewer/runner"
 	"reviewsrv/pkg/rpc"
 	"reviewsrv/pkg/vt"
 
@@ -34,11 +37,20 @@ type Config struct {
 		Environment string
 		DSN         string
 	}
+	// Debug sizes the in-memory ring of recent reviewctl runs; zero values
+	// take the defaults below.
+	Debug struct {
+		Capacity      int // runs kept (metadata)
+		FilesCapacity int // newest runs that keep their artifact files
+	}
 }
 
-// debugBufferCapacity caps the in-memory ring of recent reviewctl runs.
-// Sized for a handful of CI failures — bigger values just waste RAM.
-const debugBufferCapacity = 10
+// Defaults for the debug ring: run metadata is small, so keep days of CI
+// failures; artifacts run to megabytes each, so only the newest keep them.
+const (
+	debugBufferCapacity = 200
+	debugFilesCapacity  = 20
+)
 
 type App struct {
 	embedlog.Logger
@@ -53,6 +65,7 @@ type App struct {
 	srv          *zenrpc.Server
 	reviewctlsrv *zenrpc.Server
 	debugStorage *debug.Storage
+	runMetrics   *reviewer.RunMetrics
 }
 
 func New(appName, version string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *App {
@@ -64,7 +77,8 @@ func New(appName, version string, sl embedlog.Logger, cfg Config, db db.DB, dbc 
 		dbc:          dbc,
 		echo:         appkit.NewEcho(),
 		Logger:       sl,
-		debugStorage: debug.New(debugBufferCapacity),
+		debugStorage: debug.New(cmp.Or(cfg.Debug.Capacity, debugBufferCapacity), cmp.Or(cfg.Debug.FilesCapacity, debugFilesCapacity)),
+		runMetrics:   reviewer.NewRunMetrics(runner.Names...),
 	}
 
 	// add services

@@ -1,33 +1,30 @@
 package direct
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
 
-const (
-	// defaultMaxRetries is the transient-error retry budget when not configured.
-	defaultMaxRetries = 3
-	// defaultMaxTokens caps each response so a long review answer is not silently
-	// truncated by a low provider default.
-	defaultMaxTokens = 8192
-)
+// defaultMaxTokens caps each response so a long review answer is not silently
+// truncated by a low provider default.
+const defaultMaxTokens = 8192
 
-// OpenAIConfig configures an OpenAI-compatible provider (DeepSeek, or any
-// endpoint speaking the OpenAI chat-completions protocol).
+// OpenAIConfig configures an OpenAI-protocol provider: chat completions
+// (DeepSeek, or any OpenAI-compatible endpoint) or the OpenAI Responses API.
 type OpenAIConfig struct {
 	APIKey      string
 	BaseURL     string // e.g. https://api.deepseek.com/v1
 	Model       string
 	Pricing     Pricing
 	Temperature float32
-	MaxRetries  int // transient (429/5xx/network) retry budget; 0 -> defaultMaxRetries
 	MaxTokens   int // per-response output cap; 0 -> defaultMaxTokens
+	// PassEffort sends Request.Effort as reasoning_effort. Only for backends
+	// known to accept it (DeepSeek); arbitrary OpenAI-compatible ones may 400.
+	PassEffort bool
 }
 
 // openaiProvider drives an OpenAI-compatible chat-completions API.
@@ -36,12 +33,30 @@ type openaiProvider struct {
 	model       string
 	pricing     Pricing
 	temperature float32
-	maxRetries  int
 	maxTokens   int
+	passEffort  bool
 }
 
-// NewOpenAIProvider builds a provider for DeepSeek / OpenAI-compatible endpoints.
+// NewOpenAIProvider builds a chat-completions provider for DeepSeek /
+// OpenAI-compatible endpoints.
 func NewOpenAIProvider(cfg OpenAIConfig) (LLMProvider, error) {
+	client, err := newOpenAIClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &openaiProvider{
+		client:      client,
+		model:       cfg.Model,
+		pricing:     cfg.Pricing,
+		temperature: cfg.Temperature,
+		maxTokens:   cmp.Or(cfg.MaxTokens, defaultMaxTokens),
+		passEffort:  cfg.PassEffort,
+	}, nil
+}
+
+// newOpenAIClient validates cfg and builds the go-openai client shared by the
+// chat-completions and Responses providers.
+func newOpenAIClient(cfg OpenAIConfig) (*openai.Client, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("openai provider: API key is required")
 	}
@@ -52,22 +67,7 @@ func NewOpenAIProvider(cfg OpenAIConfig) (LLMProvider, error) {
 	if cfg.BaseURL != "" {
 		conf.BaseURL = cfg.BaseURL
 	}
-	maxRetries := cfg.MaxRetries
-	if maxRetries <= 0 {
-		maxRetries = defaultMaxRetries
-	}
-	maxTokens := cfg.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = defaultMaxTokens
-	}
-	return &openaiProvider{
-		client:      openai.NewClientWithConfig(conf),
-		model:       cfg.Model,
-		pricing:     cfg.Pricing,
-		temperature: cfg.Temperature,
-		maxRetries:  maxRetries,
-		maxTokens:   maxTokens,
-	}, nil
+	return openai.NewClientWithConfig(conf), nil
 }
 
 func (p *openaiProvider) Model() string    { return p.model }
@@ -79,35 +79,28 @@ func (p *openaiProvider) Complete(ctx context.Context, req Request) (Response, e
 		Messages:    toOpenAIMessages(req),
 		Tools:       toOpenAITools(req.Tools),
 		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		// DeepSeek and most OpenAI-compatible backends only document max_tokens,
+		// not max_completion_tokens.
+		MaxTokens: p.maxTokens, //nolint:staticcheck // see above
+	}
+	if p.passEffort {
+		// Passed through as-is: DeepSeek takes none/low/high/max and maps
+		// minimal→low, medium/xhigh→high itself.
+		creq.ReasoningEffort = req.Effort
 	}
 
-	// Retry transient errors (429 / 5xx / network) with exponential backoff.
-	// A non-transient error (400, auth) fails immediately.
-	var resp openai.ChatCompletionResponse
-	var err error
-	backoff := 500 * time.Millisecond
-	for attempt := 0; ; attempt++ {
-		resp, err = p.client.CreateChatCompletion(ctx, creq)
-		if err == nil {
-			break
-		}
-		if attempt >= p.maxRetries || ctx.Err() != nil || !isTransientErr(err) {
-			return Response{}, fmt.Errorf("openai: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return Response{}, ctx.Err()
-		case <-time.After(backoff):
-		}
-		backoff *= 2
+	resp, retried, err := withRetry(ctx, openaiRetry, func() (openai.ChatCompletionResponse, error) {
+		return p.client.CreateChatCompletion(ctx, creq)
+	})
+	if err != nil {
+		return Response{}, err
 	}
 	if len(resp.Choices) == 0 {
 		return Response{}, errors.New("openai: response had no choices")
 	}
 
 	ch := resp.Choices[0]
-	out := Response{Text: ch.Message.Content, StopReason: string(ch.FinishReason)}
+	out := Response{Text: ch.Message.Content, StopReason: string(ch.FinishReason), Retries: retried}
 	for _, tc := range ch.Message.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, ToolCall{
 			ID:   tc.ID,
@@ -116,21 +109,11 @@ func (p *openaiProvider) Complete(ctx context.Context, req Request) (Response, e
 		})
 	}
 
-	// Split cached prompt tokens out of the input count so cost matches the
-	// Anthropic semantics (InputTokens = uncached remainder).
 	cached := 0
-	if resp.Usage.PromptTokensDetails != nil {
-		cached = resp.Usage.PromptTokensDetails.CachedTokens
+	if d := resp.Usage.PromptTokensDetails; d != nil {
+		cached = d.CachedTokens
 	}
-	input := resp.Usage.PromptTokens - cached
-	if input < 0 {
-		input, cached = resp.Usage.PromptTokens, 0
-	}
-	out.Usage = Usage{
-		InputTokens:     input,
-		OutputTokens:    resp.Usage.CompletionTokens,
-		CacheReadTokens: cached,
-	}
+	out.Usage = SplitInput(resp.Usage.PromptTokens, cached, 0, resp.Usage.CompletionTokens)
 	return out, nil
 }
 
@@ -174,17 +157,6 @@ func toOpenAIMessages(req Request) []openai.ChatCompletionMessage {
 		}
 	}
 	return msgs
-}
-
-// isTransientErr reports whether err is worth retrying: an HTTP 429 / 5xx
-// response or a network-level request error.
-func isTransientErr(err error) bool {
-	var apiErr *openai.APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.HTTPStatusCode == 429 || apiErr.HTTPStatusCode >= 500
-	}
-	var reqErr *openai.RequestError
-	return errors.As(err, &reqErr)
 }
 
 func toOpenAITools(defs []ToolDef) []openai.Tool {

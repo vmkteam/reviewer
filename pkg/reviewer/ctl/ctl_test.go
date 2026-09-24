@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -208,6 +211,90 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 	assert.Contains(t, debugError, "files[0]", "errorMsg must carry verbose validation detail")
 }
 
+// failingRunner fails like a real runner: a tagged error plus the partial result
+// carrying what the run already spent.
+type failingRunner struct {
+	name string
+	cost float64
+	err  error
+}
+
+func (r failingRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
+	return &runner.ClaudeResult{TotalCostUSD: r.cost, IsError: true}, r.err
+}
+func (r failingRunner) Name() string      { return r.name }
+func (r failingRunner) SetSession(string) {}
+
+func TestController_Review_ReportsFailureOutcome(t *testing.T) {
+	fields := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/reviewctl/rpc/" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "prompt", "id": 1})
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/v1/upload/debug/") {
+			if !assert.NoError(t, r.ParseMultipartForm(32<<20)) {
+				return
+			}
+			for k, v := range r.MultipartForm.Value {
+				fields[k] = v[0]
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"x","url":"/v1/debug/storage/x/"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	tests := []struct {
+		name       string
+		runner     failingRunner
+		wantMsg    string
+		wantStatus string
+		wantReason string
+	}{
+		{
+			name:       "billing",
+			runner:     failingRunner{name: runner.RunnerClaude, err: reviewer.WithRunReason(reviewer.RunReasonBilling, errors.New("billing_error: Credit balance is too low (api 400, claude exit status 1)"))},
+			wantMsg:    "run claude: billing_error: Credit balance is too low",
+			wantStatus: reviewer.RunStatusFailed,
+			wantReason: reviewer.RunReasonBilling,
+		},
+		{
+			name:       "direct max rounds keeps the cost",
+			runner:     failingRunner{name: runner.RunnerDirect, cost: 7.9, err: reviewer.WithRunReason(reviewer.RunReasonMaxRounds, errors.New("direct: max rounds reached without submit_review"))},
+			wantMsg:    "run direct: direct: max rounds",
+			wantStatus: reviewer.RunStatusFailed,
+			wantReason: reviewer.RunReasonMaxRounds,
+		},
+		{
+			name:       "cancelled job",
+			runner:     failingRunner{name: runner.RunnerClaude, cost: 0.4, err: reviewer.WithRunReason(reviewer.RunReasonCancelled, errors.New("claude interrupted by a signal: exit status 143"))},
+			wantMsg:    "run claude: claude interrupted",
+			wantStatus: reviewer.RunStatusCancelled,
+			wantReason: reviewer.RunReasonCancelled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clear(fields)
+			cfg := &Config{Key: "test-key", URL: srv.URL, Model: "m", Dir: t.TempDir(), Runner: tt.runner.name}
+			err := NewController(cfg, tt.runner, slog.Default()).Review(context.Background())
+			require.Error(t, err)
+			assert.True(t, strings.HasPrefix(fields["errorMsg"], tt.wantMsg), fields["errorMsg"])
+			assert.Equal(t, tt.wantStatus, fields["status"])
+			assert.Equal(t, tt.wantReason, fields["reason"])
+			if tt.runner.cost > 0 {
+				assert.Equal(t, strconv.FormatFloat(tt.runner.cost, 'f', -1, 64), fields["costUsd"])
+			} else {
+				assert.NotContains(t, fields, "costUsd")
+			}
+		})
+	}
+}
+
 func TestController_Comment(t *testing.T) {
 	var commentPosted bool
 
@@ -304,4 +391,32 @@ func TestWriteReviewJSONRoundTrip(t *testing.T) {
 	require.Equal(t, "claude-opus-5", got.Review.ModelInfo.Model)
 	require.InEpsilon(t, 1.5, got.Review.ModelInfo.CostUsd, 1e-9)
 	require.Equal(t, 4200, got.Review.DurationMs)
+}
+
+func TestSpendTracker(t *testing.T) {
+	var none *spendTracker
+	assert.Zero(t, none.total(), "a nil tracker spent nothing")
+	assert.Nil(t, trackSpend(nil))
+
+	st := trackSpend(failingRunner{name: runner.RunnerClaude, cost: 0.4, err: errors.New("boom")})
+	for range 2 { // e.g. the first run plus a failed Step 2 retry
+		_, err := st.Run(t.Context(), "prompt")
+		require.Error(t, err)
+	}
+	assert.InDelta(t, 0.8, st.total(), 1e-9, "failed runs are billed too")
+	assert.Equal(t, runner.RunnerClaude, st.Name())
+}
+
+func TestApplyRunResultAddsFailedAttempts(t *testing.T) {
+	c := &Controller{cfg: &Config{}, log: slog.Default()}
+	cfg := &Config{Dir: t.TempDir(), Model: "m"}
+	draft := &rest.ReviewDraft{}
+
+	c.applyRunResult(t.Context(), draft, cfg, failingRunner{name: runner.RunnerCodex},
+		&runner.ClaudeResult{TotalCostUSD: 1, DurationMs: 10},
+		&runner.ClaudeResult{TotalCostUSD: 0.5, DurationMs: 5}) // a judge attempt that came back empty
+
+	assert.InDelta(t, 1.5, draft.Review.ModelInfo.CostUsd, 1e-9)
+	assert.Equal(t, 15, draft.Review.DurationMs)
+	assert.Equal(t, runner.RunnerCodex, draft.Review.ModelInfo.Runner)
 }

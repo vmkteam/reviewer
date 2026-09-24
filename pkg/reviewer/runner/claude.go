@@ -36,6 +36,7 @@ type ClaudeResult struct {
 	NumTurns          int                       `json:"num_turns"`
 	SessionID         string                    `json:"session_id"`
 	IsError           bool                      `json:"is_error"`
+	APIErrorStatus    int                       `json:"api_error_status"` // HTTP status of a failed API call; 0 when absent
 	StopReason        string                    `json:"stop_reason"`
 	TerminalReason    string                    `json:"terminal_reason"`
 	PermissionDenials []any                     `json:"permission_denials"`
@@ -151,7 +152,9 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 		return nil, fmt.Errorf("unexpected claude output type: %q", cr.Type)
 	}
 
-	if cr.Subtype == "error_max_turns" || cr.Subtype == directSubtypeError {
+	// Failure subtypes are "error" plus a growing error_* family
+	// (error_max_turns, error_during_execution, error_max_budget_usd, ...).
+	if strings.HasPrefix(cr.Subtype, directSubtypeError) {
 		return &cr, fmt.Errorf("claude returned error: %s", cr.Result)
 	}
 
@@ -160,7 +163,7 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 
 // ToModelInfo converts ClaudeResult to db.ReviewModelInfo.
 // The fallback model name (CLI -m flag) is replaced by the full model id
-// from modelUsage when available — e.g. "opus" → "claude-opus-4-7".
+// from modelUsage when available — e.g. "opus" → "claude-opus-5-5".
 // The Runner field is left empty; callers set it from the runner that produced cr.
 func (cr *ClaudeResult) ToModelInfo(model string) db.ReviewModelInfo {
 	mi := db.ReviewModelInfo{
@@ -228,12 +231,17 @@ const (
 	RunnerCodex    = "codex"
 )
 
+// Names lists every runner identifier: the closed set a runner name is checked against.
+var Names = []string{RunnerClaude, RunnerOpenCode, RunnerCodex, RunnerDirect}
+
 // ReviewRunner abstracts the review LLM subprocess for testability.
 // Name returns a stable runner identifier (RunnerClaude | RunnerOpenCode) that
 // gets stored alongside model usage in db.ReviewModelInfo.
 //
 // Implementations normalize their CLI output into ClaudeResult — the name
-// stays for backwards compatibility with persisted records.
+// stays for backwards compatibility with persisted records. The usage and cost
+// in a Run's result cover that call only, even when it resumes a session:
+// callers add results across calls (Step 2 retry).
 type ReviewRunner interface {
 	Run(ctx context.Context, prompt string) (*ClaudeResult, error)
 	Name() string
@@ -293,6 +301,12 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 		// as --output-format json, so ParseClaudeResult is unchanged downstream.
 		"--output-format", "stream-json", "--verbose",
 		"--permission-mode", "bypassPermissions",
+		// The working dir is the reviewed MR checkout: its .claude/settings.json
+		// (hooks, env, apiKeyHelper) and .mcp.json are attacker-controlled and
+		// would run with the job's secrets. Load user settings only (managed
+		// policy always applies) and no MCP servers.
+		"--setting-sources", "user",
+		"--strict-mcp-config",
 	}
 
 	if r.Model != "" {
@@ -300,8 +314,7 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 	}
 
 	// Pass reasoning effort only when explicitly set; otherwise the CLI applies
-	// its own default (xhigh on Opus 4.7/4.8). Older claude CLIs that predate
-	// --effort would reject the flag, so opting in keeps them working.
+	// its own per-model default.
 	if r.Effort != "" {
 		args = append(args, "--effort", r.Effort)
 	}
@@ -453,12 +466,10 @@ func (r *ExecClaudeRunner) saveOutput(ctx context.Context, data []byte) {
 }
 
 func (r *ExecClaudeRunner) handleClaudeError(err error, stdout []byte, stderr string) (*ClaudeResult, error) {
-	if len(stdout) > 0 {
-		if cr, parseErr := ParseClaudeResult(stdout); parseErr == nil {
-			return cr, fmt.Errorf("claude exited with error: %w", err)
-		}
-	}
-	return nil, fmt.Errorf("claude exited with error: %w (stderr: %s)", err, truncate(stderr, 500))
+	// An error_* subtype comes back together with a parse error; keep the result
+	// anyway — its cost and usage are what the failed run billed.
+	cr, _ := ParseClaudeResult(stdout)
+	return cr, claudeRunError(err, cr, stdout, stderr)
 }
 
 func truncate(s string, maxLen int) string {
@@ -556,6 +567,17 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
 
 	out.err = cmd.Run()
+	// Killed by the context (runnerTimeout, the caller's deadline or a cancelled
+	// job): keep the cause in the chain so a timeout/cancel is not reported as a
+	// crash ("signal: killed").
+	if out.err != nil && ctx.Err() != nil {
+		out.err = fmt.Errorf("%w: %w", ctx.Err(), out.err)
+	}
+	// Stopped by SIGTERM/SIGINT from outside (a cancelled CI job reaches the
+	// runner before, or instead of, reviewctl itself): not a runner failure.
+	if isInterrupted(out.err) {
+		out.err = reviewer.WithRunReason(reviewer.RunReasonCancelled, out.err)
+	}
 	if lw != nil {
 		lw.flush() // emit a trailing line without a newline
 	}

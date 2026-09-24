@@ -81,11 +81,48 @@ func DetectBaseRef(ctx context.Context, root string) string {
 		}
 	}
 	for _, ref := range []string{"origin/devel", "origin/main", "origin/master"} {
-		if _, err := runGit(ctx, root, false, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
+		if isCommit(ctx, root, ref) {
 			return ref
 		}
 	}
 	return ""
+}
+
+// ResolveDiffRange turns CI metadata into refs that exist in the checkout. A
+// GitLab CI clone is a detached HEAD without local branches, so the bare branch
+// names (main...feature-x) are "bad revision": the preload silently came out
+// empty and the model had to read every changed file one round at a time.
+//
+// head is source when it resolves locally, else HEAD — the checked-out commit is
+// also what read_file sees; an empty source stays empty (the local "working tree
+// vs base" mode). base is the first candidate that shares history with head
+// (base...head needs a merge base, which a shallow clone can cut off): the MR
+// diff base SHA, origin/<target>, <target>. "" when none does — the caller
+// falls back to DetectBaseRef.
+func ResolveDiffRange(ctx context.Context, root, baseSHA, target, source string) (base, head string) {
+	head = source
+	if source != "" && (!validRef(source) || !isCommit(ctx, root, source)) {
+		head = "HEAD"
+	}
+	var origin string
+	if target != "" && !strings.HasPrefix(target, "origin/") {
+		origin = "origin/" + target
+	}
+	for _, cand := range []string{baseSHA, origin, target} {
+		if cand == "" || !validRef(cand) {
+			continue
+		}
+		if _, err := runGit(ctx, root, false, "merge-base", cand, cmp.Or(head, "HEAD")); err == nil {
+			return cand, head
+		}
+	}
+	return "", head
+}
+
+// isCommit reports whether ref resolves to a commit in the repository.
+func isCommit(ctx context.Context, root, ref string) bool {
+	_, err := runGit(ctx, root, false, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	return err == nil
 }
 
 // validPath guards the git_diff path argument: relative, no traversal, not an

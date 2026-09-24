@@ -41,6 +41,16 @@ func (pm *ProjectManager) GetByKey(ctx context.Context, projectKey string) (*Pro
 	return NewProject(p), err
 }
 
+// TitleByKey returns the title of the project with projectKey, or "" when no
+// project matches. It loads the project row only, without its relations.
+func (pm *ProjectManager) TitleByKey(ctx context.Context, projectKey string) (string, error) {
+	p, err := pm.repo.OneProject(ctx, &db.ProjectSearch{ProjectKey: &projectKey}, db.WithColumns(db.TableColumns))
+	if err != nil || p == nil {
+		return "", err
+	}
+	return p.Title, nil
+}
+
 // resolvePrimaryProfile returns a project's primary runner profile: its pinned
 // profile, or the global default when none is pinned.
 func (pm *ProjectManager) resolvePrimaryProfile(ctx context.Context, p *db.Project) (*db.RunnerProfile, error) {

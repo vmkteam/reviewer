@@ -44,6 +44,7 @@ const (
 const (
 	toolSubmitReview = "submit_review"
 	toolAddIssues    = "add_issues"
+	toolSetGroup     = "set_group"
 
 	fSummary     = "summary"
 	fIsAccepted  = "isAccepted"
@@ -124,7 +125,7 @@ func (b *reviewBuilder) snapshot() (map[string]groupData, []rest.ReviewDraftIssu
 // small payload, called once per group.
 func setGroupTool(b *reviewBuilder) (ToolDef, Handler) {
 	def := ToolDef{
-		Name: "set_group",
+		Name: toolSetGroup,
 		Description: "Set one review group: its one-line summary, isAccepted, and full markdown body. " +
 			"Call once per group (architecture, code, security, tests, operability). Small payload — preferred over packing all groups into submit_review.",
 		Schema: objSchema(map[string]any{

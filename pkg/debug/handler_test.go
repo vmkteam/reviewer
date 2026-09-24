@@ -3,6 +3,7 @@ package debug
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -18,8 +19,8 @@ import (
 
 func newTestHandler(t *testing.T) (*Storage, *echo.Echo) {
 	t.Helper()
-	storage := New(5)
-	h := NewHandler(storage, slog.Default())
+	storage := New(5, 5)
+	h := NewHandler(storage, slog.Default(), nil, nil)
 
 	e := echo.New()
 	e.POST("/v1/upload/debug/:projectKey/", h.Upload)
@@ -40,6 +41,26 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 		t.Fatalf("gzip close: %v", err)
 	}
 	return buf.Bytes()
+}
+
+// gzFile builds a stored artifact from its content.
+func gzFile(t *testing.T, content string) File {
+	t.Helper()
+	return File{Gzip: gzipBytes(t, []byte(content)), Size: len(content)}
+}
+
+// unzip returns a stored artifact's content.
+func unzip(t *testing.T, f File) string {
+	t.Helper()
+	gr, err := gzip.NewReader(bytes.NewReader(f.Gzip))
+	if err != nil {
+		t.Fatalf("gzip: %v", err)
+	}
+	data, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("gunzip: %v", err)
+	}
+	return string(data)
 }
 
 func buildMultipart(t *testing.T, fields map[string]string, files map[string][]byte) (*bytes.Buffer, string) {
@@ -112,11 +133,11 @@ func TestHandler_UploadStoresBundle(t *testing.T) {
 	if b.MRIid != "42" || b.Runner != "claude" || b.Model != "opus" {
 		t.Errorf("metadata mismatch: %+v", b)
 	}
-	if string(b.Files["review.json"]) != `{"files":[]}` {
-		t.Errorf("review.json content mismatch: %q", b.Files["review.json"])
+	if got := unzip(t, b.Files["review.json"]); got != `{"files":[]}` {
+		t.Errorf("review.json content mismatch: %q", got)
 	}
-	if string(b.Files["claude-output.json"]) != `{"type":"result"}` {
-		t.Errorf("claude-output.json content mismatch: %q", b.Files["claude-output.json"])
+	if f := b.Files["claude-output.json"]; unzip(t, f) != `{"type":"result"}` || f.Size != len(`{"type":"result"}`) {
+		t.Errorf("claude-output.json mismatch: %q (size %d)", unzip(t, f), f.Size)
 	}
 }
 
@@ -165,7 +186,7 @@ func TestHandler_ListAndBundleHTML(t *testing.T) {
 		ErrorMsg:     "boom",
 		SourceBranch: "feat/x",
 		TargetBranch: "master",
-		Files:        map[string][]byte{"review.json": []byte(`{"x":1}`)},
+		Files:        map[string]File{"review.json": gzFile(t, `{"x":1}`)},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/debug/storage/", nil)
@@ -200,7 +221,7 @@ func TestHandler_FileServesArtifactWithContentType(t *testing.T) {
 	storage, e := newTestHandler(t)
 	storage.Add(&Bundle{
 		ID:    "xyz",
-		Files: map[string][]byte{"review.json": []byte(`{"ok":true}`)},
+		Files: map[string]File{"review.json": gzFile(t, `{"ok":true}`)},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/debug/storage/xyz/review.json", nil)
@@ -226,5 +247,81 @@ func TestHandler_FileNotFound(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
+	}
+}
+
+// upload posts a bundle and returns the stored copy.
+func upload(t *testing.T, storage *Storage, e *echo.Echo, projectKey string, fields map[string]string) *Bundle {
+	t.Helper()
+	body, ct := buildMultipart(t, fields, map[string][]byte{"review.json": []byte(`{}`)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/upload/debug/"+projectKey+"/", body)
+	req.Header.Set("Content-Type", ct)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return storage.Get(resp["id"])
+}
+
+func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
+	storage := New(5, 5)
+	knownKey := uuid.NewString()
+	h := NewHandler(storage, slog.Default(), func(_ context.Context, key string) string {
+		if key == knownKey {
+			return "demo"
+		}
+		return ""
+	}, nil)
+	e := echo.New()
+	e.POST("/v1/upload/debug/:projectKey/", h.Upload)
+	e.GET("/v1/debug/storage/", h.List)
+
+	b := upload(t, storage, e, knownKey, map[string]string{
+		"runner": "claude", "errorMsg": "run claude: billing_error: Credit balance is too low",
+		"status": "failed", "reason": "billing", "costUsd": "1.5",
+	})
+	if b.Status != "failed" || b.Reason != "billing" || b.CostUsd != 1.5 || b.ProjectTitle != "demo" {
+		t.Errorf("outcome not recorded: %+v", b)
+	}
+
+	// A legacy client sends no status: derived from errorMsg. Garbage is sanitized.
+	b = upload(t, storage, e, uuid.NewString(), map[string]string{"errorMsg": "boom", "reason": "<script>", "costUsd": "NaN"})
+	if b.Status != "failed" || b.Reason != "other" || b.CostUsd != 0 || b.ProjectTitle != "" {
+		t.Errorf("legacy upload not normalized: %+v", b)
+	}
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/debug/storage/", nil))
+	page := rec.Body.String()
+	for _, want := range []string{"demo", "billing", "$1.50", `class="st-failed"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("list page misses %q", want)
+		}
+	}
+}
+
+func TestClip(t *testing.T) {
+	if got := clip("short", 10); got != "short" {
+		t.Errorf("clip(short) = %q", got)
+	}
+	// "ошибка" is 12 bytes, 2 per rune: a cut at 5 must not split a rune.
+	if got := clip("ошибка", 5); got != "ош" {
+		t.Errorf("clip(ошибка, 5) = %q, want %q", got, "ош")
+	}
+}
+
+func TestHandler_UploadClipsMetadata(t *testing.T) {
+	storage, e := newTestHandler(t)
+	b := upload(t, storage, e, uuid.NewString(), map[string]string{
+		FieldErrorMsg: strings.Repeat("e", maxErrorMsgBytes+100),
+		FieldModel:    strings.Repeat("m", maxFieldBytes+100),
+	})
+	if len(b.ErrorMsg) != maxErrorMsgBytes || len(b.Model) != maxFieldBytes {
+		t.Errorf("errorMsg %d bytes, model %d bytes: want %d and %d", len(b.ErrorMsg), len(b.Model), maxErrorMsgBytes, maxFieldBytes)
 	}
 }

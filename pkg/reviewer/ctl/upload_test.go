@@ -173,6 +173,9 @@ func TestUploadDebugBundle(t *testing.T) {
 		Runner:   "claude",
 		Model:    "opus",
 		ErrorMsg: "validate review.json: invalid reviewType at files[2]: \"\"",
+		Status:   "failed",
+		Reason:   "other",
+		CostUsd:  1.81118025,
 	}, map[string][]byte{
 		"review.json":        []byte(`{"files":[]}`),
 		"claude-output.json": []byte(`{"type":"result"}`),
@@ -184,6 +187,9 @@ func TestUploadDebugBundle(t *testing.T) {
 	assert.Equal(t, "42", gotFields["mrIid"])
 	assert.Equal(t, "claude", gotFields["runner"])
 	assert.Contains(t, gotFields["errorMsg"], "files[2]")
+	assert.Equal(t, "failed", gotFields["status"])
+	assert.Equal(t, "other", gotFields["reason"])
+	assert.Equal(t, "1.81118025", gotFields["costUsd"])
 	assert.JSONEq(t, `{"files":[]}`, string(gotFiles["review.json"]))
 	assert.JSONEq(t, `{"type":"result"}`, string(gotFiles["claude-output.json"]))
 }

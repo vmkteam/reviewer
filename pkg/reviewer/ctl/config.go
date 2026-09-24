@@ -3,6 +3,7 @@ package ctl
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,9 +43,10 @@ type Config struct {
 	// Direct-API runner (--runner direct): provider, endpoint and reasoning effort.
 	// The API key is read from the environment (ANTHROPIC_API_KEY / DEEPSEEK_API_KEY),
 	// never a flag.
-	APIProvider string // "deepseek" (default) | "openai-compat" | "anthropic"
+	APIProvider string // "deepseek" (default) | "openai" | "openai-compat" | "anthropic"
 	APIBaseURL  string
 	Effort      string
+	MaxRounds   int // direct runner round budget (--max-rounds / profile); 0 = default
 
 	// Resolved runner profile (fetched from the server over /v1/reviewctl/rpc/).
 	// Token is the optional API-key fallback used only when the matching env var
@@ -61,11 +63,16 @@ type Config struct {
 	TrackerURL   string
 	TrackerToken string
 
-	// AllowDangerousPermissions toggles `--dangerously-skip-permissions` for
+	// AllowDangerousPermissions toggles permission auto-approval (`--auto`) for
 	// runners that support it (currently opencode). Defaults to true to match
 	// previous behaviour — unattended CI runs need it to avoid permission
 	// prompts. Set false for local interactive review on untrusted code.
 	AllowDangerousPermissions bool
+
+	// CodexSandbox overrides codex's --sandbox mode (default workspace-write).
+	// Inside an unprivileged container codex's bubblewrap sandbox cannot start,
+	// so CI images set danger-full-access and the container is the sandbox.
+	CodexSandbox string
 
 	// Multi holds the panel members for a local multi-review run (--multi /
 	// $REVIEW_MULTI). Empty = single review. Each member is a runner+model run in
@@ -101,7 +108,7 @@ func (c *Config) RunnerProfileSnapshot() db.ReviewRunnerProfile {
 		Effort:          c.Effort,
 		APIProvider:     c.APIProvider,
 		APIBaseURL:      c.APIBaseURL,
-		Params:          db.RunnerProfileParams{AllowDangerousPermissions: c.AllowDangerousPermissions},
+		Params:          db.RunnerProfileParams{AllowDangerousPermissions: c.AllowDangerousPermissions, MaxRounds: c.MaxRounds},
 	}
 }
 
@@ -148,12 +155,13 @@ func (c *Config) ResolveDefaults() {
 	}
 	// Direct runner against Anthropic: pin a concrete model and reasoning effort
 	// so cost/quality stay predictable. Without an explicit effort the Anthropic
-	// API silently defaults to "high", whereas Claude Code uses "xhigh" for
-	// agentic coding — match it so the direct runner isn't a notch weaker out of
-	// the box. DeepSeek/openai-compat ignore effort and require an explicit --model.
+	// API silently defaults to "medium" on Opus 5.5 ("high" on older models),
+	// whereas Claude Code uses "xhigh" for agentic coding — match it so the direct
+	// runner isn't weaker out of the box. Other providers get an effort only when
+	// one is set (openai-compat never) and require an explicit --model.
 	if c.Runner == runner.RunnerDirect && c.APIProvider == "anthropic" { //nolint:goconst // provider id; canonical const lives in pkg/reviewer/direct
 		if c.Model == "" {
-			c.Model = "claude-opus-4-8" //nolint:goconst // pinned model id
+			c.Model = "claude-opus-5-5" //nolint:goconst // pinned model id
 		}
 		if c.Effort == "" {
 			c.Effort = "xhigh" //nolint:goconst // reasoning effort level
@@ -163,7 +171,7 @@ func (c *Config) ResolveDefaults() {
 	// predictable model and the cost is estimated from tokens against the price
 	// table (an empty model leaves cost at 0). Override with --model.
 	if c.Runner == runner.RunnerCodex && c.Model == "" {
-		c.Model = "gpt-5.1-codex"
+		c.Model = "gpt-6-sol"
 	}
 }
 
@@ -178,7 +186,7 @@ type MemberSpec struct {
 }
 
 // ParseMulti parses the --multi value: a comma-separated list of runner:model
-// members, e.g. "codex:gpt-5.5,opencode:openrouter/deepseek/deepseek-v4-pro". Only
+// members, e.g. "codex:gpt-6-sol,opencode:openrouter/deepseek/deepseek-v4-pro". Only
 // the first colon separates runner from model (models may contain slashes); a bare
 // "runner" with no colon uses the runner's default model. Returns nil for an empty
 // string (single review, no panel).
@@ -197,10 +205,8 @@ func ParseMulti(s string) ([]MemberSpec, error) {
 		r, m, _ := strings.Cut(part, ":")
 		r = strings.TrimSpace(r)
 		m = strings.TrimSpace(m)
-		switch r {
-		case runner.RunnerClaude, runner.RunnerOpenCode, runner.RunnerCodex, runner.RunnerDirect:
-		default:
-			return nil, fmt.Errorf("--multi: unknown runner %q in %q (want claude|opencode|codex|direct)", r, part)
+		if !slices.Contains(runner.Names, r) {
+			return nil, fmt.Errorf("--multi: unknown runner %q in %q (want %s)", r, part, strings.Join(runner.Names, "|"))
 		}
 		out = append(out, MemberSpec{Runner: r, Model: m})
 	}

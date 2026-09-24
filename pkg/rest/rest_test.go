@@ -22,7 +22,7 @@ import (
 func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
 	dbc, _ := dbtest.Setup(t)
-	return NewHandler(dbc, nil, "http://localhost")
+	return NewHandler(dbc, nil, "http://localhost", nil)
 }
 
 // callInstructionsHandler builds a fresh Echo context with `:id` set to param
@@ -80,7 +80,7 @@ func TestDBProjectInstructionsMarkdown_OK(t *testing.T) {
 
 	// OK path needs the same dbc as the project, so wire NewHandler inline
 	// rather than via newTestHandler.
-	h := NewHandler(dbc, nil, "http://localhost")
+	h := NewHandler(dbc, nil, "http://localhost", nil)
 
 	rec, err := callInstructionsHandler(t, h, strconv.Itoa(pr.ID)+".md")
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestDBProjectInstructionsMarkdown_RendersIgnoredIssues(t *testing.T) {
 	_, err := rm.SetFeedback(t.Context(), ignoredID, db.StatusIgnored)
 	require.NoError(t, err)
 
-	h := NewHandler(dbc, nil, "http://localhost")
+	h := NewHandler(dbc, nil, "http://localhost", nil)
 
 	rec, err := callInstructionsHandler(t, h, strconv.Itoa(pr.ID)+".md")
 	require.NoError(t, err)

@@ -52,6 +52,16 @@ func TestParseClaudeResult_Error(t *testing.T) {
 	assert.Equal(t, "error_max_turns", cr.Subtype)
 }
 
+func TestParseClaudeResult_ErrorSubtypes(t *testing.T) {
+	for _, subtype := range []string{"error", "error_during_execution", "error_max_budget_usd"} {
+		cr, err := ParseClaudeResult([]byte(`{"type":"result","subtype":"` + subtype + `","result":"boom"}`))
+		require.Error(t, err, subtype)
+		require.NotNil(t, cr, subtype)
+	}
+	_, err := ParseClaudeResult([]byte(`{"type":"result","subtype":"success","result":"ok"}`))
+	require.NoError(t, err)
+}
+
 func TestParseClaudeResult_InvalidJSON(t *testing.T) {
 	_, err := ParseClaudeResult([]byte("not json"))
 	require.Error(t, err)
@@ -186,6 +196,7 @@ func TestExecClaudeRunnerBuildArgs(t *testing.T) {
 		assert.Equal(t, []string{
 			"--print", "--output-format", "stream-json", "--verbose",
 			"--permission-mode", "bypassPermissions",
+			"--setting-sources", "user", "--strict-mcp-config",
 			"-p", "-",
 		}, args)
 	})
@@ -224,21 +235,23 @@ func TestExecClaudeRunnerBuildArgs(t *testing.T) {
 }
 
 func TestExecOpenCodeRunnerBuildArgs(t *testing.T) {
-	t.Run("default omits dangerous flag", func(t *testing.T) {
+	t.Run("default omits auto-approve flag", func(t *testing.T) {
 		r := &ExecOpenCodeRunner{}
-		assert.NotContains(t, r.buildArgs(), "--dangerously-skip-permissions")
+		assert.NotContains(t, r.buildArgs(), "--auto")
 	})
 
 	t.Run("dangerous permissions enabled", func(t *testing.T) {
 		r := &ExecOpenCodeRunner{AllowDangerousPermissions: true}
-		assert.Contains(t, r.buildArgs(), "--dangerously-skip-permissions")
+		args := r.buildArgs()
+		assert.Contains(t, args, "--auto")
+		assert.NotContains(t, args, "--dangerously-skip-permissions")
 	})
 
 	t.Run("with model", func(t *testing.T) {
-		r := &ExecOpenCodeRunner{Model: "anthropic/claude-opus-4-7"}
+		r := &ExecOpenCodeRunner{Model: "anthropic/claude-opus-5-5"}
 		args := r.buildArgs()
 		assert.Contains(t, args, "-m")
-		assert.Contains(t, args, "anthropic/claude-opus-4-7")
+		assert.Contains(t, args, "anthropic/claude-opus-5-5")
 	})
 
 	t.Run("continue beats session", func(t *testing.T) {
