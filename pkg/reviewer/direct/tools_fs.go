@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"unicode/utf8"
 
 	"reviewsrv/pkg/reviewer"
 )
@@ -445,11 +444,7 @@ func grepLines(rel string, data []byte, re *regexp.Regexp, out *[]string) error 
 		if re.MatchString(line) {
 			text := strings.TrimSpace(line)
 			if len(text) > grepLineClip {
-				n := grepLineClip
-				for n > 0 && !utf8.RuneStart(text[n]) { // don't split a rune mid-sequence
-					n--
-				}
-				text = text[:n] + "…"
+				text = reviewer.ClipUTF8(text, grepLineClip) + "…"
 			}
 			*out = append(*out, fmt.Sprintf("%s:%d:%s", rel, i+1, text))
 			if len(*out) >= maxGrepMatches {

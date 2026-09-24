@@ -21,6 +21,10 @@ func TestConfigValidate(t *testing.T) {
 		{"valid upload", Config{Key: "k", URL: "http://x"}, "upload", false},
 		{"comment no id", Config{Key: "k", URL: "http://x"}, "comment", true},
 		{"comment with id", Config{Key: "k", URL: "http://x", ReviewID: 1}, "comment", false},
+		{"max rounds default", Config{Key: "k", URL: "http://x", MaxRounds: 0}, "review", false},
+		{"max rounds in bounds", Config{Key: "k", URL: "http://x", MaxRounds: 120}, "review", false},
+		{"max rounds too low", Config{Key: "k", URL: "http://x", MaxRounds: 3}, "review", true},
+		{"max rounds too high", Config{Key: "k", URL: "http://x", MaxRounds: 10000}, "review", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -50,11 +54,11 @@ func TestConfigResolveDefaults(t *testing.T) {
 		{"claude effort preserved, no default", runner.RunnerClaude, "", "", "high", "opus", "high"},
 		{"opencode empty model stays empty", runner.RunnerOpenCode, "", "", "", "", ""},
 		{"opencode explicit model preserved", runner.RunnerOpenCode, "", "anthropic/claude-opus-4", "", "anthropic/claude-opus-4", ""},
-		{"direct+anthropic pins model and xhigh effort", runner.RunnerDirect, "anthropic", "", "", "claude-opus-4-8", "xhigh"},
-		{"direct+anthropic explicit effort preserved", runner.RunnerDirect, "anthropic", "", "max", "claude-opus-4-8", "max"},
+		{"direct+anthropic pins model and xhigh effort", runner.RunnerDirect, "anthropic", "", "", "claude-opus-5-5", "xhigh"},
+		{"direct+anthropic explicit effort preserved", runner.RunnerDirect, "anthropic", "", "max", "claude-opus-5-5", "max"},
 		{"direct+deepseek leaves model/effort untouched", runner.RunnerDirect, "deepseek", "", "", "", ""},
-		{"codex pins a default model", runner.RunnerCodex, "", "", "", "gpt-5.1-codex", ""},
-		{"codex explicit model preserved", runner.RunnerCodex, "", "gpt-5-codex", "", "gpt-5-codex", ""},
+		{"codex pins a default model", runner.RunnerCodex, "", "", "", "gpt-6-sol", ""},
+		{"codex explicit model preserved", runner.RunnerCodex, "", "gpt-5.5", "", "gpt-5.5", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

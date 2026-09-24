@@ -14,7 +14,7 @@ import (
 
 func mkProfile(t *testing.T, dbc db.DB, title, runner string) *db.RunnerProfile {
 	rp, _ := dbtest.RunnerProfile(t, dbc, &db.RunnerProfile{
-		Title: title, Runner: runner, Token: reviewer.Ptr("tok-" + title), StatusID: db.StatusEnabled,
+		Title: title, Runner: runner, Token: new("tok-" + title), StatusID: db.StatusEnabled,
 	})
 	t.Cleanup(func() {
 		_, _ = dbc.ModelContext(context.Background(), &db.RunnerProfile{ID: rp.ID}).WherePK().Delete()
@@ -32,9 +32,9 @@ func TestDBService_ReviewConfig(t *testing.T) {
 		judge := mkProfile(t, dbc, "judge", "claude")
 
 		pr, cl := dbtest.Project(t, dbc, &db.Project{
-			RunnerProfileID:      reviewer.Ptr(primary.ID),
+			RunnerProfileID:      new(primary.ID),
 			RunnerProfileIDs:     db.ProjectRunnerProfileIDs{member.ID},
-			JudgeRunnerProfileID: reviewer.Ptr(judge.ID),
+			JudgeRunnerProfileID: new(judge.ID),
 			StatusID:             db.StatusEnabled,
 		}, dbtest.WithProjectRelations, dbtest.WithFakeProject)
 		t.Cleanup(cl)
@@ -56,15 +56,15 @@ func TestDBService_ReviewConfig(t *testing.T) {
 		tt, clTT := dbtest.TaskTracker(t, dbc, &db.TaskTracker{
 			Title:       "YT",
 			URL:         "https://youtrack.example.com",
-			AuthToken:   reviewer.Ptr("perm:secret"),
+			AuthToken:   new("perm:secret"),
 			FetchPrompt: "GET {{URL}}/api/issues/<ID>",
 			StatusID:    db.StatusEnabled,
 		})
 		t.Cleanup(clTT)
 
 		pr, cl := dbtest.Project(t, dbc, &db.Project{
-			RunnerProfileID: reviewer.Ptr(primary.ID),
-			TaskTrackerID:   reviewer.Ptr(tt.ID),
+			RunnerProfileID: new(primary.ID),
+			TaskTrackerID:   new(tt.ID),
 			StatusID:        db.StatusEnabled,
 		}, dbtest.WithProjectRelations, dbtest.WithFakeProject)
 		t.Cleanup(cl)
@@ -88,8 +88,8 @@ func TestDBService_ReviewConfig(t *testing.T) {
 		t.Cleanup(clTT)
 
 		pr, cl := dbtest.Project(t, dbc, &db.Project{
-			RunnerProfileID: reviewer.Ptr(primary.ID),
-			TaskTrackerID:   reviewer.Ptr(tt.ID),
+			RunnerProfileID: new(primary.ID),
+			TaskTrackerID:   new(tt.ID),
 			StatusID:        db.StatusEnabled,
 		}, dbtest.WithProjectRelations, dbtest.WithFakeProject)
 		t.Cleanup(cl)
@@ -115,7 +115,7 @@ func TestDBService_Prompt(t *testing.T) {
 	tt, clTT := dbtest.TaskTracker(t, dbc, &db.TaskTracker{
 		Title:       "YT",
 		URL:         "https://yt.example.com",
-		AuthToken:   reviewer.Ptr("perm:legacy-secret"),
+		AuthToken:   new("perm:legacy-secret"),
 		FetchPrompt: "curl -H 'Authorization: Bearer {{TOKEN}}' {{URL}}/api",
 		StatusID:    db.StatusEnabled,
 	})
@@ -123,7 +123,7 @@ func TestDBService_Prompt(t *testing.T) {
 
 	pr, cl := dbtest.Project(t, dbc, &db.Project{
 		PromptID:      prompt.ID,
-		TaskTrackerID: reviewer.Ptr(tt.ID),
+		TaskTrackerID: new(tt.ID),
 		StatusID:      db.StatusEnabled,
 	}, dbtest.WithProjectRelations, dbtest.WithFakeProject)
 	t.Cleanup(cl)
@@ -136,7 +136,7 @@ func TestDBService_Prompt(t *testing.T) {
 	})
 
 	t.Run("tokenEnv client gets the env reference, not the secret", func(t *testing.T) {
-		got, err := svc.Prompt(t.Context(), pr.ProjectKey, reviewer.Ptr(true))
+		got, err := svc.Prompt(t.Context(), pr.ProjectKey, new(true))
 		require.NoError(t, err)
 		assert.NotContains(t, got, "perm:legacy-secret")
 		assert.Contains(t, got, "$REVIEW_TRACKER_TOKEN")

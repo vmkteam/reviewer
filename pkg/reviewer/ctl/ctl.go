@@ -2,13 +2,17 @@ package ctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/runner"
 )
 
@@ -19,11 +23,16 @@ type Controller struct {
 	prompt *PromptClient
 	upload *UploadClient
 	gitlab *GitLabClient
-	runner runner.ReviewRunner
+	runner *spendTracker
 
 	// runnerFactory builds a runner from a per-member config; used by the panel
 	// path to build one runner per member after creating its worktree.
 	runnerFactory RunnerFactory
+
+	// spent adds up a panel's runs — members and judge, failed ones included —
+	// for the closing log line. Members run concurrently, hence the mutex.
+	spentMu sync.Mutex
+	spent   float64
 }
 
 // RunnerFactory builds a runner from a (per-member) config.
@@ -37,6 +46,60 @@ func WithRunnerFactory(f RunnerFactory) Option {
 	return func(c *Controller) { c.runnerFactory = f }
 }
 
+// spendTracker wraps a ReviewRunner and keeps the result of each of its runs —
+// failed ones included, as they are billed too — so the review record and the
+// debug bundle cover the whole run: a Step 2 retry, a retried judge.
+type spendTracker struct {
+	runner.ReviewRunner
+	results []*runner.ClaudeResult
+}
+
+// trackSpend wraps rr; a nil runner stays nil.
+func trackSpend(rr runner.ReviewRunner) *spendTracker {
+	if rr == nil {
+		return nil
+	}
+	return &spendTracker{ReviewRunner: rr}
+}
+
+// Run implements runner.ReviewRunner.
+func (t *spendTracker) Run(ctx context.Context, prompt string) (*runner.ClaudeResult, error) {
+	res, err := t.ReviewRunner.Run(ctx, prompt)
+	if res != nil {
+		t.results = append(t.results, res)
+	}
+	return res, err
+}
+
+// total returns what the runs spent so far; 0 for a nil tracker.
+func (t *spendTracker) total() float64 {
+	if t == nil {
+		return 0
+	}
+	var usd float64
+	for _, r := range t.results {
+		usd += r.TotalCostUSD
+	}
+	return usd
+}
+
+// usage merges the model usage and durations of every run.
+func (t *spendTracker) usage(model string) (db.ReviewModelInfo, int) {
+	var (
+		mi  db.ReviewModelInfo
+		dur int
+	)
+	for i, r := range t.results {
+		if i == 0 {
+			mi = r.ToModelInfo(model)
+		} else {
+			mi.Add(r.ToModelInfo(model))
+		}
+		dur += r.DurationMs
+	}
+	return mi, dur
+}
+
 // NewController creates a new Controller from Config.
 func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger, opts ...Option) *Controller {
 	c := &Controller{
@@ -44,7 +107,7 @@ func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger, opts .
 		log:    log,
 		prompt: NewPromptClient(log),
 		upload: NewUploadClient(log),
-		runner: rr,
+		runner: trackSpend(rr),
 	}
 
 	if cfg.HasGitLab() {
@@ -58,34 +121,25 @@ func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger, opts .
 	return c
 }
 
+func (c *Controller) spentTotal() float64 {
+	c.spentMu.Lock()
+	defer c.spentMu.Unlock()
+	return c.spent
+}
+
 // Review runs the full review flow: fetch prompt → Claude → parse → upload → comment → HTML.
 func (c *Controller) Review(ctx context.Context) (retErr error) {
 	start := time.Now()
-	c.log.InfoContext(ctx, "starting review", "projectKey", c.cfg.Key, "model", c.cfg.Model)
-
 	// Multi-review: a configured panel fans out to one member review per runner,
-	// each in its own git worktree. No judge/fusion yet — members are the output.
+	// each in its own git worktree, then a judge fuses them.
 	if len(c.cfg.Multi) > 0 {
 		return c.reviewPanel(ctx, start)
 	}
+	c.log.InfoContext(ctx, "starting review", "projectKey", reviewer.ShortKey(c.cfg.Key), "runner", c.cfg.Runner, "model", c.cfg.Model)
 
-	// Set when the runner skipped Step 2; forces a debug-bundle upload so
-	// the silent skip can be post-mortemed even on otherwise-clean runs.
-	var skipDetected bool
 	retried := false
 
-	// Publish artifacts to the debug ring buffer when something failed, when
-	// --debug-upload was passed, or when we caught a Step-2 skip (so the
-	// jsonl/MDs are kept for analysis). Detached context survives ctx
-	// cancellation so a killed CI job still has a chance to ship its bundle.
-	defer func() {
-		if retErr == nil && !c.cfg.DebugUpload && !skipDetected {
-			return
-		}
-		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		c.uploadDebugBundle(upCtx, c.cfg, retErr)
-	}()
+	defer func() { c.settleRun(ctx, c.cfg, c.runner, retErr) }()
 
 	// Wipe a previous run's outputs (R*.md, session logs, review.json) so the
 	// runner reviews a clean tree — otherwise its glob/grep/read tools surface
@@ -109,7 +163,7 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 
 	result, err := c.runner.Run(ctx, prompt)
 	if err != nil {
-		return fmt.Errorf("run claude: %w", err)
+		return fmt.Errorf("run %s: %w", c.runner.Name(), err)
 	}
 
 	draft, err := ReadReviewJSON(c.cfg.Dir)
@@ -118,19 +172,12 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 		return fmt.Errorf("read review: %w", err)
 	}
 
-	c.applyRunResult(ctx, draft, c.cfg, c.runner, result)
+	c.applyRunResult(ctx, draft, c.cfg, c.runner)
 
 	if isReviewJSONUnfilled(draft) {
-		skipDetected = true
 		retried = true
-		if d2 := c.runStep2Recovery(ctx, draft, result); d2 != nil {
-			draft = d2
-			skipDetected = false
-			// applyRunResult persisted the pre-recovery draft; keep review.json in
-			// sync with what is actually uploaded.
-			if werr := WriteReviewJSON(c.cfg.Dir, draft); werr != nil {
-				c.log.WarnContext(ctx, "persist recovered review.json", "err", werr)
-			}
+		if draft, err = c.runStep2Recovery(ctx, draft, result); err != nil {
+			return err
 		}
 	}
 
@@ -147,16 +194,36 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 	c.postComments(ctx, draft, reviewID)
 	c.generateHTML(draft, mdFiles)
 
-	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second), "retried", retried)
+	c.log.InfoContext(ctx, "review completed", "reviewId", reviewID, "duration", time.Since(start).Round(time.Second),
+		"retried", retried, "costUsd", c.runner.total())
 	return nil
 }
+
+// settleRun closes one runner's run: its spend joins the panel total, and a
+// failed run — or any run under --debug-upload — ships its artifacts to the
+// debug ring before a panel worktree goes. The upload gets a detached context:
+// a cancelled or timed-out run is precisely what the bundle should explain.
+func (c *Controller) settleRun(ctx context.Context, cfg *Config, rr *spendTracker, runErr error) {
+	c.spentMu.Lock()
+	c.spent += rr.total()
+	c.spentMu.Unlock()
+	if runErr == nil && !cfg.DebugUpload {
+		return
+	}
+	upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), debugUploadTimeout)
+	defer cancel()
+	c.uploadDebugBundle(upCtx, cfg, runErr, rr.total())
+}
+
+// debugUploadTimeout bounds shipping a debug bundle.
+const debugUploadTimeout = 30 * time.Second
 
 // uploadDebugBundle publishes on-disk artifacts so a failed CI run can be
 // inspected via /v1/debug/storage/. Best-effort — never returns an error.
 // The empty-bundle short-circuit lives in UploadClient.UploadDebugBundle.
 // cfg is the run whose dir/identity to bundle — the base config for a single
 // review, a member's clone for a panel member.
-func (c *Controller) uploadDebugBundle(ctx context.Context, cfg *Config, runErr error) {
+func (c *Controller) uploadDebugBundle(ctx context.Context, cfg *Config, runErr error, costUsd float64) {
 	files := CollectDebugArtifacts(cfg.Dir)
 
 	meta := DebugMeta{
@@ -167,9 +234,22 @@ func (c *Controller) uploadDebugBundle(ctx context.Context, cfg *Config, runErr 
 		SourceBranch: cfg.SourceBranch,
 		TargetBranch: cfg.TargetBranch,
 		CommitHash:   cfg.Commit,
+		CostUsd:      costUsd,
+	}
+	meta.Status, meta.Reason = reviewer.RunOutcome(runErr)
+	var created *reviewCreatedError
+	if errors.As(runErr, &created) {
+		meta.ReviewID = created.reviewID
 	}
 	if runErr != nil {
 		meta.ErrorMsg = runErr.Error()
+		// A cancelled job is expected, not a failure worth a warning.
+		lvl := slog.LevelWarn
+		if meta.Status == reviewer.RunStatusCancelled {
+			lvl = slog.LevelInfo
+		}
+		c.log.Log(ctx, lvl, "review run did not complete", "status", meta.Status, "reason", meta.Reason,
+			"runner", cfg.Runner, "model", cfg.Model, "costUsd", costUsd, "err", runErr)
 	}
 
 	url, err := c.upload.UploadDebugBundle(ctx, cfg.URL, cfg.Key, meta, files)
@@ -257,15 +337,16 @@ func (c *Controller) Comment(ctx context.Context) error {
 	return nil
 }
 
-// applyRunResult records the run's model/runner/timing metadata and the resolved
-// profile snapshot on a freshly-read draft, then fills MR metadata. Shared by the
-// single review, panel members and the judge so all three populate identically.
-// The enriched draft is persisted back to review.json so the metadata survives a
-// failed upload and a later standalone `reviewctl upload` re-sends it intact.
-func (c *Controller) applyRunResult(ctx context.Context, draft *rest.ReviewDraft, cfg *Config, rr runner.ReviewRunner, result *runner.ClaudeResult) {
-	draft.Review.ModelInfo = result.ToModelInfo(cfg.Model)
+// applyRunResult records the run's model/runner/timing metadata — every run
+// of rr so far, failed ones included — and the resolved profile snapshot on a
+// freshly-read draft, then fills MR metadata. Shared by the single review
+// (again after a Step 2 retry), panel members and the judge so all populate
+// identically. The enriched draft is persisted back to review.json so the
+// metadata survives a failed upload and a later standalone `reviewctl upload`
+// re-sends it intact.
+func (c *Controller) applyRunResult(ctx context.Context, draft *rest.ReviewDraft, cfg *Config, rr *spendTracker) {
+	draft.Review.ModelInfo, draft.Review.DurationMs = rr.usage(cfg.Model)
 	draft.Review.ModelInfo.Runner = rr.Name()
-	draft.Review.DurationMs = result.DurationMs
 	draft.Review.RunnerProfile = cfg.RunnerProfileSnapshot()
 	c.fillMetadata(ctx, draft)
 	if err := WriteReviewJSON(cfg.Dir, draft); err != nil {
@@ -309,7 +390,9 @@ func (c *Controller) fillMetadata(ctx context.Context, draft *rest.ReviewDraft) 
 // gitMeta returns the trimmed output of a git command in dir, or "" on any
 // error — callers treat the value as optional metadata.
 func gitMeta(ctx context.Context, dir string, args ...string) string {
-	out, err := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
+	cmd := exec.CommandContext(ctx, "git", reviewer.GitArgs(append([]string{"-C", dir}, args...)...)...)
+	cmd.Env = reviewer.ChildEnv()
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

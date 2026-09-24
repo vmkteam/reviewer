@@ -13,6 +13,8 @@ import "encoding/json"
 //   - "tool_call"   — a tool the model requested (Tool, Args)
 //   - "tool_result" — the tool's output, truncated (Tool, Content, IsError)
 //   - "round"       — per-round usage and stop reason (Usage, StopReason)
+//   - "retry"       — a transient provider failure retried within the round (Text)
+//   - "notice"      — a round-budget notice appended to the round's tool results (Text)
 //   - "result"      — final totals (Rounds, Usage, CostUsd, Submitted, Model, StopReason)
 type Event struct {
 	Round      int             `json:"round"`
@@ -28,6 +30,7 @@ type Event struct {
 	CostUsd    float64         `json:"costUsd,omitempty"`
 	Submitted  bool            `json:"submitted,omitempty"`
 	Model      string          `json:"model,omitempty"`
+	DurationMs int             `json:"durationMs,omitempty"` // a round's provider call
 }
 
 // Sink receives transcript events. A nil Sink is a no-op.

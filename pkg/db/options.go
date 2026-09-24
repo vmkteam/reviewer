@@ -133,7 +133,7 @@ func WithJoinedIDs(ids []int, tableAlias, column string) OpFunc {
 }
 
 // OnConflict adds ON CONFLICT statement to update query
-func OnConflict(s string, params ...interface{}) OpFunc {
+func OnConflict(s string, params ...any) OpFunc {
 	return func(query *orm.Query) {
 		query.OnConflict(s, params...)
 	}

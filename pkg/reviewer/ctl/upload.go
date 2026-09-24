@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,22 +47,33 @@ func NewUploadClient(log *slog.Logger) *UploadClient {
 	}
 }
 
+// do sends an upload request, masking the project key in the URL that
+// http.Client quotes in a transport error.
+func (c *UploadClient) do(req *http.Request, projectKey string) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		ue.URL = reviewer.MaskKey(ue.URL, projectKey)
+	}
+	return resp, err
+}
+
 // UploadReview uploads review.json and returns the reviewId.
 func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey string, draft *rest.ReviewDraft) (int, error) {
-	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	endpoint := fmt.Sprintf("%s/v1/reviewctl/upload/%s/", strings.TrimRight(serverURL, "/"), projectKey)
 
 	body, err := json.Marshal(draft)
 	if err != nil {
 		return 0, fmt.Errorf("marshal review draft: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("create upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return 0, fmt.Errorf("upload review: %w", err)
 	}
@@ -88,15 +100,15 @@ func (c *UploadClient) UploadReview(ctx context.Context, serverURL, projectKey s
 
 // UploadFile uploads a single review file (markdown content).
 func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey string, reviewID int, reviewType string, content []byte) error {
-	url := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
+	endpoint := fmt.Sprintf("%s/v1/reviewctl/upload/%s/%d/%s/", strings.TrimRight(serverURL, "/"), projectKey, reviewID, reviewType)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(content))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(content))
 	if err != nil {
 		return fmt.Errorf("create file upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return fmt.Errorf("upload file %s: %w", reviewType, err)
 	}
@@ -107,7 +119,7 @@ func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey str
 		return fmt.Errorf("upload file %s: HTTP %d: %s", reviewType, resp.StatusCode, string(respBody))
 	}
 
-	c.log.InfoContext(ctx, "uploaded file", "reviewType", reviewType)
+	c.log.InfoContext(ctx, "uploaded file", "reviewId", reviewID, "reviewType", reviewType)
 
 	return nil
 }
@@ -122,15 +134,25 @@ func (c *UploadClient) UploadAll(ctx context.Context, serverURL, projectKey stri
 	for reviewType, filePath := range mdFiles {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return reviewID, fmt.Errorf("read %s: %w", filePath, err)
+			return reviewID, &reviewCreatedError{reviewID: reviewID, err: fmt.Errorf("read %s: %w", filePath, err)}
 		}
 		if err := c.UploadFile(ctx, serverURL, projectKey, reviewID, reviewType, content); err != nil {
-			return reviewID, err
+			return reviewID, &reviewCreatedError{reviewID: reviewID, err: err}
 		}
 	}
 
 	return reviewID, nil
 }
+
+// reviewCreatedError is a failure after the review itself was created, which
+// already counted the run as ok on the server; its debug bundle says so.
+type reviewCreatedError struct {
+	reviewID int
+	err      error
+}
+
+func (e *reviewCreatedError) Error() string { return e.err.Error() }
+func (e *reviewCreatedError) Unwrap() error { return e.err }
 
 // ReadReviewJSON reads and validates review.json from the given directory.
 // On validation failure, also returns the parsed draft so the caller can
@@ -177,6 +199,10 @@ type DebugMeta struct {
 	SourceBranch string
 	TargetBranch string
 	CommitHash   string
+	Status       string  // reviewer.RunStatus*
+	Reason       string  // reviewer.RunReason*; empty for an ok run
+	CostUsd      float64 // what the run spent, including a failed run
+	ReviewID     int     // the review created before the run failed, if any
 }
 
 // UploadDebugBundle posts artifacts as a multipart form with each file
@@ -191,14 +217,14 @@ func (c *UploadClient) UploadDebugBundle(ctx context.Context, serverURL, project
 		return "", fmt.Errorf("build multipart: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/upload/debug/%s/", strings.TrimRight(serverURL, "/"), projectKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	endpoint := fmt.Sprintf("%s/v1/upload/debug/%s/", strings.TrimRight(serverURL, "/"), projectKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return "", fmt.Errorf("create debug upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", contentType)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req, projectKey)
 	if err != nil {
 		return "", fmt.Errorf("post debug bundle: %w", err)
 	}
@@ -236,6 +262,10 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 		{debug.FieldSourceBranch, meta.SourceBranch},
 		{debug.FieldTargetBranch, meta.TargetBranch},
 		{debug.FieldCommitHash, meta.CommitHash},
+		{debug.FieldStatus, meta.Status},
+		{debug.FieldReason, meta.Reason},
+		{debug.FieldCostUsd, formatCost(meta.CostUsd)},
+		{debug.FieldReviewID, formatID(meta.ReviewID)},
 	}
 	for _, f := range fields {
 		if f.value == "" {
@@ -271,6 +301,22 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 	return &buf, mw.FormDataContentType(), nil
 }
 
+// formatCost renders a dollar cost for a form field; "" (field omitted) for zero.
+func formatCost(usd float64) string {
+	if usd <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(usd, 'f', -1, 64)
+}
+
+// formatID renders an optional id for a form field; "" when unset.
+func formatID(id int) string {
+	if id <= 0 {
+		return ""
+	}
+	return strconv.Itoa(id)
+}
+
 // reviewArtifactFiles are the fixed-name outputs a runner writes into the review
 // directory (the R*.md bodies are matched separately by FindMDFiles). The
 // canonical set lives in the reviewer package, shared with the direct runner's
@@ -280,6 +326,9 @@ var reviewArtifactFiles = reviewer.ReviewArtifactFiles
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
 func CollectDebugArtifacts(dir string) map[string][]byte {
+	if dir == "" { // a run with no working dir of its own, e.g. a failed panel
+		return nil
+	}
 	out := make(map[string][]byte, len(reviewArtifactFiles)+len(reviewTypeByPrefix))
 
 	for _, name := range reviewArtifactFiles {

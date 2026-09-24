@@ -28,14 +28,15 @@ type RunnerProfile struct {
 // produces invalid TS).
 type RunnerProfileParams struct {
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions"`
+	MaxRounds                 int  `json:"maxRounds"` // direct runner round budget; 0 = default
 }
 
 func NewRunnerProfileParams(in db.RunnerProfileParams) RunnerProfileParams {
-	return RunnerProfileParams{AllowDangerousPermissions: in.AllowDangerousPermissions}
+	return RunnerProfileParams(in)
 }
 
 func (p RunnerProfileParams) ToDB() db.RunnerProfileParams {
-	return db.RunnerProfileParams{AllowDangerousPermissions: p.AllowDangerousPermissions}
+	return db.RunnerProfileParams(p)
 }
 
 func (rp *RunnerProfile) ToDB() *db.RunnerProfile {

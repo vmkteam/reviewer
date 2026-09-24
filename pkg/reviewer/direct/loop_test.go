@@ -3,10 +3,14 @@ package direct
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+
+	"reviewsrv/pkg/reviewer"
 
 	"github.com/stretchr/testify/require"
 )
@@ -76,7 +80,7 @@ func TestRunSubmitsReview(t *testing.T) {
 	require.Equal(t, 30, res.Usage.OutputTokens)
 	require.Equal(t, 40, res.Usage.CacheReadTokens)
 	require.Equal(t, "fake-model", res.Model)
-	require.InEpsilon(t, computeCost(Usage{InputTokens: 150, OutputTokens: 30}, prov.Pricing()), res.CostUsd, 1e-9)
+	require.InEpsilon(t, prov.Pricing().Cost(Usage{InputTokens: 150, OutputTokens: 30}), res.CostUsd, 1e-9)
 
 	// review.json written and valid.
 	data, err := os.ReadFile(filepath.Join(dir, "review.json"))
@@ -195,6 +199,20 @@ func TestCompactMessages(t *testing.T) {
 	// The source history must not be mutated (its ToolResults backing is shared).
 	require.NotContains(t, src[36].ToolResults[0].Content, "compacted")
 
+	// Kept assistant turns lose their provider snapshot (signed thinking blocks
+	// bound to the pre-compaction history) and are rebuilt from neutral fields;
+	// the source history keeps it.
+	withRaw := mk(40)
+	for i := range withRaw {
+		if withRaw[i].Role == RoleAssistant {
+			withRaw[i].Raw = "snapshot"
+		}
+	}
+	for _, m := range compactMessages(withRaw, 5) {
+		require.Nil(t, m.Raw)
+	}
+	require.Equal(t, "snapshot", withRaw[39].Raw)
+
 	// Tail without tool results (text-only turns): fall back to the head marker.
 	textOnly := []Message{
 		{Role: RoleUser, Text: "task"},
@@ -250,18 +268,98 @@ func TestRunRespectsContextCancel(t *testing.T) {
 	require.Empty(t, prov.seen, "provider must not be called once ctx is cancelled")
 }
 
+// globRound is a round that only explores (one glob call).
+func globRound(id int) Response {
+	return Response{ToolCalls: []ToolCall{{ID: strconv.Itoa(id), Name: "glob", Args: json.RawMessage(`{"pattern":"**/*.go"}`)}}}
+}
+
+// lastToolResult returns the content of the last tool result the model was sent
+// in request i.
+func lastToolResult(t *testing.T, prov *scriptedProvider, i int) ToolResult {
+	t.Helper()
+	msgs := prov.seen[i].Messages
+	last := msgs[len(msgs)-1]
+	require.Equal(t, RoleTool, last.Role)
+	return last.ToolResults[len(last.ToolResults)-1]
+}
+
 func TestRunMaxRoundsWithoutSubmit(t *testing.T) {
 	dir := t.TempDir()
 	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
-	prov := &scriptedProvider{responses: []Response{
-		{ToolCalls: []ToolCall{{ID: "1", Name: "glob", Args: json.RawMessage(`{"pattern":"**/*.go"}`)}}},
-		{ToolCalls: []ToolCall{{ID: "2", Name: "glob", Args: json.RawMessage(`{"pattern":"**/*.go"}`)}}},
-	}}
+	prov := &scriptedProvider{}
+	for i := range 2 + graceRounds { // the model keeps exploring past its budget
+		prov.responses = append(prov.responses, globRound(i))
+	}
 
 	res, err := Run(context.Background(), prov, reg, "system", "review this", Options{MaxRounds: 2})
 	require.ErrorIs(t, err, errMaxRounds)
+	_, reason := reviewer.RunOutcome(err)
+	require.Equal(t, reviewer.RunReasonMaxRounds, reason)
 	require.False(t, res.Submitted)
 	require.Equal(t, "max_rounds", res.StopReason)
+	require.Equal(t, 2+maxDeniedRounds, res.Rounds, "grace rounds of refused calls only end the run early")
+	// Past MaxRounds, read tools are denied instead of served.
+	denied := lastToolResult(t, prov, 3)
+	require.True(t, denied.IsError)
+	require.Contains(t, denied.Content, budgetDenied)
+}
+
+func TestRunBudgetNoticesAndGraceDelivery(t *testing.T) {
+	const maxRounds = 12
+	dir := t.TempDir()
+	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
+	prov := &scriptedProvider{}
+	for i := range maxRounds {
+		prov.responses = append(prov.responses, globRound(i))
+	}
+	// The review is delivered in the grace rounds, after one denied read.
+	prov.responses = append(prov.responses,
+		globRound(100),
+		Response{ToolCalls: []ToolCall{{ID: "s", Name: toolSubmitReview, Args: validSubmitArgs(t, "high")}}},
+	)
+
+	var notices []Event
+	opts := Options{MaxRounds: maxRounds, OnEvent: func(ev Event) {
+		if ev.Kind == "notice" {
+			notices = append(notices, ev)
+		}
+	}}
+	res, err := Run(context.Background(), prov, reg, "system", "review this", opts)
+	require.NoError(t, err)
+	require.True(t, res.Submitted)
+	require.Equal(t, maxRounds+2, res.Rounds)
+
+	// Notices ride on the last tool result of the round that leaves 10, 3 and 0
+	// rounds — never as an extra user message.
+	require.Len(t, notices, 3)
+	require.Equal(t, []int{maxRounds - budgetWarnAt - 1, maxRounds - budgetFinalAt - 1, maxRounds - 1},
+		[]int{notices[0].Round, notices[1].Round, notices[2].Round})
+	require.Contains(t, lastToolResult(t, prov, maxRounds-budgetWarnAt).Content, "10 rounds of your round budget are left")
+	require.Contains(t, lastToolResult(t, prov, maxRounds-budgetFinalAt).Content, "only 3 rounds are left")
+	require.Contains(t, lastToolResult(t, prov, maxRounds).Content, "read and search tools are disabled")
+
+	denied := lastToolResult(t, prov, maxRounds+1)
+	require.True(t, denied.IsError)
+	require.Contains(t, denied.Content, budgetDenied)
+}
+
+// failingProvider fails every call with err.
+type failingProvider struct{ err error }
+
+func (f failingProvider) Complete(context.Context, Request) (Response, error) {
+	return Response{}, f.err
+}
+func (failingProvider) Model() string    { return "fake-model" }
+func (failingProvider) Pricing() Pricing { return Pricing{} }
+
+func TestRunProviderTransportErrorReason(t *testing.T) {
+	reg := NewReviewRegistry(ReviewToolsConfig{Dir: t.TempDir()})
+	res, err := Run(context.Background(), failingProvider{errors.New("anthropic: stream error: stream ID 41; INTERNAL_ERROR")}, reg, "s", "go", Options{MaxRounds: 5})
+	require.Error(t, err)
+	require.Equal(t, "error", res.StopReason)
+	require.Equal(t, "round 0: anthropic: stream error: stream ID 41; INTERNAL_ERROR", err.Error())
+	_, reason := reviewer.RunOutcome(err)
+	require.Equal(t, reviewer.RunReasonAPIError, reason)
 }
 
 func TestDispatchParallelRecoversPanic(t *testing.T) {
@@ -346,4 +444,25 @@ func TestIsTruncated(t *testing.T) {
 	require.True(t, IsTruncated(stopLength), "OpenAI finish_reason")
 	require.False(t, IsTruncated("end_turn"))
 	require.False(t, IsTruncated(""))
+}
+
+// retriedFailProvider fails after retrying, reporting the retried errors.
+type retriedFailProvider struct{ failingProvider }
+
+func (retriedFailProvider) Complete(_ context.Context, req Request) (Response, error) {
+	req.OnRetry(errors.New("overloaded"))
+	req.OnRetry(errors.New("reset stream"))
+	return Response{}, errors.New("anthropic: api_error")
+}
+
+func TestRunKeepsRetriesOfFailedRound(t *testing.T) {
+	var retries []string
+	opts := Options{MaxRounds: 5, OnEvent: func(ev Event) {
+		if ev.Kind == "retry" {
+			retries = append(retries, ev.Text)
+		}
+	}}
+	_, err := Run(context.Background(), retriedFailProvider{}, NewReviewRegistry(ReviewToolsConfig{Dir: t.TempDir()}), "s", "go", opts)
+	require.Error(t, err)
+	require.Equal(t, []string{"overloaded", "reset stream"}, retries, "the retries before a final failure reach the transcript")
 }

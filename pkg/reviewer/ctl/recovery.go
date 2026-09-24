@@ -2,6 +2,8 @@ package ctl
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"reviewsrv/pkg/rest"
@@ -27,58 +29,50 @@ func isReviewJSONUnfilled(draft *rest.ReviewDraft) bool {
 }
 
 // runStep2Recovery wraps the retry path: logs the skip, invokes retryStep2,
-// merges metrics from both passes, and returns the recovered draft (or nil
-// if retry didn't help, so caller keeps the original skeleton).
-func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDraft, first *runner.ClaudeResult) *rest.ReviewDraft {
-	c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — attempting Step 2 retry with session continuation", "files", len(draft.Files), "issues", len(draft.Issues), "sessionId", first.SessionID)
+// records both passes on the recovered draft, and returns it. A retry that
+// could not fill review.json fails the run as not submitted — unless the retry
+// run failed for a reason of its own (cancelled, timeout, billing).
+func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDraft, first *runner.ClaudeResult) (*rest.ReviewDraft, error) {
+	c.log.WarnContext(ctx, "review.json appears unfilled — attempting Step 2 retry with session continuation", "files", len(draft.Files), "issues", len(draft.Issues), "sessionId", first.SessionID)
 
-	d2, retryRes := c.retryStep2(ctx, first.SessionID)
-	if d2 == nil {
-		return nil
+	d2, err := c.retryStep2(ctx, first.SessionID)
+	if err != nil {
+		return nil, reviewer.WithRunReason(reviewer.RunReasonNotSubmitted, err)
 	}
-
-	d2.Review.ModelInfo = draft.Review.ModelInfo
-	d2.Review.DurationMs = draft.Review.DurationMs
-	if retryRes != nil {
-		d2.Review.ModelInfo.Add(retryRes.ToModelInfo(c.cfg.Model))
-		d2.Review.DurationMs += retryRes.DurationMs
-	}
-	c.fillMetadata(ctx, d2)
-
+	// The tracker holds both passes, so the record covers the retry too.
+	c.applyRunResult(ctx, d2, c.cfg, c.runner)
 	if isReviewJSONUnfilled(d2) {
-		c.log.WarnContext(ctx, "Step 2 retry did not fill review.json")
-		return nil
+		return nil, errEmptyReview("the Step 2 retry did not fill it")
 	}
 	c.log.InfoContext(ctx, "Step 2 retry filled review.json", "issues", len(d2.Issues))
-	return d2
+	return d2, nil
 }
 
 // retryStep2 invokes the runner a second time with a focused "fill review.json"
 // prompt, resuming the previous session so the cached original prompt isn't
-// re-billed. Returns the re-read draft and the runner result for metric
-// aggregation; nil draft signals "retry could not happen or runner failed"
-// and the caller stays with the original skeleton draft.
-func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) (*rest.ReviewDraft, *runner.ClaudeResult) {
-	if lastSessionID == "" {
-		c.log.WarnContext(ctx, "Step 2 retry skipped: no sessionId from previous run")
-		return nil, nil
-	}
-	if c.runner == nil {
-		return nil, nil
+// re-billed. Returns the re-read draft, or why there is none.
+func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) (*rest.ReviewDraft, error) {
+	if lastSessionID == "" || c.runner == nil {
+		return nil, errEmptyReview("there is no session to resume for a Step 2 retry")
 	}
 
 	c.runner.SetSession(lastSessionID)
 
-	res, err := c.runner.Run(ctx, reviewer.PromptStep2Retry)
-	if err != nil {
-		c.log.WarnContext(ctx, "Step 2 retry runner failed", "err", err)
-		return nil, nil
+	if _, err := c.runner.Run(ctx, reviewer.PromptStep2Retry); err != nil {
+		return nil, fmt.Errorf("run %s: step 2 retry: %w", c.runner.Name(), err)
 	}
 
 	draft, err := ReadReviewJSON(c.cfg.Dir)
 	if err != nil {
-		c.log.WarnContext(ctx, "Step 2 retry: review.json still unparseable", "err", err)
-		return nil, nil
+		return nil, errEmptyReview("the Step 2 retry left it unparseable: " + err.Error())
 	}
-	return draft, res
+	return draft, nil
+}
+
+// errEmptyReview fails a run whose review.json stayed an untouched skeleton,
+// like an empty panel member: that is no review, so the run fails (and ships
+// its debug bundle) instead of uploading it.
+func errEmptyReview(why string) error {
+	return reviewer.WithRunReason(reviewer.RunReasonNotSubmitted,
+		errors.New("empty review: the runner left review.json unfilled, and "+why))
 }

@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,6 +38,7 @@ type ClaudeResult struct {
 	NumTurns          int                       `json:"num_turns"`
 	SessionID         string                    `json:"session_id"`
 	IsError           bool                      `json:"is_error"`
+	APIErrorStatus    int                       `json:"api_error_status"` // HTTP status of a failed API call; 0 when absent
 	StopReason        string                    `json:"stop_reason"`
 	TerminalReason    string                    `json:"terminal_reason"`
 	PermissionDenials []any                     `json:"permission_denials"`
@@ -151,7 +154,9 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 		return nil, fmt.Errorf("unexpected claude output type: %q", cr.Type)
 	}
 
-	if cr.Subtype == "error_max_turns" || cr.Subtype == directSubtypeError {
+	// Failure subtypes are "error" plus a growing error_* family
+	// (error_max_turns, error_during_execution, error_max_budget_usd, ...).
+	if strings.HasPrefix(cr.Subtype, directSubtypeError) {
 		return &cr, fmt.Errorf("claude returned error: %s", cr.Result)
 	}
 
@@ -160,7 +165,7 @@ func parseResultObject(data []byte) (*ClaudeResult, error) {
 
 // ToModelInfo converts ClaudeResult to db.ReviewModelInfo.
 // The fallback model name (CLI -m flag) is replaced by the full model id
-// from modelUsage when available — e.g. "opus" → "claude-opus-4-7".
+// from modelUsage when available — e.g. "opus" → "claude-opus-5-5".
 // The Runner field is left empty; callers set it from the runner that produced cr.
 func (cr *ClaudeResult) ToModelInfo(model string) db.ReviewModelInfo {
 	mi := db.ReviewModelInfo{
@@ -228,12 +233,17 @@ const (
 	RunnerCodex    = "codex"
 )
 
+// Names lists every runner identifier: the closed set a runner name is checked against.
+var Names = []string{RunnerClaude, RunnerOpenCode, RunnerCodex, RunnerDirect}
+
 // ReviewRunner abstracts the review LLM subprocess for testability.
 // Name returns a stable runner identifier (RunnerClaude | RunnerOpenCode) that
 // gets stored alongside model usage in db.ReviewModelInfo.
 //
 // Implementations normalize their CLI output into ClaudeResult — the name
-// stays for backwards compatibility with persisted records.
+// stays for backwards compatibility with persisted records. The usage and cost
+// in a Run's result cover that call only, even when it resumes a session:
+// callers add results across calls (Step 2 retry).
 type ReviewRunner interface {
 	Run(ctx context.Context, prompt string) (*ClaudeResult, error)
 	Name() string
@@ -293,6 +303,12 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 		// as --output-format json, so ParseClaudeResult is unchanged downstream.
 		"--output-format", "stream-json", "--verbose",
 		"--permission-mode", "bypassPermissions",
+		// The working dir is the reviewed MR checkout: its .claude/settings.json
+		// (hooks, env, apiKeyHelper) and .mcp.json are attacker-controlled and
+		// would run with the job's secrets. Load user settings only (managed
+		// policy always applies) and no MCP servers.
+		"--setting-sources", "user",
+		"--strict-mcp-config",
 	}
 
 	if r.Model != "" {
@@ -300,8 +316,7 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 	}
 
 	// Pass reasoning effort only when explicitly set; otherwise the CLI applies
-	// its own default (xhigh on Opus 4.7/4.8). Older claude CLIs that predate
-	// --effort would reject the flag, so opting in keeps them working.
+	// its own per-model default.
 	if r.Effort != "" {
 		args = append(args, "--effort", r.Effort)
 	}
@@ -316,11 +331,20 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 	return args
 }
 
+// claudeIsolationEnv keeps the developer's auto-memory out of a review: Claude
+// Code loads it per project, and a panel worktree resolves to the main repo, so
+// a local review would read (and could quote) personal notes that CI never has.
+// --setting-sources does not cover it. The operator's env wins, as in credEnv.
+func claudeIsolationEnv() []string {
+	return credEnv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1")
+}
+
 // Run executes claude --print --output-format stream-json and parses the result.
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface tool calls live as claude streams its NDJSON events.
 	env := append(credEnv(envAnthropicAPIKey, r.Token), credEnv(envTrackerToken, r.TrackerToken)...)
+	env = append(env, claudeIsolationEnv()...)
 	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
@@ -421,7 +445,8 @@ func (r *ExecClaudeRunner) logResult(ctx context.Context, cr *ClaudeResult) {
 		"cacheCreate5m", cr.Usage.CacheCreation.Ephemeral5mInputTokens,
 		"webFetch", cr.Usage.ServerToolUse.WebFetchRequests,
 		"webSearch", cr.Usage.ServerToolUse.WebSearchRequests,
-		"models", len(cr.ModelUsage),
+		// The resolved ids: a CLI alias (-m opus) says nothing about the model.
+		"models", strings.Join(slices.Sorted(maps.Keys(cr.ModelUsage)), ","),
 		"stopReason", cr.StopReason,
 	)
 
@@ -453,25 +478,25 @@ func (r *ExecClaudeRunner) saveOutput(ctx context.Context, data []byte) {
 }
 
 func (r *ExecClaudeRunner) handleClaudeError(err error, stdout []byte, stderr string) (*ClaudeResult, error) {
-	if len(stdout) > 0 {
-		if cr, parseErr := ParseClaudeResult(stdout); parseErr == nil {
-			return cr, fmt.Errorf("claude exited with error: %w", err)
-		}
-	}
-	return nil, fmt.Errorf("claude exited with error: %w (stderr: %s)", err, truncate(stderr, 500))
+	// An error_* subtype comes back together with a parse error; keep the result
+	// anyway — its cost and usage are what the failed run billed.
+	cr, _ := ParseClaudeResult(stdout)
+	return cr, claudeRunError(err, cr, stdout, stderr)
 }
 
+// truncate cuts s to at most maxLen bytes, on a rune boundary, and marks the cut.
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return reviewer.ClipUTF8(s, maxLen) + "..."
 }
 
 type runOutput struct {
-	stdout bytes.Buffer
-	stderr bytes.Buffer
-	err    error
+	stdout  bytes.Buffer
+	stderr  bytes.Buffer
+	err     error
+	elapsed time.Duration // wall-clock time of the subprocess
 }
 
 // lineWriter is an io.Writer that splits the bytes written to it on '\n' and
@@ -503,11 +528,6 @@ func (w *lineWriter) flush() {
 	}
 }
 
-// runExec spawns the runner CLI under the shared runnerTimeout and captures
-// stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
-// focused on argv and result parsing. When onLine is non-nil it receives each
-// stdout line as it streams, so a runner can surface significant events live
-// (e.g. tool calls from a JSONL agent stream) instead of only after completion.
 // Credential env var names CLI runners read their API key from, plus the
 // task-tracker token. envTrackerToken aliases the canonical reviewer const so
 // the $REVIEW_TRACKER_TOKEN reference in assembled prompts and the env injected
@@ -530,6 +550,11 @@ func credEnv(varName, token string) []string {
 	return []string{varName + "=" + token}
 }
 
+// runExec spawns the runner CLI under the shared runnerTimeout and captures
+// stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
+// focused on argv and result parsing. When onLine is non-nil it receives each
+// stdout line as it streams, so a runner can surface significant events live
+// (e.g. tool calls from a JSONL agent stream) instead of only after completion.
 func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string, extraEnv []string, onLine func([]byte)) *runOutput {
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
@@ -537,11 +562,8 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
-	// credEnv only injects a var absent from the ambient env, so there is never a
-	// duplicate key to resolve here; nil extraEnv leaves cmd.Env nil = inherit.
-	if len(extraEnv) > 0 {
-		cmd.Env = append(os.Environ(), extraEnv...)
-	}
+	cmd.Env = reviewer.ChildEnv(extraEnv...)
+	prepareCLI(cmd)
 
 	out := &runOutput{}
 	var lw *lineWriter
@@ -555,12 +577,27 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 
 	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
 
-	out.err = cmd.Run()
+	start := time.Now()
+	out.err = finishCLI(ctx, log, cmd, cmd.Run())
+	out.elapsed = time.Since(start)
+	// Killed by the context (runnerTimeout, the caller's deadline or a cancelled
+	// job): keep the cause in the chain so a timeout/cancel is not reported as a
+	// crash ("signal: killed").
+	if out.err != nil && ctx.Err() != nil {
+		out.err = fmt.Errorf("%w: %w", ctx.Err(), out.err)
+	}
+	// Stopped by SIGTERM/SIGINT from outside — the CLI runs in a process group
+	// of its own, so from whatever signals every process, e.g. a container
+	// stop on a cancelled CI job: not a runner failure.
+	if isInterrupted(out.err) {
+		out.err = reviewer.WithRunReason(reviewer.RunReasonCancelled, out.err)
+	}
 	if lw != nil {
 		lw.flush() // emit a trailing line without a newline
 	}
 
-	log.InfoContext(ctx, binary+" finished", "exitErr", out.err, "stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
+	log.InfoContext(ctx, binary+" finished", "duration", out.elapsed.Round(time.Second), "exitErr", out.err,
+		"stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
 
 	if log.Enabled(ctx, slog.LevelDebug) {
 		if out.stderr.Len() > 0 {

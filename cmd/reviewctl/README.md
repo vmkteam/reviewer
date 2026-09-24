@@ -19,6 +19,13 @@ passes only the project key, server URL and credentials, so it stays thin. The
 runner flags below are **local overrides**: an explicit flag always wins over the
 profile. Multi-review is profile-driven too (see below).
 
+The reviewed checkout is untrusted, so CLI runners ignore the agent config it
+ships: `claude` loads user settings only, no MCP servers and no auto-memory;
+`opencode` runs with project config off (`OPENCODE_DISABLE_PROJECT_CONFIG`) and
+formatters and LSP off (merged into your `OPENCODE_CONFIG_CONTENT`, if set), and
+refuses to start when the checkout contains `.opencode/` or `opencode.json(c)`,
+whose plugins it would load regardless.
+
 ## Flags & Environment Variables
 
 Most flags have an environment-variable default for CI.
@@ -43,10 +50,12 @@ Most flags have an environment-variable default for CI.
 |------|-------------|---------|-------------|
 | `--runner` | `$REVIEW_RUNNER` | `claude` | Runner: `claude` \| `opencode` \| `codex` \| `direct` |
 | `--model` | `$REVIEW_MODEL` | *runner default* | Model name |
-| `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort `low`..`max` (honored by the `claude` and `direct` Anthropic runners; others ignore it) |
-| `--api-provider` | `$REVIEW_API_PROVIDER` | `deepseek` | `direct` runner provider: `deepseek` \| `openai-compat` \| `anthropic` |
+| `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort `low`..`max` (honored by the `claude`, `codex` and `direct` runners; opencode and `direct` with `openai-compat` ignore it) |
+| `--api-provider` | `$REVIEW_API_PROVIDER` | `deepseek` | `direct` runner provider: `deepseek` \| `openai` (Responses API) \| `openai-compat` \| `anthropic` |
 | `--api-base-url` | `$REVIEW_API_BASE_URL` | *provider default* | `direct` runner API base URL |
-| `--allow-dangerous-permissions` | `$REVIEW_ALLOW_DANGEROUS_PERMISSIONS` | `true` | Pass `--dangerously-skip-permissions` to opencode (needed for unattended CI) |
+| `--max-rounds` | `$REVIEW_MAX_ROUNDS` | `60` | `direct` runner round budget (10–500); the flag or env var overrides the profile's `maxRounds`. The model is warned 10 and 3 rounds before it, then gets up to 5 review-only rounds to deliver |
+| `--allow-dangerous-permissions` | `$REVIEW_ALLOW_DANGEROUS_PERMISSIONS` | `true` | Pass `--auto` to opencode (needed for unattended CI) |
+| `--codex-sandbox` | `$REVIEW_CODEX_SANDBOX` | `workspace-write` | codex `--sandbox` mode; `danger-full-access` inside containers, where codex's bubblewrap sandbox can't start |
 
 ### MR & CI metadata (from GitLab CI)
 

@@ -1,9 +1,13 @@
 package reviewctl
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"slices"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/reviewer"
 
 	"github.com/vmkteam/embedlog"
 	zm "github.com/vmkteam/zenrpc-middleware"
@@ -46,9 +50,10 @@ func New(dbo db.DB, logger embedlog.Logger, isDevel bool) *zenrpc.Server {
 		zm.WithSQLLogger(dbo.DB, isDevel, allowDebugFn(), allowDebugFn()),
 	)
 
+	pf := maskKeys(logger.Print)
 	rpc.Use(
-		zm.WithSLog(logger.Print, zm.DefaultServerName, nil),
-		zm.WithErrorSLog(logger.Print, zm.DefaultServerName, nil),
+		zm.WithSLog(pf, zm.DefaultServerName, nil),
+		zm.WithErrorSLog(pf, zm.DefaultServerName, nil),
 	)
 
 	// services
@@ -57,4 +62,21 @@ func New(dbo db.DB, logger embedlog.Logger, isDevel bool) *zenrpc.Server {
 	})
 
 	return rpc
+}
+
+// maskKeys wraps the printer of the RPC log middlewares, which log each call's
+// raw params: every method here takes the project key.
+func maskKeys(pf zm.Print) zm.Print {
+	return func(ctx context.Context, msg string, args ...any) {
+		args = slices.Clone(args)
+		for i := 1; i < len(args); i += 2 {
+			if args[i-1] != "params" {
+				continue
+			}
+			if p, ok := args[i].(json.RawMessage); ok {
+				args[i] = json.RawMessage(reviewer.MaskKeys(string(p)))
+			}
+		}
+		pf(ctx, msg, args...)
+	}
 }

@@ -58,8 +58,10 @@ type ModelUseStats struct {
 // profile (runnerProfiles.params jsonb). New runner options live here so they
 // need no schema migration.
 type RunnerProfileParams struct {
-	// AllowDangerousPermissions maps to opencode's --dangerously-skip-permissions.
+	// AllowDangerousPermissions maps to opencode's --auto.
 	AllowDangerousPermissions bool `json:"allowDangerousPermissions,omitempty"`
+	// MaxRounds overrides the direct runner's round budget; 0 = its default.
+	MaxRounds int `json:"maxRounds,omitempty"`
 }
 
 // ReviewRunnerProfile is the snapshot of the resolved runner profile used to
@@ -74,7 +76,7 @@ type ReviewRunnerProfile struct {
 	Effort          string              `json:"effort,omitempty"`
 	APIProvider     string              `json:"apiProvider,omitempty"`
 	APIBaseURL      string              `json:"apiBaseURL,omitempty"`
-	Params          RunnerProfileParams `json:"params,omitempty"`
+	Params          RunnerProfileParams `json:"params"`
 }
 
 // Add accumulates numeric counters and Models map entries from o into m.

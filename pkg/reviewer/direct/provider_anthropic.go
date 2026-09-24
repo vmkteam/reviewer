@@ -47,7 +47,9 @@ func NewAnthropicProvider(cfg AnthropicConfig) (LLMProvider, error) {
 	if cfg.Model == "" {
 		return nil, errors.New("anthropic provider: model is required")
 	}
-	opts := []option.RequestOption{option.WithAPIKey(cfg.APIKey)}
+	// withRetry is the only retry layer: the SDK's own retries would stack on
+	// it (up to 12 attempts, each re-sending the whole history).
+	opts := []option.RequestOption{option.WithAPIKey(cfg.APIKey), option.WithMaxRetries(0)}
 	if cfg.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
 	}
@@ -67,7 +69,16 @@ func NewAnthropicProvider(cfg AnthropicConfig) (LLMProvider, error) {
 func (p *anthropicProvider) Model() string    { return p.model }
 func (p *anthropicProvider) Pricing() Pricing { return p.pricing }
 
+// Complete sends one round, retrying transient failures with the same request —
+// a dropped stream mid-review must not throw away the whole run.
 func (p *anthropicProvider) Complete(ctx context.Context, req Request) (Response, error) {
+	params := p.params(req)
+	return withRetry(ctx, anthropicRetry, req.OnRetry, func() (Response, error) {
+		return p.stream(ctx, params)
+	})
+}
+
+func (p *anthropicProvider) params(req Request) anthropic.MessageNewParams {
 	params := anthropic.MessageNewParams{
 		Model:     p.model,
 		MaxTokens: p.maxTokens,
@@ -88,21 +99,24 @@ func (p *anthropicProvider) Complete(ctx context.Context, req Request) (Response
 	if eff := cmp.Or(req.Effort, p.effort); eff != "" {
 		params.OutputConfig = anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(eff)}
 	}
+	return params
+}
 
-	// Stream the response and accumulate it into a complete message. Streaming
-	// avoids the non-streaming request timeout on heavy rounds (high effort +
-	// adaptive thinking), where a single round can take a minute or more of
-	// output — a non-streamed POST would risk an HTTP read timeout.
+// stream makes one streamed Messages call and converts the accumulated message.
+// Streaming avoids the non-streaming request timeout on heavy rounds (high
+// effort + adaptive thinking), where a single round can take a minute or more
+// of output — a non-streamed POST would risk an HTTP read timeout.
+func (p *anthropicProvider) stream(ctx context.Context, params anthropic.MessageNewParams) (Response, error) {
 	stream := p.client.Messages.NewStreaming(ctx, params)
 	defer stream.Close()
 	var resp anthropic.Message
 	for stream.Next() {
 		if err := resp.Accumulate(stream.Current()); err != nil {
-			return Response{}, fmt.Errorf("anthropic: accumulate: %w", err)
+			return Response{}, fmt.Errorf("accumulate: %w", err)
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return Response{}, fmt.Errorf("anthropic: %w", err)
+		return Response{}, err
 	}
 
 	out := Response{StopReason: string(resp.StopReason)}

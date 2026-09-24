@@ -3,6 +3,7 @@ package reviewer
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"reviewsrv/pkg/db"
@@ -13,6 +14,43 @@ import (
 // instead of the real secret. Canonical definition — pkg/reviewer/runner and
 // cmd/reviewctl alias it so the prompt reference and the injected env can't drift.
 const EnvTrackerToken = "REVIEW_TRACKER_TOKEN"
+
+// reviewctl's own secrets from the CI env: canonical names, which cmd/reviewctl
+// reads and pkg/reviewer/runner keeps out of the agents' env.
+const (
+	EnvProjectKey  = "PROJECT_KEY"
+	EnvGitLabToken = "REVIEWER_GITLAB_TOKEN"
+	EnvAPIKey      = "REVIEW_API_KEY" // the direct runner's provider-agnostic key
+)
+
+// ShortKey returns the first 8 chars of a project key, for logs and pages: the
+// full key authorizes the project's config (runner-profile and tracker tokens).
+func ShortKey(key string) string {
+	if len(key) <= 8 {
+		return key
+	}
+	return key[:8]
+}
+
+// MaskKey replaces every occurrence of key in s with its ShortKey, e.g. in a
+// URL or an error message that quotes one.
+func MaskKey(s, key string) string {
+	if key == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, key, maskedKey(key))
+}
+
+// keyRe matches a project key (a UUID) in text that may quote one.
+var keyRe = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
+
+// MaskKeys masks every project key in s, for text where the key is not known
+// up front (logged RPC params, a Sentry event).
+func MaskKeys(s string) string {
+	return keyRe.ReplaceAllStringFunc(s, maskedKey)
+}
+
+func maskedKey(key string) string { return ShortKey(key) + "…" }
 
 type ProjectManager struct {
 	repo       db.ProjectRepo
@@ -39,6 +77,16 @@ func (pm *ProjectManager) GetByKey(ctx context.Context, projectKey string) (*Pro
 	p, err := pm.repo.OneProject(ctx, &db.ProjectSearch{ProjectKey: &projectKey}, pm.repo.FullProject())
 
 	return NewProject(p), err
+}
+
+// TitleByKey returns the title of the project with projectKey, or "" when no
+// project matches. It loads the project row only, without its relations.
+func (pm *ProjectManager) TitleByKey(ctx context.Context, projectKey string) (string, error) {
+	p, err := pm.repo.OneProject(ctx, &db.ProjectSearch{ProjectKey: &projectKey}, db.WithColumns(db.TableColumns))
+	if err != nil || p == nil {
+		return "", err
+	}
+	return p.Title, nil
 }
 
 // resolvePrimaryProfile returns a project's primary runner profile: its pinned

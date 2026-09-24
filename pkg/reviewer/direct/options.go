@@ -2,15 +2,17 @@ package direct
 
 // Options tunes the agent loop.
 type Options struct {
-	// MaxRounds caps how many provider round-trips the loop may make before
-	// giving up — a backstop against a model that never calls submit_review.
+	// MaxRounds caps the provider round-trips with the full tool set — a
+	// backstop against a model that never calls submit_review. The model is
+	// warned as it nears the cap, and up to graceRounds more review-tools-only
+	// rounds follow it so a review mid-delivery still lands.
 	MaxRounds int
 	// CompactAt is the estimated-token threshold above which the middle of the
 	// conversation is pruned. Zero disables compaction.
 	CompactAt int
 	// KeepTail is how many trailing messages compaction preserves verbatim.
 	KeepTail int
-	// Effort is passed to providers that support it (Anthropic output_config.effort).
+	// Effort is the reasoning effort passed to the provider (see Request.Effort).
 	Effort string
 	// OnEvent, if set, receives a transcript event per assistant turn, tool call,
 	// tool result, round and final result. Used to persist the session for later
@@ -18,9 +20,20 @@ type Options struct {
 	OnEvent Sink
 }
 
+// Bounds for a configured MaxRounds: below the minimum a review cannot finish,
+// above the maximum the backstop no longer protects the budget.
+const (
+	MinMaxRounds = 10
+	MaxMaxRounds = 500
+)
+
+// IsValidMaxRounds reports whether n is an acceptable configured MaxRounds:
+// 0 (the default) or within the bounds.
+func IsValidMaxRounds(n int) bool { return n == 0 || n >= MinMaxRounds && n <= MaxMaxRounds }
+
 // DefaultOptions returns sensible loop defaults for a review run. The CompactAt
-// default is sized for ~128k-context models (DeepSeek); large-context providers
-// should raise it via Options.CompactAt — see CompactAtLargeContext.
+// default is conservative (sized for ~128k-context backends); large-context
+// providers should raise it via Options.CompactAt — see CompactAtLargeContext.
 func DefaultOptions() Options {
 	return Options{MaxRounds: 60, CompactAt: 150_000, KeepTail: 12}
 }

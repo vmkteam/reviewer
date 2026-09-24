@@ -70,6 +70,7 @@ func main() {
 			Dsn:         cfg.Sentry.DSN,
 			Environment: cfg.Sentry.Environment,
 			Release:     version,
+			BeforeSend:  app.MaskSentryKeys,
 		}))
 	}
 

@@ -186,12 +186,16 @@ const localRunVisible = ref(false)
 const localRunProject = ref<ProjectSummary | null>(null)
 const localRunCopied = ref(false)
 
-// Base image (Claude Code CLI + settings + HTML template) is built by
-// vmkteam/docker-claude-ci. We layer ast-index (AST navigation for the direct
-// runner) and the latest reviewctl release on top.
+// Base image (Claude Code, Codex and opencode CLIs, Go + gopls, settings, HTML
+// template) is built by vmkteam/docker-claude-ci. We layer ast-index (AST
+// navigation for the direct runner) and the latest reviewctl release on top.
 // Build this, push to your registry, then point the template's `dockerimage` at it.
-const dockerfileContent = `# Claude Code CLI + settings, built by vmkteam/docker-claude-ci.
+const dockerfileContent = `# Claude Code / Codex / opencode CLIs + Go, built by vmkteam/docker-claude-ci.
 FROM vmkteam/claude-ci:latest
+
+# Codex's bubblewrap sandbox can't start in an unprivileged container; the
+# container itself is the sandbox.
+ENV REVIEW_CODEX_SANDBOX=danger-full-access
 
 # ast-index — AST navigation for the direct runner's ast_* tools.
 # Static-pie binary, works on musl/alpine as is; optional (skipped when absent).

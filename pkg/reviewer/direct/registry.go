@@ -28,6 +28,11 @@ type Registry struct {
 	defs      map[string]ToolDef
 	handlers  map[string]Handler
 	submitted bool
+
+	// allowed, when set, limits Dispatch to these tools; others fail with deniedMsg.
+	allowed   map[string]bool
+	deniedMsg string
+	denied    int // calls refused by the restriction so far
 }
 
 // NewRegistry returns an empty registry.
@@ -65,11 +70,39 @@ func (r *Registry) Defs() []ToolDef {
 func (r *Registry) Dispatch(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	r.mu.Lock()
 	h, ok := r.handlers[name]
+	denied := ok && r.allowed != nil && !r.allowed[name]
+	deniedMsg := r.deniedMsg
+	if denied {
+		r.denied++
+	}
 	r.mu.Unlock()
-	if !ok {
+	switch {
+	case !ok:
 		return "", fmt.Errorf("unknown tool %q", name)
+	case denied:
+		return "", fmt.Errorf("%s: %s", name, deniedMsg)
 	}
 	return h(ctx, args)
+}
+
+// deniedCalls returns how many calls the restriction has refused so far.
+func (r *Registry) deniedCalls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.denied
+}
+
+// restrict limits Dispatch to the allowed tools; any other call fails with
+// deniedMsg. Defs stay intact: changing the tool list would invalidate the
+// provider prompt cache for the whole conversation.
+func (r *Registry) restrict(deniedMsg string, allowed ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.allowed = make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		r.allowed[name] = true
+	}
+	r.deniedMsg = deniedMsg
 }
 
 // markSubmitted records that submit_review wrote its artifacts successfully.

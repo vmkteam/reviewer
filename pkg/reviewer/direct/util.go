@@ -1,6 +1,10 @@
 package direct
 
-import "fmt"
+import (
+	"fmt"
+
+	"reviewsrv/pkg/reviewer"
+)
 
 const defaultClip = 100_000
 
@@ -30,7 +34,8 @@ func clipN(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + fmt.Sprintf("\n... [truncated %d bytes]", len(s)-n)
+	c := reviewer.ClipUTF8(s, n)
+	return c + fmt.Sprintf("\n... [truncated %d bytes]", len(s)-len(c))
 }
 
 // objSchema builds a JSON Schema object with the given properties and required

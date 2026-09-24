@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -9,12 +10,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -35,14 +39,9 @@ func (f *fakeRunner) Run(context.Context, string) (*runner.ClaudeResult, error) 
 		return nil, f.err
 	}
 	if f.dir != "" {
-		draft, err := ReadReviewJSON(f.dir)
-		if err != nil {
-			return nil, err
-		}
-		draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{
-			LocalID: "C1", Severity: "low", Title: "t", FileType: "code",
-		})
-		if err := WriteReviewJSON(f.dir, draft); err != nil {
+		if err := editReviewJSON(f.dir, func(d *rest.ReviewDraft) {
+			d.Issues = append(d.Issues, rest.ReviewDraftIssue{LocalID: "C1", Severity: "low", Title: "t", FileType: "code"})
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -108,6 +107,25 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	assert.NoDirExists(t, wt, "worktree dir must be gone after remove")
 }
 
+func TestGitWorktreeAddIgnoresPlantedHooks(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-q")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "file.txt"), []byte("hi"), 0o600))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init")
+	// What an agent with write access to the checkout could plant: a hook in the
+	// .git that every panel worktree shares.
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	hook := filepath.Join(repo, ".git", "hooks", "post-checkout")
+	require.NoError(t, os.WriteFile(hook, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755))
+
+	c := &Controller{cfg: &Config{Dir: repo}, log: slog.Default()}
+	wt := filepath.Join(t.TempDir(), "wt-judge")
+	require.NoError(t, c.gitWorktreeAdd(t.Context(), wt, "HEAD"))
+	t.Cleanup(func() { c.gitWorktreeRemove(context.Background(), wt) })
+	assert.NoFileExists(t, marker, "reviewctl must not run hooks from the checkout")
+}
+
 func TestRunMembers_ToleratesFailures(t *testing.T) {
 	// Failed members must ship their artifacts as a debug bundle BEFORE panel
 	// cleanup wipes the worktree (its only copy) — count the uploads.
@@ -161,15 +179,10 @@ func (j *judgeRunner) Run(context.Context, string) (*runner.ClaudeResult, error)
 	if j.runs == 1 {
 		return &runner.ClaudeResult{}, nil
 	}
-	draft, err := ReadReviewJSON(j.dir)
-	if err != nil {
-		return nil, err
-	}
-	draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{LocalID: "F1", Severity: "low", Title: "fused", FileType: "code"})
-	if err := WriteReviewJSON(j.dir, draft); err != nil {
-		return nil, err
-	}
-	return &runner.ClaudeResult{}, nil
+	err := editReviewJSON(j.dir, func(d *rest.ReviewDraft) {
+		d.Issues = append(d.Issues, rest.ReviewDraftIssue{LocalID: "F1", Severity: "low", Title: "fused", FileType: "code"})
+	})
+	return &runner.ClaudeResult{}, err
 }
 func (j *judgeRunner) Name() string      { return runner.RunnerClaude }
 func (j *judgeRunner) SetSession(string) {}
@@ -225,13 +238,30 @@ func TestMemberConfigInheritsTracker(t *testing.T) {
 		TrackerToken: "tracker-tok",
 	}, nil, slog.Default())
 
-	mc := c.memberConfig("/tmp/wt", MemberSpec{Runner: "codex", Model: "m", Profile: &ResolvedProfile{Token: "profile-tok"}})
+	mc := c.memberConfig("/tmp/wt", MemberSpec{Runner: "codex", Model: "m", Profile: &ResolvedProfile{
+		Token: "profile-tok", Params: RunnerProfileParams{MaxRounds: 120, AllowDangerousPermissions: true},
+	}})
 
 	// Tracker access is project-wide: the profile overlay must not touch it.
 	assert.Equal(t, "https://yt.example.com", mc.TrackerURL)
 	assert.Equal(t, "tracker-tok", mc.TrackerToken)
 	assert.Equal(t, "profile-tok", mc.Token, "profile credentials still overlaid")
 	assert.Equal(t, "codex", mc.Runner)
+	assert.Equal(t, 120, mc.MaxRounds, "the member's own profile params apply")
+	assert.True(t, mc.AllowDangerousPermissions)
+}
+
+func TestMemberConfigKeepsPassedMaxRounds(t *testing.T) {
+	member := MemberSpec{Runner: "direct", Model: "m", Profile: &ResolvedProfile{Params: RunnerProfileParams{MaxRounds: 120}}}
+
+	c := NewController(&Config{MaxRounds: 10, MaxRoundsSet: true}, nil, slog.Default())
+	assert.Equal(t, 10, c.memberConfig("/tmp/wt", member).MaxRounds, "--max-rounds overrides the member's profile")
+
+	c = NewController(&Config{MaxRoundsSet: true}, nil, slog.Default())
+	assert.Zero(t, c.memberConfig("/tmp/wt", member).MaxRounds, "an explicit 0 (the default) too")
+
+	c = NewController(&Config{MaxRounds: 10}, nil, slog.Default())
+	assert.Equal(t, 120, c.memberConfig("/tmp/wt", member).MaxRounds, "the primary profile's budget does not")
 }
 
 func TestMemberLabel(t *testing.T) {
@@ -258,4 +288,176 @@ func TestSourceLabels(t *testing.T) {
 		"gpt-5.5-2",
 		"claude",
 	}, got)
+}
+
+func TestRunJudge_FailureShipsDebugBundle(t *testing.T) {
+	srv, dc := newDebugCaptureServer(t, nil)
+	mdir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(mdir, "review.json"), []byte(`{"issues":[]}`), 0o600))
+	outputs := []*memberOutput{{label: "opus", dir: mdir}}
+
+	// Both attempts leave the skeleton untouched, each billed $0.5.
+	c := NewController(&Config{Key: "k", URL: srv.URL, Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "opus"}}, nil, slog.Default())
+	c.runnerFactory = func(*Config) (runner.ReviewRunner, error) {
+		return failingRunner{name: runner.RunnerClaude, cost: 0.5}, nil
+	}
+
+	_, err := c.runJudge(t.Context(), t.TempDir(), "fuse the members", outputs)
+	require.ErrorContains(t, err, "judge produced an empty review")
+	assert.Equal(t, reviewer.RunStatusFailed, dc.field("status"))
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, dc.field("reason"))
+	assert.Equal(t, "1", dc.field("costUsd"), "both judge attempts are billed")
+	assert.Equal(t, runner.RunnerClaude, dc.field("runner"))
+}
+
+// uploadCapture answers review uploads with sequential ids and records each
+// one's role; failAt fails that upload (1-based) with a 500.
+type uploadCapture struct {
+	mu     sync.Mutex
+	roles  []string
+	failAt int
+}
+
+func (u *uploadCapture) handle(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.Count(strings.Trim(r.URL.Path, "/"), "/") != 3 { // an R*.md upload
+			return
+		}
+		var d rest.ReviewDraft
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&d)) {
+			return
+		}
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		if len(u.roles)+1 == u.failAt {
+			u.failAt = 0
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		u.roles = append(u.roles, d.Review.ReviewRole)
+		_, _ = w.Write([]byte(strconv.Itoa(len(u.roles))))
+	}
+}
+
+func testOutputs() []*memberOutput {
+	return []*memberOutput{{label: "a", draft: &rest.ReviewDraft{}}, {label: "b", draft: &rest.ReviewDraft{}}}
+}
+
+func TestFuse_JudgeNotStartedUploadsEveryMember(t *testing.T) {
+	uc := &uploadCapture{}
+	srv, dc := newDebugCaptureServer(t, uc.handle(t))
+	// Not a repository: the judge worktree can't be created.
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: t.TempDir(), Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "opus"}}
+
+	id, err := NewController(cfg, nil, slog.Default()).fuse(t.Context(), t.TempDir(), "HEAD", testOutputs())
+	require.NoError(t, err, "a judge failure never fails the panel")
+	assert.Equal(t, 1, id, "the primary member is the review")
+	assert.Equal(t, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}, uc.roles, "every member run is reported")
+	assert.Equal(t, 1, dc.count(), "the judge that never ran is reported too")
+	assert.Equal(t, runner.RunnerClaude, dc.field("runner"))
+	assert.Contains(t, dc.field("errorMsg"), "judge worktree add")
+}
+
+func TestUploadUnfused(t *testing.T) {
+	cause := errors.New("judge failed")
+	for _, tt := range []struct {
+		name    string
+		failAt  int
+		wantErr bool
+		roles   []string
+	}{
+		{"all uploaded", 0, false, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}},
+		{"a lost member upload is tolerated", 2, false, []string{reviewer.ReviewRoleSingle}},
+		{"a lost primary upload fails the panel", 1, true, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			uc := &uploadCapture{failAt: tt.failAt}
+			srv := httptest.NewServer(uc.handle(t))
+			t.Cleanup(srv.Close)
+
+			_, err := NewController(&Config{Key: "k", URL: srv.URL}, nil, slog.Default()).uploadUnfused(t.Context(), testOutputs(), cause)
+			assert.Equal(t, tt.wantErr, err != nil, "err = %v", err)
+			assert.Equal(t, tt.roles, uc.roles)
+		})
+	}
+
+	t.Run("a cancelled job uploads nothing", func(t *testing.T) {
+		uc := &uploadCapture{}
+		srv := httptest.NewServer(uc.handle(t))
+		t.Cleanup(srv.Close)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := NewController(&Config{Key: "k", URL: srv.URL}, nil, slog.Default()).uploadUnfused(ctx, testOutputs(), cause)
+		require.ErrorIs(t, err, cause)
+		assert.Empty(t, uc.roles)
+	})
+}
+
+func TestReviewPanel_JudgeFailureUploadsEveryMember(t *testing.T) {
+	uc := &uploadCapture{}
+	srv, dc := newDebugCaptureServer(t, uc.handle(t))
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-q")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "file.txt"), []byte("hi"), 0o600))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init")
+	profile := &ResolvedProfile{Params: RunnerProfileParams{MaxRounds: 120}}
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: repo, Commit: "HEAD", Runner: runner.RunnerClaude, MaxRounds: 10, MaxRoundsSet: true,
+		Multi: []MemberSpec{{Runner: runner.RunnerClaude, Model: "a", Profile: profile}, {Runner: runner.RunnerCodex, Model: "b", Profile: profile}},
+		Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "j", Profile: profile}}
+	var mu sync.Mutex
+	var maxRounds []int
+	c := NewController(cfg, nil, slog.Default(), WithRunnerFactory(func(mc *Config) (runner.ReviewRunner, error) {
+		mu.Lock()
+		maxRounds = append(maxRounds, mc.MaxRounds)
+		mu.Unlock()
+		if mc.Label == "judge" { // leaves the skeleton untouched, on both attempts
+			return failingRunner{name: runner.RunnerClaude}, nil
+		}
+		return &fakeRunner{name: mc.Runner, dir: mc.Dir}, nil
+	}))
+
+	require.NoError(t, c.Review(t.Context()))
+	assert.Equal(t, []string{reviewer.ReviewRoleSingle, reviewer.ReviewRoleMember}, uc.roles, "every member run is reported")
+	assert.Equal(t, 1, dc.count(), "one bundle, the judge's")
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, dc.field("reason"))
+	assert.Equal(t, []int{10, 10, 10}, maxRounds, "--max-rounds overrides every member's and the judge's profile")
+}
+
+func TestReviewPanel_ShipsPanelLevelFailure(t *testing.T) {
+	srv, dc := newDebugCaptureServer(t, nil)
+	// A checkout that doesn't exist: no worktree, so no member ever runs — the
+	// panel itself must report the failure.
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: filepath.Join(t.TempDir(), "missing"), Commit: "abc123",
+		Runner: runner.RunnerClaude, Multi: []MemberSpec{{Runner: runner.RunnerClaude, Model: "opus"}}}
+	c := NewController(cfg, nil, slog.Default(), WithRunnerFactory(func(*Config) (runner.ReviewRunner, error) {
+		return failingRunner{name: runner.RunnerClaude}, nil
+	}))
+
+	err := c.Review(t.Context())
+	require.ErrorContains(t, err, "worktree add")
+	assert.Equal(t, 1, dc.count())
+	assert.Equal(t, reviewer.RunStatusFailed, dc.field("status"))
+	assert.Equal(t, reviewer.PanelRunner, dc.field("runner"), "not the primary profile's runner")
+	assert.Equal(t, "claude:opus", dc.field("model"))
+	assert.Contains(t, dc.field("errorMsg"), "worktree add")
+}
+
+func TestReviewPanel_AllMembersFailedReportsEachOnce(t *testing.T) {
+	srv, dc := newDebugCaptureServer(t, nil)
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-q")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "file.txt"), []byte("hi"), 0o600))
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init")
+	cfg := &Config{Key: "k", URL: srv.URL, Dir: repo, Commit: "HEAD", Runner: runner.RunnerClaude,
+		Multi: []MemberSpec{{Runner: runner.RunnerClaude, Model: "a"}, {Runner: runner.RunnerCodex, Model: "b"}}}
+	c := NewController(cfg, nil, slog.Default(), WithRunnerFactory(func(mc *Config) (runner.ReviewRunner, error) {
+		return failingRunner{name: mc.Runner, err: errors.New("boom")}, nil
+	}))
+
+	err := c.Review(t.Context())
+	require.ErrorIs(t, err, errAllMembersFailed)
+	assert.Equal(t, 2, dc.count(), "one bundle per failed member, none for the panel on top")
 }

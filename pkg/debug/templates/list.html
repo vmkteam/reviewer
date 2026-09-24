@@ -11,6 +11,9 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee
 th { background: #f6f8fa; font-weight: 600; }
 tr:hover td { background: #fafbfc; }
 .err { color: #b00020; }
+.st-failed, .st-timeout { color: #b00020; font-weight: 600; }
+.st-cancelled { color: #8a6d00; }
+.st-ok { color: #1a7f37; }
 .muted { color: #888; font-size: 0.85em; }
 .empty { color: #888; font-style: italic; padding: 2rem 0; }
 code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; }
@@ -30,6 +33,8 @@ a:hover { text-decoration: underline; }
       <th>Branch</th>
       <th>Runner</th>
       <th>Model</th>
+      <th>Status</th>
+      <th>Cost</th>
       <th>Files</th>
       <th>Error</th>
     </tr>
@@ -38,12 +43,14 @@ a:hover { text-decoration: underline; }
   {{range .Bundles}}
     <tr>
       <td><a href="{{storageURL}}{{.ID}}/"><code>{{.Timestamp.Format "2006-01-02 15:04:05"}}</code></a></td>
-      <td><code>{{shortKey .ProjectKey}}</code></td>
+      <td>{{if .ProjectTitle}}{{.ProjectTitle}}{{else}}<code>{{shortKey .ProjectKey}}</code>{{end}}</td>
       <td>{{or .MRIid .ExternalID}}</td>
       <td><code>{{.SourceBranch}}</code> → <code>{{.TargetBranch}}</code></td>
       <td>{{.Runner}}</td>
       <td><code>{{.Model}}</code></td>
-      <td>{{len .Files}}</td>
+      <td class="st-{{.Status}}">{{.Status}}{{if .Reason}}<br><span class="muted">{{.Reason}}</span>{{end}}</td>
+      <td>{{if .CostUsd}}<code>${{printf "%.2f" .CostUsd}}</code>{{else}}—{{end}}</td>
+      <td>{{if .FilesEvicted}}<span class="muted">evicted</span>{{else}}{{len .Files}}{{end}}</td>
       <td class="err">{{preview .ErrorMsg 80}}</td>
     </tr>
   {{end}}

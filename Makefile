@@ -8,7 +8,7 @@ ifeq ($(RACE),1)
 	GOFLAGS+=-race
 endif
 
-LINT_VERSION := v2.12.2
+LINT_VERSION := v2.13.2
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 

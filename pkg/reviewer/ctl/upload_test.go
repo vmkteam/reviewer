@@ -87,6 +87,26 @@ func TestUploadReview_ServerError(t *testing.T) {
 	}
 }
 
+func TestUploadClient_TransportErrorMasksProjectKey(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close() // connection refused: http.Client quotes the URL in its error
+
+	const key = "11111111-2222-3333-4444-555555555555"
+	c := NewUploadClient(slog.Default())
+	_, err := c.UploadReview(t.Context(), srv.URL, key, testDraft(t))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), key)
+	assert.Contains(t, err.Error(), "/v1/reviewctl/upload/11111111…/")
+
+	err = c.UploadFile(t.Context(), srv.URL, key, 42, "architecture", []byte("x"))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), key)
+
+	_, err = c.UploadDebugBundle(t.Context(), srv.URL, key, DebugMeta{ErrorMsg: "boom"}, nil)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), key)
+}
+
 func TestReadReviewJSON(t *testing.T) {
 	draft, err := ReadReviewJSON("testdata")
 	require.NoError(t, err)
@@ -173,6 +193,9 @@ func TestUploadDebugBundle(t *testing.T) {
 		Runner:   "claude",
 		Model:    "opus",
 		ErrorMsg: "validate review.json: invalid reviewType at files[2]: \"\"",
+		Status:   "failed",
+		Reason:   "other",
+		CostUsd:  1.81118025,
 	}, map[string][]byte{
 		"review.json":        []byte(`{"files":[]}`),
 		"claude-output.json": []byte(`{"type":"result"}`),
@@ -184,6 +207,9 @@ func TestUploadDebugBundle(t *testing.T) {
 	assert.Equal(t, "42", gotFields["mrIid"])
 	assert.Equal(t, "claude", gotFields["runner"])
 	assert.Contains(t, gotFields["errorMsg"], "files[2]")
+	assert.Equal(t, "failed", gotFields["status"])
+	assert.Equal(t, "other", gotFields["reason"])
+	assert.Equal(t, "1.81118025", gotFields["costUsd"])
 	assert.JSONEq(t, `{"files":[]}`, string(gotFiles["review.json"]))
 	assert.JSONEq(t, `{"type":"result"}`, string(gotFiles["claude-output.json"]))
 }
@@ -291,4 +317,11 @@ func TestCleanReviewArtifacts(t *testing.T) {
 
 	// Idempotent: clean again on an already-clean dir is a no-op, no error.
 	require.NoError(t, CleanReviewArtifacts(dir))
+}
+
+func TestCollectDebugArtifactsWithoutDir(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "review.json"), []byte("{}"), 0o600))
+	t.Chdir(dir)
+	assert.Nil(t, CollectDebugArtifacts(""), "no dir means no artifacts, not the current one")
 }

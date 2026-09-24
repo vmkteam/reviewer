@@ -29,16 +29,41 @@ type memberOutput struct {
 	mdFiles map[string]string // reviewType → R*.md path in dir
 }
 
+// errAllMembersFailed ends a panel whose members all failed, each of which has
+// shipped its own debug bundle.
+var errAllMembersFailed = errors.New("panel: every member failed to produce a review")
+
 // reviewPanel fans out the --multi panel into per-member git worktrees, then —
 // when a judge is configured and ≥2 members succeed — runs the judge over the
 // members' outputs to produce one fused review. Members and the judge share the
 // project prompt and MR metadata; only runner/model/working dir differ. Members
 // run concurrently (bounded by panelConcurrency), and per-member failures are
 // tolerated as long as one member produces a review.
-func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
+func (c *Controller) reviewPanel(ctx context.Context, start time.Time) (err error) {
 	if c.runnerFactory == nil {
 		return errors.New("panel review requires a runner factory")
 	}
+	// Strings, not MemberSpec values: a spec carries its profile's token.
+	members := make([]string, len(c.cfg.Multi))
+	for i, m := range c.cfg.Multi {
+		members[i] = m.String()
+	}
+	// A failure of the panel itself (prompt fetch, worktree, upload) ships a
+	// bundle and counts in the metrics under the "panel" runner — metadata
+	// only, as the panel writes nothing to the base checkout, and without cost:
+	// the runs report their own. When every member failed, each already has.
+	defer func() {
+		if err != nil && !errors.Is(err, errAllMembersFailed) {
+			pc := *c.cfg
+			pc.Dir, pc.Runner, pc.Model = "", reviewer.PanelRunner, strings.Join(members, " ")
+			c.settleRun(ctx, &pc, nil, err)
+		}
+	}()
+	judge := ""
+	if c.cfg.Judge != nil {
+		judge = c.cfg.Judge.String()
+	}
+	c.log.InfoContext(ctx, "starting panel review", "projectKey", reviewer.ShortKey(c.cfg.Key), "members", members, "judge", judge)
 
 	prompt, err := c.prompt.FetchPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
@@ -77,7 +102,7 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 
 	outputs := c.runMembers(ctx, dirs, labels, prompt)
 	if len(outputs) == 0 {
-		return errors.New("panel: every member failed to produce a review")
+		return errAllMembersFailed
 	}
 
 	primaryID, err := c.finishPanel(ctx, base, commit, outputs)
@@ -86,7 +111,8 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	}
 
 	c.log.InfoContext(ctx, "panel completed",
-		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second))
+		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second),
+		"costUsd", c.spentTotal())
 	return nil
 }
 
@@ -109,9 +135,7 @@ func (c *Controller) runMembers(ctx context.Context, dirs, labels []string, prom
 	sem := make(chan struct{}, panelConcurrency)
 	var wg sync.WaitGroup
 	for i, m := range c.cfg.Multi {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -119,18 +143,19 @@ func (c *Controller) runMembers(ctx context.Context, dirs, labels []string, prom
 			defer cancel()
 			out, err := c.produceMember(mctx, dirs[i], labels[i], m, prompt)
 			results[i] = result{out: out, err: err}
-		}()
+		})
 	}
 	wg.Wait()
 
 	var outputs []*memberOutput
 	for i := range results {
 		if results[i].err != nil {
-			c.log.ErrorContext(ctx, "panel member failed", "label", labels[i], "err", results[i].err)
+			c.log.ErrorContext(ctx, "panel member failed", "member", labels[i], "err", results[i].err)
 			continue
 		}
 		outputs = append(outputs, results[i].out)
-		c.log.InfoContext(ctx, "panel member reviewed", "label", labels[i], "issues", len(results[i].out.draft.Issues))
+		c.log.InfoContext(ctx, "panel member reviewed", "member", labels[i], "issues", len(results[i].out.draft.Issues),
+			"costUsd", results[i].out.draft.Review.ModelInfo.CostUsd)
 	}
 	return outputs
 }
@@ -163,7 +188,7 @@ func (c *Controller) finishPanel(ctx context.Context, base, commit string, outpu
 			if err != nil {
 				return 0, err
 			}
-			c.log.InfoContext(ctx, "panel member uploaded", "label", o.label, "reviewId", id)
+			c.log.InfoContext(ctx, "panel member uploaded", "member", o.label, "reviewId", id)
 			lastID = id
 		}
 		return lastID, nil
@@ -171,27 +196,26 @@ func (c *Controller) finishPanel(ctx context.Context, base, commit string, outpu
 }
 
 // fuse runs the judge over the staged member outputs and uploads one fused
-// review that links the members as children. If the judge fails after a retry,
-// it degrades to a single review from the primary member so CI never goes red on
-// a judge flap.
+// review that links the members as children. If the judge can't run or fails
+// after a retry, it degrades to uploadUnfused so CI never goes red on a judge
+// flap.
 func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*memberOutput) (int, error) {
 	// The judge prompt is a server built-in (served via the reviewctl RPC) so a
 	// future per-project override needs no client change — same as the member prompt.
 	fusionPrompt, err := c.prompt.FetchFusionPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
-		return 0, fmt.Errorf("fetch fusion prompt: %w", err)
+		return c.judgeNotRun(ctx, outputs, fmt.Errorf("fetch fusion prompt: %w", err))
 	}
 
 	judgeDir := filepath.Join(base, "wt-judge")
 	if err = c.gitWorktreeAdd(ctx, judgeDir, commit); err != nil {
-		return 0, fmt.Errorf("judge worktree add: %w", err)
+		return c.judgeNotRun(ctx, outputs, fmt.Errorf("judge worktree add: %w", err))
 	}
 	defer c.gitWorktreeRemove(ctx, judgeDir)
 
 	fusion, err := c.runJudge(ctx, judgeDir, fusionPrompt, outputs)
 	if err != nil {
-		c.log.ErrorContext(ctx, "judge failed, promoting primary member to single", "err", err)
-		return c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+		return c.uploadUnfused(ctx, outputs, err)
 	}
 
 	// Upload members first to get their ids, then the fusion that links them.
@@ -214,6 +238,45 @@ func (c *Controller) fuse(ctx context.Context, base, commit string, outputs []*m
 	return id, nil
 }
 
+// judgeNotRun reports a judge that could not start as a failed judge run
+// (runJudge settles only the runs it starts), then degrades to uploadUnfused.
+func (c *Controller) judgeNotRun(ctx context.Context, outputs []*memberOutput, err error) (int, error) {
+	jc := c.judgeConfig("") // no worktree: the bundle carries the error only
+	c.settleRun(ctx, &jc, nil, err)
+	return c.uploadUnfused(ctx, outputs, err)
+}
+
+// uploadUnfused uploads the primary member as a single review and the others
+// as member reviews: only an uploaded review reports an ok run, with its cost,
+// to the server's run metrics. A cancelled job uploads nothing more.
+func (c *Controller) uploadUnfused(ctx context.Context, outputs []*memberOutput, cause error) (int, error) {
+	if ctx.Err() != nil {
+		return 0, cause
+	}
+	c.log.ErrorContext(ctx, "no fused review, promoting primary member to single", "err", cause)
+	id, err := c.uploadMember(ctx, outputs[0], reviewer.ReviewRoleSingle)
+	if err != nil {
+		return 0, err
+	}
+	for _, o := range outputs[1:] {
+		// The review is out: a lost member upload costs its metrics, not the run.
+		mid, err := c.uploadMember(ctx, o, reviewer.ReviewRoleMember)
+		if err != nil {
+			c.log.WarnContext(ctx, "upload unfused member", "member", o.label, "err", err)
+			continue
+		}
+		c.log.InfoContext(ctx, "unfused member uploaded", "member", o.label, "reviewId", mid)
+	}
+	return id, nil
+}
+
+// judgeConfig is the judge's run config, working in dir.
+func (c *Controller) judgeConfig(dir string) Config {
+	jc := c.memberConfig(dir, *c.cfg.Judge)
+	jc.Label = "judge"
+	return jc
+}
+
 // memberConfig clones the base config for one panel member (or the judge): its own
 // working dir + runner/model, the panel fields cleared, and — for a server-driven
 // member — its resolved profile's credentials/settings overlaid (nil profile = the
@@ -231,6 +294,9 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 		mc.APIProvider = p.APIProvider
 		mc.APIBaseURL = p.APIBaseURL
 		mc.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+		if !mc.MaxRoundsSet {
+			mc.MaxRounds = p.Params.MaxRounds
+		}
 		mc.RunnerProfileID = p.RunnerProfileID
 		mc.RunnerProfileTitle = p.Title
 	}
@@ -244,27 +310,20 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 // worktree, which is otherwise the only place the runner transcript exists.
 func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (out *memberOutput, err error) {
 	mc := c.memberConfig(dir, m)
-	defer func() {
-		if err == nil {
-			return
-		}
-		// Detached context: a member timeout is precisely a failure this bundle
-		// should explain, and by then ctx is already cancelled.
-		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		c.uploadDebugBundle(upCtx, &mc, err)
-	}()
+	mc.Label = label
+	var rr *spendTracker
+	defer func() { c.settleRun(ctx, &mc, rr, err) }()
 
-	rr, err := c.runnerFactory(&mc)
+	built, err := c.runnerFactory(&mc)
 	if err != nil {
 		return nil, fmt.Errorf("build runner: %w", err)
 	}
+	rr = trackSpend(built)
 	if err = WriteReviewSkeleton(mc.Dir, &mc); err != nil {
 		return nil, fmt.Errorf("write review.json skeleton: %w", err)
 	}
 
-	result, err := rr.Run(ctx, prompt)
-	if err != nil {
+	if _, err = rr.Run(ctx, prompt); err != nil {
 		return nil, fmt.Errorf("run %s: %w", mc.Runner, err)
 	}
 
@@ -272,12 +331,13 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 	if err != nil {
 		return nil, fmt.Errorf("read review: %w", err)
 	}
-	c.applyRunResult(ctx, draft, &mc, rr, result)
+	c.applyRunResult(ctx, draft, &mc, rr)
 	// A skeleton passes Validate, so an "exit 0, review.json untouched" run
 	// would otherwise sail into the panel as a legitimate zero-findings member
 	// and dilute the fusion.
 	if isReviewJSONUnfilled(draft) {
-		return nil, errors.New("empty review: runner finished without filling review.json (no issues, no group summaries)")
+		return nil, reviewer.WithRunReason(reviewer.RunReasonNotSubmitted,
+			errors.New("empty review: runner finished without filling review.json (no issues, no group summaries)"))
 	}
 
 	mdFiles, err := FindMDFiles(mc.Dir)
@@ -290,54 +350,59 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 // runJudge stages each member's outputs into members/<label>/ inside the judge
 // worktree, then runs the judge with the fusion prompt (one retry) and returns
 // the fused draft + R*.md.
-func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (*memberOutput, error) {
-	if err := stageMembers(judgeDir, outputs); err != nil {
+func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (_ *memberOutput, err error) {
+	jc := c.judgeConfig(judgeDir)
+	var rr *spendTracker
+	// The panel survives a failed judge (the primary member is promoted), but
+	// the judge's run and spend must not vanish with its worktree.
+	defer func() { c.settleRun(ctx, &jc, rr, err) }()
+
+	if err = stageMembers(judgeDir, outputs); err != nil {
 		return nil, fmt.Errorf("stage members: %w", err)
 	}
-
-	jc := c.memberConfig(judgeDir, *c.cfg.Judge)
-
-	rr, err := c.runnerFactory(&jc)
+	built, err := c.runnerFactory(&jc)
 	if err != nil {
 		return nil, fmt.Errorf("build judge runner: %w", err)
 	}
+	rr = trackSpend(built)
 	prompt := SubstituteVariables(fusionPrompt, &jc)
 
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ { // initial run + one retry
 		// Wipe the previous attempt's root artifacts; the staged members/ subdirs
 		// are untouched (CleanReviewArtifacts only looks at the dir root).
-		if err = CleanReviewArtifacts(judgeDir); err != nil {
-			c.log.WarnContext(ctx, "clean judge artifacts", "err", err)
+		if cerr := CleanReviewArtifacts(judgeDir); cerr != nil {
+			c.log.WarnContext(ctx, "clean judge artifacts", "err", cerr)
 		}
-		if err = WriteReviewSkeleton(judgeDir, &jc); err != nil {
-			return nil, fmt.Errorf("write judge skeleton: %w", err)
+		if werr := WriteReviewSkeleton(judgeDir, &jc); werr != nil {
+			return nil, fmt.Errorf("write judge skeleton: %w", werr)
 		}
 
 		rctx, cancel := withTimeout(ctx, c.cfg.Timeout)
-		result, err := rr.Run(rctx, prompt)
+		_, runErr := rr.Run(rctx, prompt)
 		cancel()
-		if err != nil {
-			lastErr = err
-			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", err)
+		if runErr != nil {
+			lastErr = runErr
+			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", runErr)
 			continue
 		}
-		draft, err := ReadReviewJSON(jc.Dir)
-		if err != nil {
-			lastErr = err
-			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
+		draft, readErr := ReadReviewJSON(jc.Dir)
+		if readErr != nil {
+			lastErr = readErr
+			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", readErr)
 			continue
 		}
 		if isReviewJSONUnfilled(draft) {
-			lastErr = errors.New("judge produced an empty review")
+			lastErr = reviewer.WithRunReason(reviewer.RunReasonNotSubmitted, errors.New("judge produced an empty review"))
 			c.log.WarnContext(ctx, "judge review empty, retrying", "attempt", attempt)
 			continue
 		}
-		c.applyRunResult(ctx, draft, &jc, rr, result)
+		// Every attempt so far is in the record: the failed ones were billed too.
+		c.applyRunResult(ctx, draft, &jc, rr)
 
-		mdFiles, err := FindMDFiles(jc.Dir)
-		if err != nil {
-			return nil, fmt.Errorf("find judge md files: %w", err)
+		mdFiles, findErr := FindMDFiles(jc.Dir)
+		if findErr != nil {
+			return nil, fmt.Errorf("find judge md files: %w", findErr)
 		}
 		return &memberOutput{label: "judge", dir: judgeDir, draft: draft, mdFiles: mdFiles}, nil
 	}
@@ -417,7 +482,8 @@ func (c *Controller) panelCommit() string {
 // gitWorktreeAdd creates a detached worktree at dir checked out to commit, run
 // from the working repo so git finds it.
 func (c *Controller) gitWorktreeAdd(ctx context.Context, dir, commit string) error {
-	cmd := exec.CommandContext(ctx, "git", "worktree", "add", "--detach", dir, commit)
+	cmd := exec.CommandContext(ctx, "git", reviewer.GitArgs("worktree", "add", "--detach", dir, commit)...)
+	cmd.Env = reviewer.ChildEnv()
 	cmd.Dir = c.cfg.Dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
@@ -428,7 +494,8 @@ func (c *Controller) gitWorktreeAdd(ctx context.Context, dir, commit string) err
 // gitWorktreeRemove tears down a worktree. Best-effort; uses a detached context
 // so cleanup still runs when the review context was cancelled.
 func (c *Controller) gitWorktreeRemove(ctx context.Context, dir string) {
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), "git", "worktree", "remove", "--force", dir)
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), "git", reviewer.GitArgs("worktree", "remove", "--force", dir)...)
+	cmd.Env = reviewer.ChildEnv()
 	cmd.Dir = c.cfg.Dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		c.log.WarnContext(ctx, "worktree remove", "dir", dir, "err", err, "out", strings.TrimSpace(string(out)))

@@ -75,3 +75,12 @@ func TestEnvDefault(t *testing.T) {
 		assert.Equal(t, "actual", EnvDefault("REVIEW_TEST_STR", "fb"))
 	})
 }
+
+func TestEnvInt(t *testing.T) {
+	t.Setenv("REVIEW_TEST_INT", "")
+	assert.Equal(t, 60, EnvInt("REVIEW_TEST_INT", 60))
+	t.Setenv("REVIEW_TEST_INT", "120")
+	assert.Equal(t, 120, EnvInt("REVIEW_TEST_INT", 60))
+	t.Setenv("REVIEW_TEST_INT", "lots")
+	assert.Equal(t, 60, EnvInt("REVIEW_TEST_INT", 60))
+}

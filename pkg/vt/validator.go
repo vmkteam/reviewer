@@ -158,7 +158,7 @@ func (v *Validator) Error() error {
 	return nil
 }
 
-func (v *Validator) CheckBasic(ctx context.Context, item interface{}) {
+func (v *Validator) CheckBasic(ctx context.Context, item any) {
 	v.SetInternalError(nil)
 	err := validate.StructCtx(ctx, item)
 	if err == nil {

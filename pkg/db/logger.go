@@ -21,13 +21,13 @@ func NewQueryLogger(logger embedlog.Logger) QueryLogger {
 }
 
 // Printf used for pg.SetLogger
-func (s QueryLogger) Printf(_ context.Context, format string, args ...interface{}) {
+func (s QueryLogger) Printf(_ context.Context, format string, args ...any) {
 	s.Logger.With(slog.String("lib", "pg")).Errorf(format, args...)
 }
 
 func (ql QueryLogger) BeforeQuery(ctx context.Context, event *pg.QueryEvent) (context.Context, error) {
 	if event.Stash == nil {
-		event.Stash = make(map[interface{}]interface{})
+		event.Stash = make(map[any]any)
 	}
 
 	event.Stash["startedAt"] = time.Now()

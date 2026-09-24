@@ -59,7 +59,7 @@ func (f Filter) jsonField(field string) jsonField {
 }
 
 // jsonValue convert json field value to []string
-func (f Filter) jsonValue(value interface{}) []string {
+func (f Filter) jsonValue(value any) []string {
 	var res []string
 
 	switch v := value.(type) {
@@ -120,7 +120,7 @@ func (f Filter) jsonValue(value interface{}) []string {
 }
 
 // jsonArrayValue convert json field value to string
-func (f Filter) jsonArrayValue(value interface{}) string {
+func (f Filter) jsonArrayValue(value any) string {
 	switch v := value.(type) {
 	case bool:
 		return strconv.FormatBool(v)

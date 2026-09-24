@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -120,40 +121,42 @@ func (r *retryStep2RunnerStub) Run(_ context.Context, _ string) (*runner.ClaudeR
 }
 
 func TestRetryStep2(t *testing.T) {
-	t.Run("empty sessionId returns nil draft and skips runner", func(t *testing.T) {
+	t.Run("empty sessionId fails as not submitted and skips runner", func(t *testing.T) {
 		stub := &retryStep2RunnerStub{}
 		c := &Controller{
 			cfg:    &Config{Dir: t.TempDir()},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "")
+		draft, err := c.retryStep2(context.Background(), "")
+		require.ErrorContains(t, err, "no session to resume")
+		_, reason := reviewer.RunOutcome(err)
+		assert.Equal(t, reviewer.RunReasonNotSubmitted, reason)
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 		assert.False(t, stub.runCalled, "runner.Run must not be called when sessionId empty")
 		assert.Empty(t, stub.sessionSet, "SetSession must not be called when sessionId empty")
 	})
 
-	t.Run("nil runner returns nil without panic", func(t *testing.T) {
+	t.Run("nil runner fails without panic", func(t *testing.T) {
 		c := &Controller{
 			cfg: &Config{Dir: t.TempDir()},
 			log: slog.Default(),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_123")
+		draft, err := c.retryStep2(context.Background(), "ses_123")
+		require.Error(t, err)
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 	})
 
-	t.Run("runner error returns nil draft", func(t *testing.T) {
+	t.Run("runner error is returned", func(t *testing.T) {
 		stub := &retryStep2RunnerStub{runErr: errors.New("boom")}
 		c := &Controller{
 			cfg:    &Config{Dir: t.TempDir()},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_123")
+		draft, err := c.retryStep2(context.Background(), "ses_123")
+		require.ErrorContains(t, err, "boom")
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 		assert.Equal(t, "ses_123", stub.sessionSet, "SetSession must be called before Run")
 	})
 
@@ -173,11 +176,11 @@ func TestRetryStep2(t *testing.T) {
 		c := &Controller{
 			cfg:    &Config{Dir: dir},
 			log:    slog.Default(),
-			runner: stub,
+			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_abc")
+		draft, err := c.retryStep2(context.Background(), "ses_abc")
+		require.NoError(t, err)
 		require.NotNil(t, draft, "expected non-nil draft after successful retry")
-		require.NotNil(t, res, "expected non-nil ClaudeResult for metric aggregation")
 		assert.Equal(t, "ses_abc", stub.sessionSet)
 		require.Len(t, draft.Files, 1)
 		assert.Equal(t, "filled by retry", draft.Files[0].Summary)

@@ -15,3 +15,8 @@ ApplicationName = "reviewsrv"
 [Sentry]
 DSN         = ""
 Environment = ""
+
+# In-memory ring of recent reviewctl runs at /v1/debug/storage/ (defaults shown).
+[Debug]
+Capacity      = 200 # runs kept (metadata)
+FilesCapacity = 20  # newest runs that keep their artifact files

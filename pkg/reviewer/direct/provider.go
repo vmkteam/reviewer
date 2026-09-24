@@ -12,8 +12,8 @@ type LLMProvider interface {
 	Pricing() Pricing
 }
 
-// Pricing is the per-million-token cost table for one model. DeepSeek values come
-// from config; Claude values are the published rates (see the spec).
+// Pricing is the per-million-token cost table for one model (published rates, see
+// PricingFor).
 type Pricing struct {
 	InputPerMTok      float64
 	OutputPerMTok     float64
@@ -21,8 +21,8 @@ type Pricing struct {
 	CacheWritePerMTok float64
 }
 
-// computeCost returns the USD cost of u under pricing p.
-func computeCost(u Usage, p Pricing) float64 {
+// Cost returns the USD cost of u under pricing p.
+func (p Pricing) Cost(u Usage) float64 {
 	const m = 1_000_000.0
 	return float64(u.InputTokens)/m*p.InputPerMTok +
 		float64(u.OutputTokens)/m*p.OutputPerMTok +

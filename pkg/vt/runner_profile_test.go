@@ -5,6 +5,7 @@ import (
 
 	"reviewsrv/pkg/db"
 	"reviewsrv/pkg/db/test"
+	"reviewsrv/pkg/reviewer/direct"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -109,5 +110,16 @@ func TestDB_RunnerProfileService(t *testing.T) {
 		// openai is accepted by direct.NewProvider, so the admin must accept it too.
 		ok := add(RunnerProfile{Title: "rp-openai", Runner: runner.RunnerDirect, APIProvider: sp("openai")})
 		assert.NotZero(t, ok.ID)
+	})
+
+	t.Run("params.maxRounds bounds match direct.IsValidMaxRounds", func(t *testing.T) {
+		for _, n := range []int{direct.MinMaxRounds - 1, direct.MaxMaxRounds + 1} {
+			_, err := srv.Add(ctx, RunnerProfile{Title: "rp-rounds", Runner: runner.RunnerDirect, Params: RunnerProfileParams{MaxRounds: n}, StatusID: db.StatusEnabled})
+			require.Error(t, err, "maxRounds %d must be rejected", n)
+		}
+		for _, n := range []int{0, direct.MinMaxRounds, direct.MaxMaxRounds} {
+			ok := add(RunnerProfile{Title: "rp-rounds", Runner: runner.RunnerDirect, Params: RunnerProfileParams{MaxRounds: n}})
+			assert.Equal(t, n, ok.Params.MaxRounds, "0 = the default")
+		}
 	})
 }

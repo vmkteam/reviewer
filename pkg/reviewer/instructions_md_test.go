@@ -33,7 +33,7 @@ func TestBuildInstructionsMarkdown_HappyPath(t *testing.T) {
 			File:        "pkg/bar.go",
 			Lines:       "42",
 			Description: "use snake_case",
-			Comment:     strPtr("project style"),
+			Comment:     new("project style"),
 			ReviewFile:  &db.ReviewFile{ReviewType: ReviewTypeCode},
 		}},
 		{Issue: db.Issue{

@@ -1,8 +1,9 @@
 // Package debug provides an in-memory ring buffer of recent reviewctl runs.
 // reviewctl uploads artifacts (claude-output.json, opencode-output.jsonl,
 // review.json, R*.md) here when a review fails in CI, where GitLab job
-// artifacts are unavailable. The buffer is intentionally small and ephemeral —
-// restart of reviewsrv drops everything.
+// artifacts are unavailable. Run metadata outlives the artifacts (only the
+// newest bundles keep their files); a restart of reviewsrv drops everything —
+// the reviewer_runs_total metric is the durable record.
 package debug
 
 import (
@@ -13,8 +14,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// Bundle is a single captured run. Files holds raw (un-gzipped) bytes keyed
-// by original filename (e.g. "review.json", "R1.feat-foo.md").
+// File is one artifact, kept gzip-compressed as uploaded: runner transcripts
+// compress 5-15x, so the ring's memory is bounded by the upload cap.
+type File struct {
+	Gzip []byte // compressed content
+	Size int    // decompressed length
+}
+
+// Bundle is a single captured run. Files holds the artifacts keyed by original
+// filename (e.g. "review.json", "R1.feat-foo.md").
 type Bundle struct {
 	ID           string
 	Timestamp    time.Time
@@ -27,25 +35,33 @@ type Bundle struct {
 	TargetBranch string
 	CommitHash   string
 	ErrorMsg     string
-	Files        map[string][]byte
+	Status       string  // reviewer.RunStatus*, normalized on upload
+	Reason       string  // reviewer.RunReason*; empty for an ok run
+	CostUsd      float64 // what the run spent, including a failed one
+	ReviewID     string  // the review created before the run failed, if any
+	ProjectTitle string  // resolved from ProjectKey; empty for an unknown key
+	Files        map[string]File
+	FilesEvicted bool // artifacts dropped to cap memory; metadata kept
 }
 
 // Storage is a thread-safe ring buffer of Bundle values, newest last.
 type Storage struct {
-	mu       sync.RWMutex
-	capacity int
-	items    []*Bundle
+	mu            sync.RWMutex
+	capacity      int
+	filesCapacity int
+	items         []*Bundle
 }
 
-// New returns a Storage with the given capacity. Once full, Add evicts
-// the oldest bundle. capacity must be positive; non-positive values default to 1.
-func New(capacity int) *Storage {
-	if capacity <= 0 {
-		capacity = 1
-	}
+// New returns a Storage keeping up to capacity bundles, of which only the newest
+// filesCapacity keep their artifact files: metadata is bytes, artifacts are
+// megabytes. Once full, Add evicts the oldest bundle. Non-positive capacity
+// defaults to 1; filesCapacity is clamped to [1, capacity].
+func New(capacity, filesCapacity int) *Storage {
+	capacity = max(capacity, 1)
 	return &Storage{
-		capacity: capacity,
-		items:    make([]*Bundle, 0, capacity),
+		capacity:      capacity,
+		filesCapacity: min(max(filesCapacity, 1), capacity),
+		items:         make([]*Bundle, 0, capacity),
 	}
 }
 
@@ -68,6 +84,28 @@ func (s *Storage) Add(b *Bundle) {
 		s.items = s.items[1:]
 	}
 	s.items = append(s.items, b)
+	s.evictFiles()
+}
+
+// evictFiles drops the artifacts of bundles beyond the newest filesCapacity
+// that still hold files. A stored bundle is shared with concurrent readers, so
+// it is replaced by a trimmed copy rather than mutated. Caller holds s.mu.
+func (s *Storage) evictFiles() {
+	kept := 0
+	for i := len(s.items) - 1; i >= 0; i-- {
+		b := s.items[i]
+		if len(b.Files) == 0 {
+			continue
+		}
+		kept++
+		if kept <= s.filesCapacity {
+			continue
+		}
+		trimmed := *b
+		trimmed.Files = nil
+		trimmed.FilesEvicted = true
+		s.items[i] = &trimmed
+	}
 }
 
 // List returns a snapshot of bundles, newest first.
@@ -95,15 +133,15 @@ func (s *Storage) Get(id string) *Bundle {
 	return nil
 }
 
-// GetFile returns the raw file content from the bundle by ID and filename.
-// The boolean is false when either the bundle or the file is missing.
-func (s *Storage) GetFile(id, filename string) ([]byte, bool) {
+// GetFile returns a file of the bundle by ID and filename. The boolean is
+// false when either the bundle or the file is missing.
+func (s *Storage) GetFile(id, filename string) (File, bool) {
 	b := s.Get(id)
 	if b == nil {
-		return nil, false
+		return File{}, false
 	}
-	data, ok := b.Files[filename]
-	return data, ok
+	f, ok := b.Files[filename]
+	return f, ok
 }
 
 // newID returns a 12-char hex id derived from a UUIDv4. Short enough
