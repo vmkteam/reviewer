@@ -224,7 +224,7 @@ func (s RunnerProfileService) isValid(ctx context.Context, runnerProfile RunnerP
 	if runnerProfile.Effort != nil && *runnerProfile.Effort != "" && !validEfforts[*runnerProfile.Effort] {
 		v.Append("effort", FieldErrorIncorrect)
 	}
-	if n := runnerProfile.Params.MaxRounds; n != 0 && !direct.IsValidMaxRounds(n) {
+	if !direct.IsValidMaxRounds(runnerProfile.Params.MaxRounds) {
 		v.Append("params.maxRounds", FieldErrorIncorrect)
 	}
 

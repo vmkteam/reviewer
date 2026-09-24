@@ -21,6 +21,10 @@ func TestConfigValidate(t *testing.T) {
 		{"valid upload", Config{Key: "k", URL: "http://x"}, "upload", false},
 		{"comment no id", Config{Key: "k", URL: "http://x"}, "comment", true},
 		{"comment with id", Config{Key: "k", URL: "http://x", ReviewID: 1}, "comment", false},
+		{"max rounds default", Config{Key: "k", URL: "http://x", MaxRounds: 0}, "review", false},
+		{"max rounds in bounds", Config{Key: "k", URL: "http://x", MaxRounds: 120}, "review", false},
+		{"max rounds too low", Config{Key: "k", URL: "http://x", MaxRounds: 3}, "review", true},
+		{"max rounds too high", Config{Key: "k", URL: "http://x", MaxRounds: 10000}, "review", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

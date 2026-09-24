@@ -30,22 +30,23 @@ var (
 
 // withRetry calls fn, retrying transient errors with exponential backoff up to
 // maxRetries times; a definitive error (bad request, auth, billing) fails at
-// once. The retried errors are returned for the transcript.
-func withRetry[T any](ctx context.Context, p retryPolicy, fn func() (T, error)) (T, []string, error) {
+// once. onRetry, when set, hears of each retried error before the wait.
+func withRetry[T any](ctx context.Context, p retryPolicy, onRetry func(error), fn func() (T, error)) (T, error) {
 	backoff := p.backoff
-	var retried []string
 	for attempt := 0; ; attempt++ {
 		resp, err := fn()
 		if err == nil {
-			return resp, retried, nil
+			return resp, nil
 		}
 		if attempt >= maxRetries || ctx.Err() != nil || !p.transient(err) {
-			return resp, retried, fmt.Errorf("%s: %w", p.name, err)
+			return resp, fmt.Errorf("%s: %w", p.name, err)
 		}
-		retried = append(retried, err.Error())
+		if onRetry != nil {
+			onRetry(err)
+		}
 		select {
 		case <-ctx.Done():
-			return resp, retried, fmt.Errorf("%s: %w (retrying after: %w)", p.name, ctx.Err(), err)
+			return resp, fmt.Errorf("%s: %w (retrying after: %w)", p.name, ctx.Err(), err)
 		case <-time.After(backoff):
 		}
 		backoff = min(backoff*2, maxRetryBackoff)

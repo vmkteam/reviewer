@@ -118,26 +118,27 @@ func TestWithRetry(t *testing.T) {
 	ctx := context.Background()
 
 	fn, calls := fails(1, &openai.APIError{HTTPStatusCode: 503})
-	got, retried, err := withRetry(ctx, openaiRetry, fn)
+	var retried []string
+	got, err := withRetry(ctx, openaiRetry, func(err error) { retried = append(retried, err.Error()) }, fn)
 	require.NoError(t, err, "a transient error is retried")
 	require.Equal(t, "ok", got)
 	require.Equal(t, 2, *calls)
-	require.Len(t, retried, 1, "the retried failure is kept for the transcript")
+	require.Len(t, retried, 1, "the retried failure is reported")
 
 	fn, calls = fails(maxRetries+1, &openai.APIError{HTTPStatusCode: 429})
-	_, _, err = withRetry(ctx, openaiRetry, fn)
+	_, err = withRetry(ctx, openaiRetry, nil, fn)
 	require.ErrorContains(t, err, "openai:", "retries are bounded")
 	require.Equal(t, maxRetries+1, *calls)
 
 	fn, calls = fails(1, &openai.APIError{HTTPStatusCode: 400})
-	_, _, err = withRetry(ctx, openaiRetry, fn)
+	_, err = withRetry(ctx, openaiRetry, nil, fn)
 	require.Error(t, err, "a client error is not retried")
 	require.Equal(t, 1, *calls)
 
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	fn, calls = fails(1, &openai.APIError{HTTPStatusCode: 503})
-	_, _, err = withRetry(cancelled, openaiRetry, fn)
+	_, err = withRetry(cancelled, openaiRetry, nil, fn)
 	require.ErrorContains(t, err, "openai:")
 	require.Equal(t, 1, *calls, "no retry after cancellation")
 }

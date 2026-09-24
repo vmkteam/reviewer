@@ -23,8 +23,9 @@ func TestRunMetricsObserve(t *testing.T) {
 	m.Observe("demo", "direct", RunStatusFailed, RunReasonMaxRounds, 7.9)
 	m.Observe("demo", "direct", RunStatusFailed, RunReasonMaxRounds, 10.7)
 	m.Observe("", "rm -rf /", RunStatusFailed, RunReasonOther, 0)
+	m.Observe("demo", "direct", RunStatusFailed, RunReasonMaxRounds, 1e9) // implausible: counted, cost dropped
 
-	assert.InDelta(t, 2, counterValue(t, m.runs.WithLabelValues("demo", "direct", RunStatusFailed, RunReasonMaxRounds)), 0)
+	assert.InDelta(t, 3, counterValue(t, m.runs.WithLabelValues("demo", "direct", RunStatusFailed, RunReasonMaxRounds)), 0)
 	assert.InDelta(t, 18.6, counterValue(t, m.cost.WithLabelValues("demo", "direct", RunStatusFailed)), 1e-9)
 	// Unknown projects and runners collapse into fixed label values.
 	assert.InDelta(t, 1, counterValue(t, m.runs.WithLabelValues(metricUnknownProject, metricOtherRunner, RunStatusFailed, RunReasonOther)), 0)

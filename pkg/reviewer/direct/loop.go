@@ -56,6 +56,10 @@ const (
 	budgetWarnAt  = 10
 	budgetFinalAt = 3
 	graceRounds   = 5
+	// maxDeniedRounds grace rounds in a row made only of refused calls end the
+	// run: the model is not delivering the review, and each such round re-sends
+	// the whole history.
+	maxDeniedRounds = 2
 )
 
 // budgetDenied is the tool error for a read/search call during the grace rounds.
@@ -109,10 +113,13 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 	}
 
 	msgs := []Message{{Role: RoleUser, Text: userPrompt}}
-	var total Usage
-	var apiMs int // cumulative provider Complete time (vs total wall-clock)
-	nudged := false
-	truncatedRounds := 0 // consecutive rounds cut by the output-token cap
+	var (
+		total           Usage
+		apiMs           int // cumulative provider Complete time (vs total wall-clock)
+		nudged          bool
+		truncatedRounds int // consecutive rounds cut by the output-token cap
+		deniedRounds    int // consecutive grace rounds whose every call was refused
+	)
 
 	// Record the kickoff input (system contract + user task with the preloaded
 	// diff/files) so the transcript is a full input/output log, not just the
@@ -136,15 +143,13 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		if round == opts.MaxRounds {
 			reg.restrict(budgetDenied, toolSetGroup, toolAddIssues, toolSubmitReview)
 		}
-		t0 := time.Now()
-		resp, err := p.Complete(ctx, Request{System: system, Messages: msgs, Tools: reg.Defs(), Effort: opts.Effort})
-		apiMs += int(time.Since(t0).Milliseconds())
-		emitRetries(opts.OnEvent, round, resp.Retries)
+		resp, roundMs, err := completeRound(ctx, p, Request{System: system, Messages: msgs, Tools: reg.Defs(), Effort: opts.Effort}, opts.OnEvent, round)
+		apiMs += roundMs
 		if err != nil {
 			return finish(round, "error", reg.Submitted()), reviewer.WithRunReason(providerReason(err), fmt.Errorf("round %d: %w", round, err))
 		}
 		total = sumUsage(total, resp.Usage)
-		emitRound(opts.OnEvent, round, resp)
+		emitRound(opts.OnEvent, round, resp, roundMs)
 		msgs = append(msgs, Message{Role: RoleAssistant, Text: resp.Text, ToolCalls: resp.ToolCalls, Raw: resp.Raw})
 
 		// A truncated round burned the whole max_tokens budget (thinking + partial
@@ -153,7 +158,7 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 		// abort happens AFTER dispatching whatever tool calls did arrive, so a
 		// submit_review or issue batch that survived the cut is not thrown away.
 		truncated := IsTruncated(resp.StopReason)
-		truncatedRounds = countTruncated(truncatedRounds, truncated)
+		truncatedRounds = consecutive(truncatedRounds, truncated)
 		abort := truncatedRounds >= maxConsecutiveTruncated
 
 		if len(resp.ToolCalls) == 0 {
@@ -176,13 +181,18 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 			return finish(round+1, "end_turn", reg.Submitted()), nil
 		}
 
-		msgs = append(msgs, runTools(ctx, reg, opts, round, resp.ToolCalls, truncated))
+		toolMsg, allDenied := runTools(ctx, reg, opts, round, resp.ToolCalls, truncated)
+		msgs = append(msgs, toolMsg)
 
 		if reg.Submitted() {
 			return finish(round+1, "submitted", true), nil
 		}
 		if abort {
 			return finish(round+1, "error", false), fmt.Errorf("round %d: %w", round, errTruncatedRounds)
+		}
+		deniedRounds = consecutive(deniedRounds, allDenied)
+		if deniedRounds >= maxDeniedRounds {
+			return finish(round+1, "max_rounds", false), errMaxRounds
 		}
 		msgs = maybeCompact(msgs, opts, round)
 	}
@@ -192,9 +202,11 @@ func Run(ctx context.Context, p LLMProvider, reg *Registry, system, userPrompt s
 
 // runTools dispatches a round's tool calls and returns the tool message fed back
 // to the model, with any harness notices (truncation, round budget) folded into
-// its last result.
-func runTools(ctx context.Context, reg *Registry, opts Options, round int, calls []ToolCall, truncated bool) Message {
+// its last result, and whether the round budget refused every call.
+func runTools(ctx context.Context, reg *Registry, opts Options, round int, calls []ToolCall, truncated bool) (Message, bool) {
+	denied0 := reg.deniedCalls()
 	results := dispatchParallel(ctx, reg, calls)
+	allDenied := reg.deniedCalls()-denied0 == len(calls)
 	if truncated {
 		appendNotice(results, noticeTruncated)
 	}
@@ -202,7 +214,7 @@ func runTools(ctx context.Context, reg *Registry, opts Options, round int, calls
 		noteBudget(opts, round, results)
 	}
 	emitToolResults(opts.OnEvent, round, results)
-	return Message{Role: RoleTool, ToolResults: results}
+	return Message{Role: RoleTool, ToolResults: results}, allDenied
 }
 
 // noteBudget folds the round-budget notice due after this round (if any) into
@@ -216,13 +228,6 @@ func noteBudget(opts Options, round int, results []ToolResult) {
 	opts.OnEvent.emit(Event{Round: round, Kind: "notice", Text: notice})
 }
 
-// emitRetries records the transient provider failures retried within a round.
-func emitRetries(s Sink, round int, retries []string) {
-	for _, r := range retries {
-		s.emit(Event{Round: round, Kind: "retry", Text: r})
-	}
-}
-
 // emitToolResults records each tool result in the transcript, clipped to keep
 // the log readable.
 func emitToolResults(s Sink, round int, results []ToolResult) {
@@ -231,13 +236,22 @@ func emitToolResults(s Sink, round int, results []ToolResult) {
 	}
 }
 
-// countTruncated advances the consecutive-truncated-rounds counter: any whole
-// (non-truncated) round resets it.
-func countTruncated(prev int, truncated bool) int {
-	if !truncated {
+// consecutive advances a run-of-rounds counter (truncated rounds, fully refused
+// rounds): a round without the condition resets it.
+func consecutive(prev int, hit bool) int {
+	if !hit {
 		return 0
 	}
 	return prev + 1
+}
+
+// completeRound sends one round to the provider, recording each retry as it
+// happens (a failed round's too), and returns its duration.
+func completeRound(ctx context.Context, p LLMProvider, req Request, s Sink, round int) (Response, int, error) {
+	req.OnRetry = func(err error) { s.emit(Event{Round: round, Kind: "retry", Text: err.Error()}) }
+	t0 := time.Now()
+	resp, err := p.Complete(ctx, req)
+	return resp, int(time.Since(t0).Milliseconds()), err
 }
 
 // maybeCompact prunes the history once it crosses the compaction threshold,
@@ -256,7 +270,7 @@ func maybeCompact(msgs []Message, opts Options, round int) []Message {
 }
 
 // emitRound records the model's text, requested tool calls and per-round usage.
-func emitRound(s Sink, round int, resp Response) {
+func emitRound(s Sink, round int, resp Response, durationMs int) {
 	if s == nil {
 		return
 	}
@@ -267,7 +281,7 @@ func emitRound(s Sink, round int, resp Response) {
 		s.emit(Event{Round: round, Kind: "tool_call", Tool: tc.Name, Args: tc.Args})
 	}
 	u := resp.Usage
-	s.emit(Event{Round: round, Kind: "round", Usage: &u, StopReason: resp.StopReason})
+	s.emit(Event{Round: round, Kind: "round", Usage: &u, StopReason: resp.StopReason, DurationMs: durationMs})
 }
 
 func makeResult(total Usage, rounds int, stop string, submitted bool, p LLMProvider) *Result {

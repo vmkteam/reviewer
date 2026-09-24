@@ -9,6 +9,11 @@ const (
 	metricOtherRunner    = "other"
 )
 
+// maxRunCostUsd bounds a plausible run cost (a 500-round Opus run stays well
+// below it): a higher client-reported value is not added to the cost counter,
+// which only ever grows.
+const maxRunCostUsd = 1000
+
 // RunMetrics counts reviewctl runs on reviewsrv by outcome: an ok run when its
 // review is uploaded, any other run when its debug bundle arrives. A nil
 // *RunMetrics is a no-op.
@@ -56,7 +61,7 @@ func (m *RunMetrics) Observe(project, runner, status, reason string, costUsd flo
 		runner = metricOtherRunner
 	}
 	m.runs.WithLabelValues(project, runner, status, reason).Inc()
-	if costUsd > 0 {
+	if costUsd > 0 && costUsd <= maxRunCostUsd {
 		m.cost.WithLabelValues(project, runner, status).Add(costUsd)
 	}
 }

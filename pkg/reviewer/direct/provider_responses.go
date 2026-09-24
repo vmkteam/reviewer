@@ -60,17 +60,17 @@ func (p *responsesProvider) Complete(ctx context.Context, req Request) (Response
 		rreq.Reasoning = &openai.ResponseReasoning{Effort: req.Effort}
 	}
 
-	resp, retried, err := withRetry(ctx, openaiRetry, func() (openai.CreateResponseResponse, error) {
-		return p.client.CreateResponse(ctx, rreq)
+	resp, err := withRetry(ctx, openaiRetry, req.OnRetry, func() (openai.CreateResponseResponse, error) {
+		resp, err := p.client.CreateResponse(ctx, rreq)
+		if err == nil && resp.Status == openai.ResponseStatusFailed {
+			// HTTP 200 with the failure in the body: classify and retry it like
+			// an API error.
+			err = newResponseFailedError(resp)
+		}
+		return resp, err
 	})
 	if err != nil {
 		return Response{}, err
-	}
-	if resp.Status == openai.ResponseStatusFailed {
-		if resp.Error != nil {
-			return Response{}, fmt.Errorf("openai: response %s failed: %s: %s", resp.ID, resp.Error.Code, resp.Error.Message)
-		}
-		return Response{}, fmt.Errorf("openai: response %s failed", resp.ID)
 	}
 
 	out, err := parseResponsesOutput(resp.Output)
@@ -78,7 +78,6 @@ func (p *responsesProvider) Complete(ctx context.Context, req Request) (Response
 		return Response{}, err
 	}
 	out.StopReason = responsesStopReason(resp, len(out.ToolCalls) > 0)
-	out.Retries = retried
 	// A cut-off response can end on a reasoning item with nothing after it,
 	// which the API rejects on replay: rebuild that turn from Text+ToolCalls.
 	if resp.Status != openai.ResponseStatusCompleted {

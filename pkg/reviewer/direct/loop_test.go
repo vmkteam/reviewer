@@ -287,7 +287,7 @@ func TestRunMaxRoundsWithoutSubmit(t *testing.T) {
 	dir := t.TempDir()
 	reg := NewReviewRegistry(ReviewToolsConfig{Dir: dir})
 	prov := &scriptedProvider{}
-	for i := range 2 + graceRounds { // the model keeps exploring through the grace rounds
+	for i := range 2 + graceRounds { // the model keeps exploring past its budget
 		prov.responses = append(prov.responses, globRound(i))
 	}
 
@@ -297,7 +297,7 @@ func TestRunMaxRoundsWithoutSubmit(t *testing.T) {
 	require.Equal(t, reviewer.RunReasonMaxRounds, reason)
 	require.False(t, res.Submitted)
 	require.Equal(t, "max_rounds", res.StopReason)
-	require.Equal(t, 2+graceRounds, res.Rounds)
+	require.Equal(t, 2+maxDeniedRounds, res.Rounds, "grace rounds of refused calls only end the run early")
 	// Past MaxRounds, read tools are denied instead of served.
 	denied := lastToolResult(t, prov, 3)
 	require.True(t, denied.IsError)
@@ -444,4 +444,25 @@ func TestIsTruncated(t *testing.T) {
 	require.True(t, IsTruncated(stopLength), "OpenAI finish_reason")
 	require.False(t, IsTruncated("end_turn"))
 	require.False(t, IsTruncated(""))
+}
+
+// retriedFailProvider fails after retrying, reporting the retried errors.
+type retriedFailProvider struct{ failingProvider }
+
+func (retriedFailProvider) Complete(_ context.Context, req Request) (Response, error) {
+	req.OnRetry(errors.New("overloaded"))
+	req.OnRetry(errors.New("reset stream"))
+	return Response{}, errors.New("anthropic: api_error")
+}
+
+func TestRunKeepsRetriesOfFailedRound(t *testing.T) {
+	var retries []string
+	opts := Options{MaxRounds: 5, OnEvent: func(ev Event) {
+		if ev.Kind == "retry" {
+			retries = append(retries, ev.Text)
+		}
+	}}
+	_, err := Run(context.Background(), retriedFailProvider{}, NewReviewRegistry(ReviewToolsConfig{Dir: t.TempDir()}), "s", "go", opts)
+	require.Error(t, err)
+	require.Equal(t, []string{"overloaded", "reset stream"}, retries, "the retries before a final failure reach the transcript")
 }

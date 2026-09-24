@@ -73,14 +73,9 @@ func (p *anthropicProvider) Pricing() Pricing { return p.pricing }
 // a dropped stream mid-review must not throw away the whole run.
 func (p *anthropicProvider) Complete(ctx context.Context, req Request) (Response, error) {
 	params := p.params(req)
-	out, retried, err := withRetry(ctx, anthropicRetry, func() (Response, error) {
+	return withRetry(ctx, anthropicRetry, req.OnRetry, func() (Response, error) {
 		return p.stream(ctx, params)
 	})
-	if err != nil {
-		return Response{}, err
-	}
-	out.Retries = retried
-	return out, nil
 }
 
 func (p *anthropicProvider) params(req Request) anthropic.MessageNewParams {

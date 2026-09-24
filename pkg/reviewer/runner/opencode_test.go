@@ -156,6 +156,12 @@ func TestOpenCodeIsolationEnv(t *testing.T) {
 		`OPENCODE_CONFIG_CONTENT={"formatter":false,"lsp":false}`,
 	}, opencodeIsolationEnv())
 
-	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"share":"disabled"}`)
-	assert.Equal(t, []string{"OPENCODE_DISABLE_PROJECT_CONFIG=1"}, opencodeIsolationEnv(), "the operator's env wins")
+	t.Setenv("OPENCODE_DISABLE_PROJECT_CONFIG", "0")
+	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"share":"disabled","lsp":true}`)
+	assert.Equal(t, []string{
+		`OPENCODE_CONFIG_CONTENT={"formatter":false,"lsp":false,"share":"disabled"}`,
+	}, opencodeIsolationEnv(), "the operator's config is kept, formatter and lsp forced off")
+
+	t.Setenv("OPENCODE_CONFIG_CONTENT", "{ // jsonc\n}")
+	assert.Empty(t, opencodeIsolationEnv(), "an unparsable operator config is left alone")
 }

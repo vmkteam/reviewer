@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/db"
+	"reviewsrv/pkg/reviewer/direct"
 	"reviewsrv/pkg/reviewer/runner"
 )
 
@@ -54,6 +55,10 @@ type Config struct {
 	Token              string
 	RunnerProfileID    int
 	RunnerProfileTitle string
+
+	// Label names a panel member ("claude-opus-5") or "judge" in the runner's
+	// log lines; empty for a single review.
+	Label string
 
 	// Task-tracker access (fetched with the review config; $REVIEW_TRACKER_TOKEN
 	// takes priority over the server token). The direct runner scopes its
@@ -124,6 +129,11 @@ func (c *Config) Validate(cmd string) error {
 	if cmd == "comment" && c.ReviewID == 0 { //nolint:goconst // CLI subcommand name
 		return errors.New("--review-id is required for comment subcommand")
 	}
+	// Same bounds as a runner profile (validated on save in the admin panel).
+	if !direct.IsValidMaxRounds(c.MaxRounds) {
+		return fmt.Errorf("--max-rounds / $REVIEW_MAX_ROUNDS must be within %d..%d (0 = default), got %d",
+			direct.MinMaxRounds, direct.MaxMaxRounds, c.MaxRounds)
+	}
 
 	return nil
 }
@@ -185,6 +195,9 @@ type MemberSpec struct {
 	Profile *ResolvedProfile
 }
 
+// String returns "runner:model" for log lines.
+func (m MemberSpec) String() string { return m.Runner + ":" + m.Model }
+
 // ParseMulti parses the --multi value: a comma-separated list of runner:model
 // members, e.g. "codex:gpt-6-sol,opencode:openrouter/deepseek/deepseek-v4-pro". Only
 // the first colon separates runner from model (models may contain slashes); a bare
@@ -197,7 +210,7 @@ func ParseMulti(s string) ([]MemberSpec, error) {
 	}
 
 	var out []MemberSpec
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

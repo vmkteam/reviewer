@@ -63,10 +63,10 @@ const TablePrefix = "t"
 const TableColumns = "t.*"
 
 type Filter struct {
-	Field      string      `json:"field"`             // search field
-	Value      interface{} `json:"value,omitempty"`   // search value
-	SearchType int         `json:"type,omitempty"`    // search type. see db/filter.go
-	Exclude    bool        `json:"exclude,omitempty"` // is this filter should exclude
+	Field      string `json:"field"`             // search field
+	Value      any    `json:"value,omitempty"`   // search value
+	SearchType int    `json:"type,omitempty"`    // search type. see db/filter.go
+	Exclude    bool   `json:"exclude,omitempty"` // is this filter should exclude
 }
 
 // String prints filter as sql string

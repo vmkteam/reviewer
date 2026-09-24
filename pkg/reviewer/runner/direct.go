@@ -184,9 +184,10 @@ func (r *DirectRunner) attachSessionLog(ctx context.Context, opts *direct.Option
 	return closeFn
 }
 
-// logEvent surfaces a significant direct-loop event to the runner log (tool calls
-// live, tool errors at warn, per-round token usage at debug). The full transcript
-// still goes to direct-output.jsonl.
+// logEvent surfaces a significant direct-loop event to the runner log: tool
+// calls and per-round timing and usage live, harness notices, and tool errors
+// and provider retries at warn. The full transcript still goes to
+// direct-output.jsonl.
 func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
 	if r.Log == nil {
 		return
@@ -209,10 +210,19 @@ func (r *DirectRunner) logEvent(ctx context.Context, ev direct.Event) {
 			r.Log.WarnContext(ctx, "direct output truncated by token limit", "round", ev.Round, "stopReason", ev.StopReason)
 		}
 		if ev.Usage != nil {
-			r.Log.DebugContext(ctx, "direct round", "round", ev.Round,
+			// At info: a heavy round (long thinking) otherwise leaves minutes of
+			// silence in the CI log.
+			r.Log.InfoContext(ctx, "direct round", "round", ev.Round,
+				"duration", (time.Duration(ev.DurationMs) * time.Millisecond).Round(100*time.Millisecond),
 				"inputTokens", ev.Usage.InputTokens, "outputTokens", ev.Usage.OutputTokens,
 				"cacheRead", ev.Usage.CacheReadTokens, "cacheWrite", ev.Usage.CacheWriteTokens)
 		}
+	case "retry":
+		r.Log.WarnContext(ctx, "direct provider call retried", "round", ev.Round, "err", truncate(ev.Text, 300))
+	case "notice":
+		r.Log.InfoContext(ctx, "direct notice", "round", ev.Round, "notice", truncate(ev.Text, 200))
+	case "compact":
+		r.Log.InfoContext(ctx, "direct history compacted", "round", ev.Round, "detail", ev.Text)
 	}
 }
 

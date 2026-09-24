@@ -27,8 +27,9 @@ const (
 	MaxMaxRounds = 500
 )
 
-// IsValidMaxRounds reports whether n is an acceptable MaxRounds override.
-func IsValidMaxRounds(n int) bool { return n >= MinMaxRounds && n <= MaxMaxRounds }
+// IsValidMaxRounds reports whether n is an acceptable configured MaxRounds:
+// 0 (the default) or within the bounds.
+func IsValidMaxRounds(n int) bool { return n == 0 || n >= MinMaxRounds && n <= MaxMaxRounds }
 
 // DefaultOptions returns sensible loop defaults for a review run. The CompactAt
 // default is conservative (sized for ~128k-context backends); large-context

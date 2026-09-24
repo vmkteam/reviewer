@@ -127,9 +127,8 @@ func TestRetryStep2(t *testing.T) {
 			log:    slog.Default(),
 			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "")
+		draft := c.retryStep2(context.Background(), "")
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 		assert.False(t, stub.runCalled, "runner.Run must not be called when sessionId empty")
 		assert.Empty(t, stub.sessionSet, "SetSession must not be called when sessionId empty")
 	})
@@ -139,9 +138,8 @@ func TestRetryStep2(t *testing.T) {
 			cfg: &Config{Dir: t.TempDir()},
 			log: slog.Default(),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_123")
+		draft := c.retryStep2(context.Background(), "ses_123")
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 	})
 
 	t.Run("runner error returns nil draft", func(t *testing.T) {
@@ -151,9 +149,8 @@ func TestRetryStep2(t *testing.T) {
 			log:    slog.Default(),
 			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_123")
+		draft := c.retryStep2(context.Background(), "ses_123")
 		assert.Nil(t, draft)
-		assert.Nil(t, res)
 		assert.Equal(t, "ses_123", stub.sessionSet, "SetSession must be called before Run")
 	})
 
@@ -175,9 +172,8 @@ func TestRetryStep2(t *testing.T) {
 			log:    slog.Default(),
 			runner: trackSpend(stub),
 		}
-		draft, res := c.retryStep2(context.Background(), "ses_abc")
+		draft := c.retryStep2(context.Background(), "ses_abc")
 		require.NotNil(t, draft, "expected non-nil draft after successful retry")
-		require.NotNil(t, res, "expected non-nil ClaudeResult for metric aggregation")
 		assert.Equal(t, "ses_abc", stub.sessionSet)
 		require.Len(t, draft.Files, 1)
 		assert.Equal(t, "filled by retry", draft.Files[0].Summary)

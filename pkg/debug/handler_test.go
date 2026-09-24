@@ -7,14 +7,18 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"reviewsrv/pkg/reviewer"
+
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func newTestHandler(t *testing.T) (*Storage, *echo.Echo) {
@@ -271,12 +275,15 @@ func upload(t *testing.T, storage *Storage, e *echo.Echo, projectKey string, fie
 func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
 	storage := New(5, 5)
 	knownKey := uuid.NewString()
-	h := NewHandler(storage, slog.Default(), func(_ context.Context, key string) string {
-		if key == knownKey {
-			return "demo"
+	metrics := reviewer.NewRunMetrics("claude")
+	reg := prometheus.NewRegistry()
+	metrics.Register(reg)
+	h := NewHandler(storage, slog.Default(), func(_ context.Context, key string) (string, error) {
+		if key != knownKey {
+			return "", nil // no such project
 		}
-		return ""
-	}, nil)
+		return "demo", nil
+	}, metrics)
 	e := echo.New()
 	e.POST("/v1/upload/debug/:projectKey/", h.Upload)
 	e.GET("/v1/debug/storage/", h.List)
@@ -289,13 +296,45 @@ func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
 		t.Errorf("outcome not recorded: %+v", b)
 	}
 
-	// A legacy client sends no status: derived from errorMsg. Garbage is sanitized.
-	b = upload(t, storage, e, uuid.NewString(), map[string]string{"errorMsg": "boom", "reason": "<script>", "costUsd": "NaN"})
-	if b.Status != "failed" || b.Reason != "other" || b.CostUsd != 0 || b.ProjectTitle != "" {
+	// A legacy client sends no status: derived from errorMsg. Garbage is
+	// sanitized; an implausible cost stays out of the cost counter.
+	b = upload(t, storage, e, knownKey, map[string]string{"errorMsg": "boom", "reason": "<script>", "costUsd": "5000"})
+	if b.Status != "failed" || b.Reason != "other" {
 		t.Errorf("legacy upload not normalized: %+v", b)
 	}
+	// An ok run is counted on review upload, not here.
+	upload(t, storage, e, knownKey, map[string]string{"runner": "claude", "status": "ok", "costUsd": "2"})
 
+	// A key that matches no project is refused.
+	body, ct := buildMultipart(t, map[string]string{"errorMsg": "x", "costUsd": "999"}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/upload/debug/"+uuid.NewString()+"/", body)
+	req.Header.Set("Content-Type", ct)
 	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("unknown project: status %d, want 404", rec.Code)
+	}
+
+	type labels = map[string]string
+	for _, c := range []struct {
+		metric string
+		labels labels
+		want   float64
+	}{
+		{"reviewer_runs_total", labels{"project": "demo", "runner": "claude", "status": "failed", "reason": "billing"}, 1},
+		{"reviewer_runs_total", labels{"project": "demo", "runner": "other", "status": "failed", "reason": "other"}, 1},
+		{"reviewer_run_cost_usd_total", labels{"project": "demo", "runner": "claude", "status": "failed"}, 1.5},
+		{"reviewer_run_cost_usd_total", labels{"project": "demo", "runner": "other", "status": "failed"}, 0},
+	} {
+		if got := counterValue(t, reg, c.metric, c.labels); got != c.want {
+			t.Errorf("%s%v = %v, want %v", c.metric, c.labels, got, c.want)
+		}
+	}
+	if n := seriesCount(t, reg, "reviewer_runs_total"); n != 2 {
+		t.Errorf("reviewer_runs_total has %d series, want 2 (ok bundles and unknown projects not counted)", n)
+	}
+
+	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/debug/storage/", nil))
 	page := rec.Body.String()
 	for _, want := range []string{"demo", "billing", "$1.50", `class="st-failed"`} {
@@ -305,14 +344,43 @@ func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
 	}
 }
 
-func TestClip(t *testing.T) {
-	if got := clip("short", 10); got != "short" {
-		t.Errorf("clip(short) = %q", got)
+// counterValue returns the counter of metric with exactly these labels; 0 when absent.
+func counterValue(t *testing.T, reg *prometheus.Registry, metric string, labels map[string]string) float64 {
+	t.Helper()
+	mfs, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
 	}
-	// "ошибка" is 12 bytes, 2 per rune: a cut at 5 must not split a rune.
-	if got := clip("ошибка", 5); got != "ош" {
-		t.Errorf("clip(ошибка, 5) = %q, want %q", got, "ош")
+	for _, mf := range mfs {
+		if mf.GetName() != metric {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			got := map[string]string{}
+			for _, l := range m.GetLabel() {
+				got[l.GetName()] = l.GetValue()
+			}
+			if maps.Equal(got, labels) {
+				return m.GetCounter().GetValue()
+			}
+		}
 	}
+	return 0
+}
+
+// seriesCount returns how many label combinations metric has.
+func seriesCount(t *testing.T, reg *prometheus.Registry, metric string) int {
+	t.Helper()
+	mfs, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == metric {
+			return len(mf.GetMetric())
+		}
+	}
+	return 0
 }
 
 func TestHandler_UploadClipsMetadata(t *testing.T) {

@@ -125,12 +125,16 @@ func TestAnthropicCompleteRetriesTransientFailures(t *testing.T) {
 		sse(sseOK),
 	)
 
-	resp, err := p.Complete(t.Context(), Request{Messages: []Message{{Role: RoleUser, Text: "go"}}})
+	var retries []string
+	resp, err := p.Complete(t.Context(), Request{
+		Messages: []Message{{Role: RoleUser, Text: "go"}},
+		OnRetry:  func(err error) { retries = append(retries, err.Error()) },
+	})
 	require.NoError(t, err)
 	require.Equal(t, "hi", resp.Text)
 	require.Equal(t, int32(4), calls.Load())
-	require.Len(t, resp.Retries, 3, "each retried failure is kept for the transcript")
-	require.Contains(t, resp.Retries[0], "api_error")
+	require.Len(t, retries, 3, "each retried failure is reported")
+	require.Contains(t, retries[0], "api_error")
 }
 
 func TestAnthropicCompleteGivesUpAfterRetryBudget(t *testing.T) {

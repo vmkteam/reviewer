@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"reviewsrv/pkg/reviewer"
 
 	"github.com/stretchr/testify/require"
 )
@@ -117,20 +120,45 @@ func TestResponsesProviderRebuildsWithoutRaw(t *testing.T) {
 }
 
 func TestResponsesProviderTruncatedAndFailed(t *testing.T) {
+	prev := openaiRetry.backoff
+	openaiRetry.backoff = time.Millisecond
+	t.Cleanup(func() { openaiRetry.backoff = prev })
+
+	completed := `{"id":"r3","object":"response","status":"completed","model":"gpt-6-sol","output":[
+		{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]}
+	],"usage":{"input_tokens":10,"output_tokens":1,"total_tokens":11}}`
 	srv, _ := fakeAPI(t, "/v1/responses",
 		// Cut off mid-reasoning: only a reasoning item, nothing after it.
 		`{"id":"r1","object":"response","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"model":"gpt-6-sol",
 			"output":[{"id":"rs_1","type":"reasoning","summary":[],"encrypted_content":"ENC"}]}`,
+		// A failed reply with a server error is retried like an HTTP 5xx.
 		`{"id":"r2","object":"response","status":"failed","error":{"code":"server_error","message":"boom"},"model":"gpt-6-sol","output":[]}`,
+		completed,
+		// A definitive failure is not retried.
+		`{"id":"r4","object":"response","status":"failed","error":{"code":"invalid_prompt","message":"flagged"},"model":"gpt-6-sol","output":[]}`,
 	)
 	p, err := NewResponsesProvider(OpenAIConfig{APIKey: "k", BaseURL: srv.URL + "/v1", Model: "gpt-6-sol"})
 	require.NoError(t, err)
+	var retries []string
+	req := Request{
+		Messages: []Message{{Role: RoleUser, Text: "go"}},
+		OnRetry:  func(err error) { retries = append(retries, err.Error()) },
+	}
 
-	resp, err := p.Complete(context.Background(), Request{Messages: []Message{{Role: RoleUser, Text: "go"}}})
+	resp, err := p.Complete(context.Background(), req)
 	require.NoError(t, err)
 	require.True(t, IsTruncated(resp.StopReason))
 	require.Nil(t, resp.Raw, "a lone reasoning item must not be replayed")
 
-	_, err = p.Complete(context.Background(), Request{Messages: []Message{{Role: RoleUser, Text: "go"}}})
-	require.ErrorContains(t, err, "response r2 failed: server_error: boom")
+	resp, err = p.Complete(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, "done", resp.Text)
+	require.Len(t, retries, 1)
+	require.Contains(t, retries[0], "response r2 failed: server_error: boom")
+
+	retries = nil
+	_, err = p.Complete(context.Background(), req)
+	require.ErrorContains(t, err, "response r4 failed: invalid_prompt: flagged")
+	require.Empty(t, retries)
+	require.Equal(t, reviewer.RunReasonOther, providerReason(err))
 }

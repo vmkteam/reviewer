@@ -107,7 +107,7 @@ func (c *UploadClient) UploadFile(ctx context.Context, serverURL, projectKey str
 		return fmt.Errorf("upload file %s: HTTP %d: %s", reviewType, resp.StatusCode, string(respBody))
 	}
 
-	c.log.InfoContext(ctx, "uploaded file", "reviewType", reviewType)
+	c.log.InfoContext(ctx, "uploaded file", "reviewId", reviewID, "reviewType", reviewType)
 
 	return nil
 }

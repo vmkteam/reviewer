@@ -95,11 +95,7 @@ func (a *App) registerHandlers() {
 	a.echo.GET("/v1/rpc/review-fix-:id", h.ReviewFixMarkdown, lg)
 	a.echo.GET("/v1/rpc/project-instructions-:id", h.ProjectInstructionsMarkdown, lg)
 
-	pm := reviewer.NewProjectManager(a.db)
-	dh := debug.NewHandler(a.debugStorage, a.Log(), func(ctx context.Context, projectKey string) string {
-		title, _ := pm.TitleByKey(ctx, projectKey)
-		return title
-	}, a.runMetrics)
+	dh := debug.NewHandler(a.debugStorage, a.Log(), reviewer.NewProjectManager(a.db).TitleByKey, a.runMetrics)
 	a.echo.POST(debugUploadPath, dh.Upload, lg, middleware.BodyLimit("20M"))
 	a.echo.GET(debug.StoragePathPrefix, dh.List, lg)
 	a.echo.GET(debug.StoragePathPrefix+":id/", dh.Bundle, lg)

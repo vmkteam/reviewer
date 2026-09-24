@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func strPtr(s string) *string { return &s }
-
 func TestBuildFixMarkdown_HappyPath(t *testing.T) {
 	rv := &Review{Review: db.Review{
 		Title:        "MR 42",
@@ -29,11 +27,11 @@ func TestBuildFixMarkdown_HappyPath(t *testing.T) {
 			File:         "pkg/foo.go",
 			Lines:        "10-20",
 			IssueType:    "error-handling",
-			LocalID:      strPtr("C1"),
+			LocalID:      new("C1"),
 			Description:  "do the thing",
 			Content:      "some content",
-			SuggestedFix: strPtr("apply fix"),
-			Comment:      strPtr("user agrees"),
+			SuggestedFix: new("apply fix"),
+			Comment:      new("user agrees"),
 			ReviewFile:   &db.ReviewFile{ReviewType: "code"},
 		},
 	}}
@@ -159,7 +157,7 @@ func TestBuildFixMarkdown_SkipsWhitespaceOnlyComment(t *testing.T) {
 			Severity: "low",
 			Title:    "x",
 			File:     "x.go",
-			Comment:  strPtr("   \n\t  "),
+			Comment:  new("   \n\t  "),
 		},
 	}}
 

@@ -20,11 +20,11 @@ runner flags below are **local overrides**: an explicit flag always wins over th
 profile. Multi-review is profile-driven too (see below).
 
 The reviewed checkout is untrusted, so CLI runners ignore the agent config it
-ships: `claude` loads user settings only and no MCP servers; `opencode` runs
-with project config, formatters and LSP off (`OPENCODE_DISABLE_PROJECT_CONFIG`,
-`OPENCODE_CONFIG_CONTENT`; set either yourself to override) and refuses to start
-when the checkout contains `.opencode/` or `opencode.json(c)`, whose plugins it
-would load regardless.
+ships: `claude` loads user settings only, no MCP servers and no auto-memory;
+`opencode` runs with project config off (`OPENCODE_DISABLE_PROJECT_CONFIG`) and
+formatters and LSP off (merged into your `OPENCODE_CONFIG_CONTENT`, if set), and
+refuses to start when the checkout contains `.opencode/` or `opencode.json(c)`,
+whose plugins it would load regardless.
 
 ## Flags & Environment Variables
 

@@ -27,23 +27,17 @@ func isReviewJSONUnfilled(draft *rest.ReviewDraft) bool {
 }
 
 // runStep2Recovery wraps the retry path: logs the skip, invokes retryStep2,
-// merges metrics from both passes, and returns the recovered draft (or nil
-// if retry didn't help, so caller keeps the original skeleton).
+// records both passes on the recovered draft, and returns it (or nil if the
+// retry didn't help, which fails the run).
 func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDraft, first *runner.ClaudeResult) *rest.ReviewDraft {
-	c.log.WarnContext(ctx, "review.json appears unfilled (skeleton uploaded as-is) — attempting Step 2 retry with session continuation", "files", len(draft.Files), "issues", len(draft.Issues), "sessionId", first.SessionID)
+	c.log.WarnContext(ctx, "review.json appears unfilled — attempting Step 2 retry with session continuation", "files", len(draft.Files), "issues", len(draft.Issues), "sessionId", first.SessionID)
 
-	d2, retryRes := c.retryStep2(ctx, first.SessionID)
+	d2 := c.retryStep2(ctx, first.SessionID)
 	if d2 == nil {
 		return nil
 	}
-
-	d2.Review.ModelInfo = draft.Review.ModelInfo
-	d2.Review.DurationMs = draft.Review.DurationMs
-	if retryRes != nil {
-		d2.Review.ModelInfo.Add(retryRes.ToModelInfo(c.cfg.Model))
-		d2.Review.DurationMs += retryRes.DurationMs
-	}
-	c.fillMetadata(ctx, d2)
+	// The tracker holds both passes, so the record covers the retry too.
+	c.applyRunResult(ctx, d2, c.cfg, c.runner)
 
 	if isReviewJSONUnfilled(d2) {
 		c.log.WarnContext(ctx, "Step 2 retry did not fill review.json")
@@ -55,30 +49,28 @@ func (c *Controller) runStep2Recovery(ctx context.Context, draft *rest.ReviewDra
 
 // retryStep2 invokes the runner a second time with a focused "fill review.json"
 // prompt, resuming the previous session so the cached original prompt isn't
-// re-billed. Returns the re-read draft and the runner result for metric
-// aggregation; nil draft signals "retry could not happen or runner failed"
-// and the caller stays with the original skeleton draft.
-func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) (*rest.ReviewDraft, *runner.ClaudeResult) {
+// re-billed. Returns the re-read draft; nil signals "retry could not happen or
+// runner failed".
+func (c *Controller) retryStep2(ctx context.Context, lastSessionID string) *rest.ReviewDraft {
 	if lastSessionID == "" {
 		c.log.WarnContext(ctx, "Step 2 retry skipped: no sessionId from previous run")
-		return nil, nil
+		return nil
 	}
 	if c.runner == nil {
-		return nil, nil
+		return nil
 	}
 
 	c.runner.SetSession(lastSessionID)
 
-	res, err := c.runner.Run(ctx, reviewer.PromptStep2Retry)
-	if err != nil {
+	if _, err := c.runner.Run(ctx, reviewer.PromptStep2Retry); err != nil {
 		c.log.WarnContext(ctx, "Step 2 retry runner failed", "err", err)
-		return nil, nil
+		return nil
 	}
 
 	draft, err := ReadReviewJSON(c.cfg.Dir)
 	if err != nil {
 		c.log.WarnContext(ctx, "Step 2 retry: review.json still unparseable", "err", err)
-		return nil, nil
+		return nil
 	}
-	return draft, res
+	return draft
 }

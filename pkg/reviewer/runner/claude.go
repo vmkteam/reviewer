@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -329,11 +331,20 @@ func (r *ExecClaudeRunner) buildArgs() []string {
 	return args
 }
 
+// claudeIsolationEnv keeps the developer's auto-memory out of a review: Claude
+// Code loads it per project, and a panel worktree resolves to the main repo, so
+// a local review would read (and could quote) personal notes that CI never has.
+// --setting-sources does not cover it. The operator's env wins, as in credEnv.
+func claudeIsolationEnv() []string {
+	return credEnv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1")
+}
+
 // Run executes claude --print --output-format stream-json and parses the result.
 func (r *ExecClaudeRunner) Run(ctx context.Context, prompt string) (*ClaudeResult, error) {
 	args := r.buildArgs()
 	// Surface tool calls live as claude streams its NDJSON events.
 	env := append(credEnv(envAnthropicAPIKey, r.Token), credEnv(envTrackerToken, r.TrackerToken)...)
+	env = append(env, claudeIsolationEnv()...)
 	out := runExec(ctx, r.Log, RunnerClaude, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
@@ -434,7 +445,8 @@ func (r *ExecClaudeRunner) logResult(ctx context.Context, cr *ClaudeResult) {
 		"cacheCreate5m", cr.Usage.CacheCreation.Ephemeral5mInputTokens,
 		"webFetch", cr.Usage.ServerToolUse.WebFetchRequests,
 		"webSearch", cr.Usage.ServerToolUse.WebSearchRequests,
-		"models", len(cr.ModelUsage),
+		// The resolved ids: a CLI alias (-m opus) says nothing about the model.
+		"models", strings.Join(slices.Sorted(maps.Keys(cr.ModelUsage)), ","),
 		"stopReason", cr.StopReason,
 	)
 
@@ -472,17 +484,19 @@ func (r *ExecClaudeRunner) handleClaudeError(err error, stdout []byte, stderr st
 	return cr, claudeRunError(err, cr, stdout, stderr)
 }
 
+// truncate cuts s to at most maxLen bytes, on a rune boundary, and marks the cut.
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return reviewer.ClipUTF8(s, maxLen) + "..."
 }
 
 type runOutput struct {
-	stdout bytes.Buffer
-	stderr bytes.Buffer
-	err    error
+	stdout  bytes.Buffer
+	stderr  bytes.Buffer
+	err     error
+	elapsed time.Duration // wall-clock time of the subprocess
 }
 
 // lineWriter is an io.Writer that splits the bytes written to it on '\n' and
@@ -548,8 +562,9 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
-	// credEnv only injects a var absent from the ambient env, so there is never a
-	// duplicate key to resolve here; nil extraEnv leaves cmd.Env nil = inherit.
+	// extraEnv comes last: for a key also in the ambient env (a merged
+	// OPENCODE_CONFIG_CONTENT) os/exec keeps the last value. nil extraEnv leaves
+	// cmd.Env nil = inherit.
 	if len(extraEnv) > 0 {
 		cmd.Env = append(os.Environ(), extraEnv...)
 	}
@@ -566,7 +581,9 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 
 	log.InfoContext(ctx, "running "+binary, "dir", dir, "promptLen", len(prompt), "args", args)
 
+	start := time.Now()
 	out.err = cmd.Run()
+	out.elapsed = time.Since(start)
 	// Killed by the context (runnerTimeout, the caller's deadline or a cancelled
 	// job): keep the cause in the chain so a timeout/cancel is not reported as a
 	// crash ("signal: killed").
@@ -582,7 +599,8 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 		lw.flush() // emit a trailing line without a newline
 	}
 
-	log.InfoContext(ctx, binary+" finished", "exitErr", out.err, "stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
+	log.InfoContext(ctx, binary+" finished", "duration", out.elapsed.Round(time.Second), "exitErr", out.err,
+		"stdoutLen", out.stdout.Len(), "stderrLen", out.stderr.Len())
 
 	if log.Enabled(ctx, slog.LevelDebug) {
 		if out.stderr.Len() > 0 {

@@ -73,6 +73,11 @@ type Request struct {
 	Messages []Message
 	Tools    []ToolDef
 	Effort   string
+
+	// OnRetry, when set, is told of each transient failure the provider retries,
+	// as it happens. The failed attempts' partial usage is billed by the
+	// provider but not counted in Response.Usage.
+	OnRetry func(err error)
 }
 
 // Response is the model's reply for one round.
@@ -86,11 +91,6 @@ type Response struct {
 	// copies it into the assistant Message it appends so the next request can
 	// replay it verbatim, preserving signed thinking / encrypted reasoning.
 	Raw any
-
-	// Retries holds the errors of transient failures the provider retried
-	// before this response, recorded in the transcript. Their partial usage is
-	// billed by the provider but not counted in Usage.
-	Retries []string
 }
 
 // SplitInput builds a Usage from OpenAI-style counters, where input includes the

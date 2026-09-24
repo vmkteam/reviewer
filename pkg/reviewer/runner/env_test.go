@@ -24,3 +24,11 @@ func TestCredEnv(t *testing.T) {
 		assert.Nil(t, credEnv(v, "tok"), "an already-set env var is not overridden")
 	})
 }
+
+func TestClaudeIsolationEnv(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "")
+	assert.Equal(t, []string{"CLAUDE_CODE_DISABLE_AUTO_MEMORY=1"}, claudeIsolationEnv())
+
+	t.Setenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "0")
+	assert.Nil(t, claudeIsolationEnv(), "the operator's env wins")
+}

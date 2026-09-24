@@ -269,13 +269,29 @@ func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string) strin
 }
 
 // opencodeIsolationEnv keeps opencode on the operator's own config. Project
-// config (the legacy loader, plus AGENTS.md auto-loading) is off. Formatters
-// and LSP servers are off too, even if the operator's config enables them:
-// prettier and eslint run the repo's JS configs, rust-analyzer its build.rs.
-// Each var is only a default, like credEnv: the operator's env wins.
+// config (the legacy loader, plus AGENTS.md auto-loading) is off unless the
+// operator's env says otherwise. Formatters and LSP servers are forced off even
+// then — prettier and eslint run the repo's JS configs, rust-analyzer its
+// build.rs — by merging into the operator's inline config.
 func opencodeIsolationEnv() []string {
-	return append(credEnv("OPENCODE_DISABLE_PROJECT_CONFIG", "1"),
-		credEnv("OPENCODE_CONFIG_CONTENT", `{"formatter":false,"lsp":false}`)...)
+	env := credEnv("OPENCODE_DISABLE_PROJECT_CONFIG", "1")
+	if content, ok := opencodeConfigContent(os.Getenv("OPENCODE_CONFIG_CONTENT")); ok {
+		env = append(env, "OPENCODE_CONFIG_CONTENT="+content)
+	}
+	return env
+}
+
+// opencodeConfigContent returns the operator's inline opencode config with
+// formatters and LSP off. A value that is not a JSON object (JSONC with
+// comments) cannot be merged and is left alone: ok is false.
+func opencodeConfigContent(operator string) (string, bool) {
+	cfg := map[string]any{}
+	if operator != "" && json.Unmarshal([]byte(operator), &cfg) != nil {
+		return "", false
+	}
+	cfg["formatter"], cfg["lsp"] = false, false
+	b, err := json.Marshal(cfg)
+	return string(b), err == nil
 }
 
 // findOpenCodeProjectConfig returns the first opencodeProjectConfig entry found

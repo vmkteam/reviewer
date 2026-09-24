@@ -88,7 +88,7 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 	// goes away earlier — subtest cleanups run before this outer-test cleanup.
 	mk := func(title, rn string, status int) *db.RunnerProfile {
 		rp, _ := test.RunnerProfile(t, dbc, &db.RunnerProfile{
-			Title: title, Runner: rn, Token: Ptr("tok-" + title), StatusID: status,
+			Title: title, Runner: rn, Token: new("tok-" + title), StatusID: status,
 		})
 		t.Cleanup(func() {
 			_, _ = dbc.ModelContext(context.Background(), &db.RunnerProfile{ID: rp.ID}).WherePK().Delete()
@@ -103,9 +103,9 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 		judge := mk("judge", "claude", db.StatusEnabled)
 
 		pr, cl := test.Project(t, dbc, &db.Project{
-			RunnerProfileID:      Ptr(primary.ID),
+			RunnerProfileID:      new(primary.ID),
 			RunnerProfileIDs:     db.ProjectRunnerProfileIDs{m1.ID, m2.ID},
-			JudgeRunnerProfileID: Ptr(judge.ID),
+			JudgeRunnerProfileID: new(judge.ID),
 			StatusID:             db.StatusEnabled,
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(cl)
@@ -126,7 +126,7 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 	t.Run("no judge → judge nil, no panel (single review)", func(t *testing.T) {
 		primary := mk("primarySingle", "claude", db.StatusEnabled)
 		pr, cl := test.Project(t, dbc, &db.Project{
-			RunnerProfileID: Ptr(primary.ID),
+			RunnerProfileID: new(primary.ID),
 			StatusID:        db.StatusEnabled,
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(cl)
@@ -145,7 +145,7 @@ func TestDBProjectManager_ReviewProfiles(t *testing.T) {
 		disabled := mk("disabled", "claude", db.StatusDisabled)
 
 		pr, cl := test.Project(t, dbc, &db.Project{
-			RunnerProfileID:  Ptr(primary.ID),
+			RunnerProfileID:  new(primary.ID),
 			RunnerProfileIDs: db.ProjectRunnerProfileIDs{disabled.ID, live.ID},
 			StatusID:         db.StatusEnabled,
 		}, test.WithProjectRelations, test.WithFakeProject)
@@ -207,7 +207,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 
 		tt, clTT := test.TaskTracker(t, dbc, &db.TaskTracker{
 			Title:       "TestTracker",
-			AuthToken:   Ptr("secret-token-123"),
+			AuthToken:   new("secret-token-123"),
 			FetchPrompt: "curl -H 'Bearer {{TOKEN}}' https://api/issues",
 			StatusID:    db.StatusEnabled,
 		})
@@ -215,7 +215,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 
 		pr, clPr := test.Project(t, dbc, &db.Project{
 			PromptID:      prompt.ID,
-			TaskTrackerID: Ptr(tt.ID),
+			TaskTrackerID: new(tt.ID),
 			StatusID:      db.StatusEnabled,
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(clPr)
@@ -249,7 +249,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 		tt, clTT := test.TaskTracker(t, dbc, &db.TaskTracker{
 			Title:       "URLTracker",
 			URL:         "https://youtrack.example.com",
-			AuthToken:   Ptr("token-456"),
+			AuthToken:   new("token-456"),
 			FetchPrompt: "curl -X GET \"{{URL}}/api/issues/PLF-731\" -H 'Authorization: Bearer {{TOKEN}}'",
 			StatusID:    db.StatusEnabled,
 		})
@@ -257,7 +257,7 @@ func TestDBProjectManager_Prompt(t *testing.T) {
 
 		pr, clPr := test.Project(t, dbc, &db.Project{
 			PromptID:      prompt.ID,
-			TaskTrackerID: Ptr(tt.ID),
+			TaskTrackerID: new(tt.ID),
 			StatusID:      db.StatusEnabled,
 		}, test.WithProjectRelations, test.WithFakeProject)
 		t.Cleanup(clPr)

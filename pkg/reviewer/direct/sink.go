@@ -30,6 +30,7 @@ type Event struct {
 	CostUsd    float64         `json:"costUsd,omitempty"`
 	Submitted  bool            `json:"submitted,omitempty"`
 	Model      string          `json:"model,omitempty"`
+	DurationMs int             `json:"durationMs,omitempty"` // a round's provider call
 }
 
 // Sink receives transcript events. A nil Sink is a no-op.

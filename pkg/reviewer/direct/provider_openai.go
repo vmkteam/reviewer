@@ -89,7 +89,7 @@ func (p *openaiProvider) Complete(ctx context.Context, req Request) (Response, e
 		creq.ReasoningEffort = req.Effort
 	}
 
-	resp, retried, err := withRetry(ctx, openaiRetry, func() (openai.ChatCompletionResponse, error) {
+	resp, err := withRetry(ctx, openaiRetry, req.OnRetry, func() (openai.ChatCompletionResponse, error) {
 		return p.client.CreateChatCompletion(ctx, creq)
 	})
 	if err != nil {
@@ -100,7 +100,7 @@ func (p *openaiProvider) Complete(ctx context.Context, req Request) (Response, e
 	}
 
 	ch := resp.Choices[0]
-	out := Response{Text: ch.Message.Content, StopReason: string(ch.FinishReason), Retries: retried}
+	out := Response{Text: ch.Message.Content, StopReason: string(ch.FinishReason)}
 	for _, tc := range ch.Message.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, ToolCall{
 			ID:   tc.ID,

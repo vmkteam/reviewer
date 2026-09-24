@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"reviewsrv/pkg/reviewer"
 
@@ -63,15 +62,16 @@ type Handler struct {
 	storage      *Storage
 	log          *slog.Logger
 	tmpl         *template.Template
-	projectTitle func(ctx context.Context, projectKey string) string
+	projectTitle func(ctx context.Context, projectKey string) (string, error)
 	metrics      *reviewer.RunMetrics
 }
 
 // NewHandler wires templates to the storage. Templates are embedded at compile
-// time. projectTitle resolves a project key to its title ("" when unknown) for
-// the pages and the run metrics; metrics counts every uploaded run that did not
-// complete (ok runs are counted on review upload). Either may be nil.
-func NewHandler(storage *Storage, log *slog.Logger, projectTitle func(ctx context.Context, projectKey string) string, metrics *reviewer.RunMetrics) *Handler {
+// time. projectTitle resolves an upload's project key to its title ("" for no
+// project, which is refused) for the pages and the run metrics; metrics counts
+// every uploaded run that did not complete (ok runs are counted on review
+// upload). Either may be nil.
+func NewHandler(storage *Storage, log *slog.Logger, projectTitle func(ctx context.Context, projectKey string) (string, error), metrics *reviewer.RunMetrics) *Handler {
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
 		"shortKey":   shortKey,
 		"preview":    preview,
@@ -88,6 +88,21 @@ func (h *Handler) Upload(c echo.Context) error {
 	if _, err := uuid.Parse(projectKey); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project key")
 	}
+	ctx := c.Request().Context()
+	var projectTitle string
+	if h.projectTitle != nil {
+		// Before the body is read: the route is unauthenticated, and a key that
+		// matches no project could only fill the ring and the metrics with noise.
+		// A failed lookup proves nothing, so that bundle is kept, untitled.
+		title, err := h.projectTitle(ctx, projectKey)
+		switch {
+		case err != nil:
+			h.log.ErrorContext(ctx, "debug upload: resolve project", "projectKey", projectKey, "err", err)
+		case title == "":
+			return echo.NewHTTPError(http.StatusNotFound, "unknown project")
+		}
+		projectTitle = title
+	}
 
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -96,25 +111,25 @@ func (h *Handler) Upload(c echo.Context) error {
 
 	// Metadata outlives the artifacts in the ring, so a client can't park
 	// megabytes in it: fields are clipped.
-	field := func(key string) string { return clip(formValue(form.Value, key), maxFieldBytes) }
+	field := func(key string, n int) string {
+		// Clone: a clipped substring would pin the whole posted value.
+		return strings.Clone(reviewer.ClipUTF8(formValue(form.Value, key), n))
+	}
 	b := &Bundle{
 		ProjectKey:   projectKey,
-		MRIid:        field(FieldMRIid),
-		ExternalID:   field(FieldExternalID),
-		Runner:       field(FieldRunner),
-		Model:        field(FieldModel),
-		ErrorMsg:     clip(formValue(form.Value, FieldErrorMsg), maxErrorMsgBytes),
-		SourceBranch: field(FieldSourceBranch),
-		TargetBranch: field(FieldTargetBranch),
-		CommitHash:   field(FieldCommitHash),
+		ProjectTitle: projectTitle,
+		MRIid:        field(FieldMRIid, maxFieldBytes),
+		ExternalID:   field(FieldExternalID, maxFieldBytes),
+		Runner:       field(FieldRunner, maxFieldBytes),
+		Model:        field(FieldModel, maxFieldBytes),
+		ErrorMsg:     field(FieldErrorMsg, maxErrorMsgBytes),
+		SourceBranch: field(FieldSourceBranch, maxFieldBytes),
+		TargetBranch: field(FieldTargetBranch, maxFieldBytes),
+		CommitHash:   field(FieldCommitHash, maxFieldBytes),
 		CostUsd:      parseCost(formValue(form.Value, FieldCostUsd)),
 		Files:        make(map[string]File, len(form.File)),
 	}
 	b.Status, b.Reason = reviewer.NormalizeRunOutcome(formValue(form.Value, FieldStatus), formValue(form.Value, FieldReason), b.ErrorMsg != "")
-	ctx := c.Request().Context()
-	if h.projectTitle != nil {
-		b.ProjectTitle = h.projectTitle(ctx, projectKey)
-	}
 
 	for _, headers := range form.File {
 		for _, fh := range headers {
@@ -247,17 +262,6 @@ func readArtifact(fh *multipart.FileHeader) (File, error) {
 	return File{Gzip: raw, Size: int(n)}, nil
 }
 
-// clip cuts s to at most n bytes, on a rune boundary.
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
-}
-
 // contentTypeFor picks a browser-friendly Content-Type by extension.
 // Markdown and JSONL render best as text/plain so the browser shows them inline
 // rather than offering a download or rendering as raw markdown.
@@ -280,10 +284,11 @@ func shortKey(s string) string {
 	return s[:8]
 }
 
-// preview truncates a string to n runes for the index error column.
+// preview truncates a string to n bytes, on a rune boundary, for the index
+// error column and the log.
 func preview(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return reviewer.ClipUTF8(s, n) + "…"
 }

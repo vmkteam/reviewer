@@ -122,6 +122,8 @@ func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult
 	}
 
 	cr := r.result(parseCodexStream(out.stdout.Bytes()))
+	// codex events report no duration: take the subprocess wall-clock time.
+	cr.DurationMs = int(out.elapsed.Milliseconds())
 	// codex can report a structured failure with a zero exit code; conversely a
 	// non-zero exit without a structured error is still a failure.
 	if out.err != nil {
@@ -180,12 +182,17 @@ func (r *ExecCodexRunner) logEvent(ctx context.Context, line []byte) {
 	case "turn.completed":
 		var ev struct {
 			Usage struct {
-				InputTokens  int `json:"input_tokens"`
-				OutputTokens int `json:"output_tokens"`
+				InputTokens       int `json:"input_tokens"`
+				CachedInputTokens int `json:"cached_input_tokens"`
+				OutputTokens      int `json:"output_tokens"`
 			} `json:"usage"`
 		}
 		if json.Unmarshal(line, &ev) == nil {
-			r.Log.InfoContext(ctx, "codex turn", "inputTokens", ev.Usage.InputTokens, "outputTokens", ev.Usage.OutputTokens)
+			// codex's input_tokens include the cached ones: split them like the
+			// result line does (inputTokens = fresh).
+			u := ev.Usage
+			r.Log.InfoContext(ctx, "codex turn", "inputTokens", max(u.InputTokens-u.CachedInputTokens, 0),
+				"outputTokens", u.OutputTokens, "cacheRead", u.CachedInputTokens)
 		}
 	case "error", "turn.failed":
 		r.Log.WarnContext(ctx, "codex stream error", "event", truncate(string(line), 300))
@@ -194,6 +201,8 @@ func (r *ExecCodexRunner) logEvent(ctx context.Context, line []byte) {
 
 func (r *ExecCodexRunner) logResult(ctx context.Context, cr *ClaudeResult) {
 	r.Log.InfoContext(ctx, "codex result parsed",
+		"model", r.Model,
+		"duration", (time.Duration(cr.DurationMs) * time.Millisecond).Round(time.Second),
 		"cost", cr.TotalCostUSD,
 		"turns", cr.NumTurns,
 		"inputTokens", cr.Usage.InputTokens,

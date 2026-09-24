@@ -90,11 +90,9 @@ func TestStorage_ConcurrentAddGet(t *testing.T) {
 		}(i)
 	}
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = s.List()
-		}()
+		})
 	}
 	wg.Wait()
 

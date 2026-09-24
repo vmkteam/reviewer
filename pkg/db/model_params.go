@@ -76,7 +76,7 @@ type ReviewRunnerProfile struct {
 	Effort          string              `json:"effort,omitempty"`
 	APIProvider     string              `json:"apiProvider,omitempty"`
 	APIBaseURL      string              `json:"apiBaseURL,omitempty"`
-	Params          RunnerProfileParams `json:"params,omitempty"`
+	Params          RunnerProfileParams `json:"params"`
 }
 
 // Add accumulates numeric counters and Models map entries from o into m.

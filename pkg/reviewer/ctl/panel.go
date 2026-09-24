@@ -13,7 +13,6 @@ import (
 
 	"reviewsrv/pkg/rest"
 	"reviewsrv/pkg/reviewer"
-	"reviewsrv/pkg/reviewer/runner"
 )
 
 // panelConcurrency bounds how many members review at once. Panels are small
@@ -40,6 +39,16 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	if c.runnerFactory == nil {
 		return errors.New("panel review requires a runner factory")
 	}
+	// Strings, not MemberSpec values: a spec carries its profile's token.
+	members := make([]string, len(c.cfg.Multi))
+	for i, m := range c.cfg.Multi {
+		members[i] = m.String()
+	}
+	judge := ""
+	if c.cfg.Judge != nil {
+		judge = c.cfg.Judge.String()
+	}
+	c.log.InfoContext(ctx, "starting panel review", "projectKey", c.cfg.Key, "members", members, "judge", judge)
 
 	prompt, err := c.prompt.FetchPrompt(ctx, c.cfg.URL, c.cfg.Key)
 	if err != nil {
@@ -87,7 +96,8 @@ func (c *Controller) reviewPanel(ctx context.Context, start time.Time) error {
 	}
 
 	c.log.InfoContext(ctx, "panel completed",
-		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second))
+		"members", len(outputs), "primaryReviewId", primaryID, "duration", time.Since(start).Round(time.Second),
+		"costUsd", c.spentTotal())
 	return nil
 }
 
@@ -110,9 +120,7 @@ func (c *Controller) runMembers(ctx context.Context, dirs, labels []string, prom
 	sem := make(chan struct{}, panelConcurrency)
 	var wg sync.WaitGroup
 	for i, m := range c.cfg.Multi {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -120,18 +128,19 @@ func (c *Controller) runMembers(ctx context.Context, dirs, labels []string, prom
 			defer cancel()
 			out, err := c.produceMember(mctx, dirs[i], labels[i], m, prompt)
 			results[i] = result{out: out, err: err}
-		}()
+		})
 	}
 	wg.Wait()
 
 	var outputs []*memberOutput
 	for i := range results {
 		if results[i].err != nil {
-			c.log.ErrorContext(ctx, "panel member failed", "label", labels[i], "err", results[i].err)
+			c.log.ErrorContext(ctx, "panel member failed", "member", labels[i], "err", results[i].err)
 			continue
 		}
 		outputs = append(outputs, results[i].out)
-		c.log.InfoContext(ctx, "panel member reviewed", "label", labels[i], "issues", len(results[i].out.draft.Issues))
+		c.log.InfoContext(ctx, "panel member reviewed", "member", labels[i], "issues", len(results[i].out.draft.Issues),
+			"costUsd", results[i].out.draft.Review.ModelInfo.CostUsd)
 	}
 	return outputs
 }
@@ -164,7 +173,7 @@ func (c *Controller) finishPanel(ctx context.Context, base, commit string, outpu
 			if err != nil {
 				return 0, err
 			}
-			c.log.InfoContext(ctx, "panel member uploaded", "label", o.label, "reviewId", id)
+			c.log.InfoContext(ctx, "panel member uploaded", "member", o.label, "reviewId", id)
 			lastID = id
 		}
 		return lastID, nil
@@ -246,17 +255,9 @@ func (c *Controller) memberConfig(dir string, m MemberSpec) Config {
 // worktree, which is otherwise the only place the runner transcript exists.
 func (c *Controller) produceMember(ctx context.Context, dir, label string, m MemberSpec, prompt string) (out *memberOutput, err error) {
 	mc := c.memberConfig(dir, m)
+	mc.Label = label
 	var rr *spendTracker
-	defer func() {
-		if err == nil {
-			return
-		}
-		// Detached context: a member timeout is precisely a failure this bundle
-		// should explain, and by then ctx is already cancelled.
-		upCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		c.uploadDebugBundle(upCtx, &mc, err, rr.total())
-	}()
+	defer func() { c.settleRun(ctx, &mc, rr, err) }()
 
 	built, err := c.runnerFactory(&mc)
 	if err != nil {
@@ -267,8 +268,7 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 		return nil, fmt.Errorf("write review.json skeleton: %w", err)
 	}
 
-	result, err := rr.Run(ctx, prompt)
-	if err != nil {
+	if _, err = rr.Run(ctx, prompt); err != nil {
 		return nil, fmt.Errorf("run %s: %w", mc.Runner, err)
 	}
 
@@ -276,12 +276,13 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 	if err != nil {
 		return nil, fmt.Errorf("read review: %w", err)
 	}
-	c.applyRunResult(ctx, draft, &mc, rr, result)
+	c.applyRunResult(ctx, draft, &mc, rr)
 	// A skeleton passes Validate, so an "exit 0, review.json untouched" run
 	// would otherwise sail into the panel as a legitimate zero-findings member
 	// and dilute the fusion.
 	if isReviewJSONUnfilled(draft) {
-		return nil, errors.New("empty review: runner finished without filling review.json (no issues, no group summaries)")
+		return nil, reviewer.WithRunReason(reviewer.RunReasonNotSubmitted,
+			errors.New("empty review: runner finished without filling review.json (no issues, no group summaries)"))
 	}
 
 	mdFiles, err := FindMDFiles(mc.Dir)
@@ -294,21 +295,25 @@ func (c *Controller) produceMember(ctx context.Context, dir, label string, m Mem
 // runJudge stages each member's outputs into members/<label>/ inside the judge
 // worktree, then runs the judge with the fusion prompt (one retry) and returns
 // the fused draft + R*.md.
-func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (*memberOutput, error) {
-	if err := stageMembers(judgeDir, outputs); err != nil {
+func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string, outputs []*memberOutput) (_ *memberOutput, err error) {
+	jc := c.memberConfig(judgeDir, *c.cfg.Judge)
+	jc.Label = "judge"
+	var rr *spendTracker
+	// The panel survives a failed judge (the primary member is promoted), but
+	// the judge's run and spend must not vanish with its worktree.
+	defer func() { c.settleRun(ctx, &jc, rr, err) }()
+
+	if err = stageMembers(judgeDir, outputs); err != nil {
 		return nil, fmt.Errorf("stage members: %w", err)
 	}
-
-	jc := c.memberConfig(judgeDir, *c.cfg.Judge)
-
-	rr, err := c.runnerFactory(&jc)
+	built, err := c.runnerFactory(&jc)
 	if err != nil {
 		return nil, fmt.Errorf("build judge runner: %w", err)
 	}
+	rr = trackSpend(built)
 	prompt := SubstituteVariables(fusionPrompt, &jc)
 
 	var lastErr error
-	var failed []*runner.ClaudeResult           // attempts that ran but failed: billed all the same
 	for attempt := 1; attempt <= 2; attempt++ { // initial run + one retry
 		// Wipe the previous attempt's root artifacts; the staged members/ subdirs
 		// are untouched (CleanReviewArtifacts only looks at the dir root).
@@ -320,30 +325,26 @@ func (c *Controller) runJudge(ctx context.Context, judgeDir, fusionPrompt string
 		}
 
 		rctx, cancel := withTimeout(ctx, c.cfg.Timeout)
-		result, err := rr.Run(rctx, prompt)
+		_, err := rr.Run(rctx, prompt)
 		cancel()
 		if err != nil {
 			lastErr = err
-			if result != nil {
-				failed = append(failed, result)
-			}
 			c.log.WarnContext(ctx, "judge run failed", "attempt", attempt, "err", err)
 			continue
 		}
 		draft, err := ReadReviewJSON(jc.Dir)
 		if err != nil {
 			lastErr = err
-			failed = append(failed, result)
 			c.log.WarnContext(ctx, "judge review.json invalid", "attempt", attempt, "err", err)
 			continue
 		}
 		if isReviewJSONUnfilled(draft) {
-			lastErr = errors.New("judge produced an empty review")
-			failed = append(failed, result)
+			lastErr = reviewer.WithRunReason(reviewer.RunReasonNotSubmitted, errors.New("judge produced an empty review"))
 			c.log.WarnContext(ctx, "judge review empty, retrying", "attempt", attempt)
 			continue
 		}
-		c.applyRunResult(ctx, draft, &jc, rr, result, failed...)
+		// Every attempt so far is in the record: the failed ones were billed too.
+		c.applyRunResult(ctx, draft, &jc, rr)
 
 		mdFiles, err := FindMDFiles(jc.Dir)
 		if err != nil {

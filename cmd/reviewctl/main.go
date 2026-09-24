@@ -165,7 +165,10 @@ func runReview(cmd *cobra.Command, cfg *ctl.Config, multiRaw, judgeRaw string, l
 		}
 	}
 
-	factory := func(mc *ctl.Config) (runner.ReviewRunner, error) { return buildRunner(mc, log) }
+	factory := func(mc *ctl.Config) (runner.ReviewRunner, error) {
+		// Members run concurrently: tag each one's runner log lines.
+		return buildRunner(mc, log.With("member", mc.Label))
+	}
 	return ctl.NewController(cfg, rr, log, ctl.WithRunnerFactory(factory)).Review(cmd.Context())
 }
 
@@ -222,10 +225,10 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 	if cfg.Runner == runner.RunnerDirect {
 		provider = cfg.APIProvider
 	}
+	// The panel members and judge are logged when the panel starts.
 	log.InfoContext(cmd.Context(), "applied runner profile",
 		"profileId", p.RunnerProfileID, "title", p.Title,
-		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort,
-		"provider", provider, "panelMembers", len(cfg.Multi), "judging", cfg.Judge != nil)
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", provider)
 	return nil
 }
 

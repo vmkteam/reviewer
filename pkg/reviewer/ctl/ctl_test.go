@@ -151,7 +151,13 @@ func TestController_Review(t *testing.T) {
 		TargetBranch: "master",
 	}
 
-	runner := &testClaudeRunner{fixturePath: "testdata/claude_result.json"}
+	runner := &testClaudeRunner{fixturePath: "testdata/claude_result.json", beforeRun: func() error {
+		return editReviewJSON(tmpDir, func(d *rest.ReviewDraft) {
+			for i := range d.Files {
+				d.Files[i].Summary = "reviewed"
+			}
+		})
+	}}
 	c := NewController(cfg, runner, slog.Default())
 
 	err := c.Review(context.Background())
@@ -161,71 +167,21 @@ func TestController_Review(t *testing.T) {
 	assert.True(t, uploadedReview, "review was not uploaded")
 }
 
-func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
-	var debugUploaded bool
-	var debugError string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if path == "/v1/reviewctl/rpc/" && r.Method == http.MethodPost {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": "prompt", "id": 1})
-			return
-		}
-		if strings.HasPrefix(path, "/v1/upload/debug/") && r.Method == http.MethodPost {
-			if !assert.NoError(t, r.ParseMultipartForm(32<<20)) {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			debugUploaded = true
-			if v := r.MultipartForm.Value["errorMsg"]; len(v) > 0 {
-				debugError = v[0]
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"x","url":"/v1/debug/storage/x/"}`))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer srv.Close()
-
-	// Simulate Claude overwriting the skeleton with an invalid review.json
-	// — reproduces the CI failure where the model picks empty reviewType.
-	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "claude-output.json"), []byte(`{"type":"result"}`), 0o644))
-
-	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: runner.RunnerClaude}
-	corrupted := []byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`)
-	runner := &testClaudeRunner{
-		fixturePath: "testdata/claude_result.json",
-		beforeRun: func() error {
-			return os.WriteFile(filepath.Join(tmpDir, "review.json"), corrupted, 0o644)
-		},
+// editReviewJSON edits the on-disk review.json in place, as a runner fills the
+// skeleton.
+func editReviewJSON(dir string, edit func(*rest.ReviewDraft)) error {
+	draft, err := ReadReviewJSON(dir)
+	if err != nil {
+		return err
 	}
-	c := NewController(cfg, runner, slog.Default())
-
-	err := c.Review(context.Background())
-	require.Error(t, err, "Review must fail on invalid review.json")
-	assert.Contains(t, err.Error(), "invalid reviewType")
-	assert.True(t, debugUploaded, "debug bundle must be uploaded on failure")
-	assert.Contains(t, debugError, "files[0]", "errorMsg must carry verbose validation detail")
+	edit(draft)
+	return WriteReviewJSON(dir, draft)
 }
 
-// failingRunner fails like a real runner: a tagged error plus the partial result
-// carrying what the run already spent.
-type failingRunner struct {
-	name string
-	cost float64
-	err  error
-}
-
-func (r failingRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
-	return &runner.ClaudeResult{TotalCostUSD: r.cost, IsError: true}, r.err
-}
-func (r failingRunner) Name() string      { return r.name }
-func (r failingRunner) SetSession(string) {}
-
-func TestController_Review_ReportsFailureOutcome(t *testing.T) {
+// newDebugCaptureServer serves the prompt RPC and records the form fields of
+// the debug bundle upload; nothing else is expected.
+func newDebugCaptureServer(t *testing.T) (*httptest.Server, map[string]string) {
+	t.Helper()
 	fields := map[string]string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/reviewctl/rpc/" {
@@ -246,7 +202,65 @@ func TestController_Review_ReportsFailureOutcome(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
+	return srv, fields
+}
+
+func TestController_Review_FailsOnUnfilledReview(t *testing.T) {
+	srv, fields := newDebugCaptureServer(t)
+	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: t.TempDir(), Runner: runner.RunnerClaude}
+	// The runner never touches review.json, neither on the run nor on the Step 2 retry.
+	rr := &testClaudeRunner{fixturePath: "testdata/claude_result.json"}
+
+	err := NewController(cfg, rr, slog.Default()).Review(context.Background())
+	require.ErrorContains(t, err, "empty review")
+	assert.NotEmpty(t, rr.sessionID, "the Step 2 retry resumed the session")
+	assert.Equal(t, reviewer.RunStatusFailed, fields["status"])
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, fields["reason"])
+	assert.Equal(t, "4.175053", fields["costUsd"], "both runs are billed")
+}
+
+func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
+	srv, fields := newDebugCaptureServer(t)
+
+	// Simulate Claude overwriting the skeleton with an invalid review.json
+	// — reproduces the CI failure where the model picks empty reviewType.
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "claude-output.json"), []byte(`{"type":"result"}`), 0o644))
+
+	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: tmpDir, Runner: runner.RunnerClaude}
+	corrupted := []byte(`{"review":{"title":"x"},"files":[{"reviewType":"","summary":"s"}],"issues":[]}`)
+	runner := &testClaudeRunner{
+		fixturePath: "testdata/claude_result.json",
+		beforeRun: func() error {
+			return os.WriteFile(filepath.Join(tmpDir, "review.json"), corrupted, 0o644)
+		},
+	}
+	c := NewController(cfg, runner, slog.Default())
+
+	err := c.Review(context.Background())
+	require.Error(t, err, "Review must fail on invalid review.json")
+	assert.Contains(t, err.Error(), "invalid reviewType")
+	assert.Contains(t, fields, "errorMsg", "debug bundle must be uploaded on failure")
+	assert.Contains(t, fields["errorMsg"], "files[0]", "errorMsg must carry verbose validation detail")
+}
+
+// failingRunner fails like a real runner: a tagged error plus the partial result
+// carrying what the run already spent.
+type failingRunner struct {
+	name string
+	cost float64
+	err  error
+}
+
+func (r failingRunner) Run(context.Context, string) (*runner.ClaudeResult, error) {
+	return &runner.ClaudeResult{TotalCostUSD: r.cost, IsError: true}, r.err
+}
+func (r failingRunner) Name() string      { return r.name }
+func (r failingRunner) SetSession(string) {}
+
+func TestController_Review_ReportsFailureOutcome(t *testing.T) {
+	srv, fields := newDebugCaptureServer(t)
 
 	tests := []struct {
 		name       string
@@ -407,14 +421,17 @@ func TestSpendTracker(t *testing.T) {
 	assert.Equal(t, runner.RunnerClaude, st.Name())
 }
 
-func TestApplyRunResultAddsFailedAttempts(t *testing.T) {
+func TestApplyRunResultRecordsEveryRun(t *testing.T) {
 	c := &Controller{cfg: &Config{}, log: slog.Default()}
 	cfg := &Config{Dir: t.TempDir(), Model: "m"}
 	draft := &rest.ReviewDraft{}
+	// A judge attempt that came back empty, then the one that delivered.
+	rr := &spendTracker{ReviewRunner: failingRunner{name: runner.RunnerCodex}, results: []*runner.ClaudeResult{
+		{TotalCostUSD: 0.5, DurationMs: 5},
+		{TotalCostUSD: 1, DurationMs: 10},
+	}}
 
-	c.applyRunResult(t.Context(), draft, cfg, failingRunner{name: runner.RunnerCodex},
-		&runner.ClaudeResult{TotalCostUSD: 1, DurationMs: 10},
-		&runner.ClaudeResult{TotalCostUSD: 0.5, DurationMs: 5}) // a judge attempt that came back empty
+	c.applyRunResult(t.Context(), draft, cfg, rr)
 
 	assert.InDelta(t, 1.5, draft.Review.ModelInfo.CostUsd, 1e-9)
 	assert.Equal(t, 15, draft.Review.DurationMs)

@@ -26,6 +26,8 @@ func Map[T, M any](a []T, f func(T) M) []M {
 }
 
 // Ptr is a generic to create pointer from value
+//
+//go:fix inline
 func Ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }

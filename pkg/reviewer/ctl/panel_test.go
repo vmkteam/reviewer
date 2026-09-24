@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"reviewsrv/pkg/rest"
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/runner"
 
 	"github.com/stretchr/testify/assert"
@@ -35,14 +36,9 @@ func (f *fakeRunner) Run(context.Context, string) (*runner.ClaudeResult, error) 
 		return nil, f.err
 	}
 	if f.dir != "" {
-		draft, err := ReadReviewJSON(f.dir)
-		if err != nil {
-			return nil, err
-		}
-		draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{
-			LocalID: "C1", Severity: "low", Title: "t", FileType: "code",
-		})
-		if err := WriteReviewJSON(f.dir, draft); err != nil {
+		if err := editReviewJSON(f.dir, func(d *rest.ReviewDraft) {
+			d.Issues = append(d.Issues, rest.ReviewDraftIssue{LocalID: "C1", Severity: "low", Title: "t", FileType: "code"})
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -161,15 +157,10 @@ func (j *judgeRunner) Run(context.Context, string) (*runner.ClaudeResult, error)
 	if j.runs == 1 {
 		return &runner.ClaudeResult{}, nil
 	}
-	draft, err := ReadReviewJSON(j.dir)
-	if err != nil {
-		return nil, err
-	}
-	draft.Issues = append(draft.Issues, rest.ReviewDraftIssue{LocalID: "F1", Severity: "low", Title: "fused", FileType: "code"})
-	if err := WriteReviewJSON(j.dir, draft); err != nil {
-		return nil, err
-	}
-	return &runner.ClaudeResult{}, nil
+	err := editReviewJSON(j.dir, func(d *rest.ReviewDraft) {
+		d.Issues = append(d.Issues, rest.ReviewDraftIssue{LocalID: "F1", Severity: "low", Title: "fused", FileType: "code"})
+	})
+	return &runner.ClaudeResult{}, err
 }
 func (j *judgeRunner) Name() string      { return runner.RunnerClaude }
 func (j *judgeRunner) SetSession(string) {}
@@ -225,13 +216,17 @@ func TestMemberConfigInheritsTracker(t *testing.T) {
 		TrackerToken: "tracker-tok",
 	}, nil, slog.Default())
 
-	mc := c.memberConfig("/tmp/wt", MemberSpec{Runner: "codex", Model: "m", Profile: &ResolvedProfile{Token: "profile-tok"}})
+	mc := c.memberConfig("/tmp/wt", MemberSpec{Runner: "codex", Model: "m", Profile: &ResolvedProfile{
+		Token: "profile-tok", Params: RunnerProfileParams{MaxRounds: 120, AllowDangerousPermissions: true},
+	}})
 
 	// Tracker access is project-wide: the profile overlay must not touch it.
 	assert.Equal(t, "https://yt.example.com", mc.TrackerURL)
 	assert.Equal(t, "tracker-tok", mc.TrackerToken)
 	assert.Equal(t, "profile-tok", mc.Token, "profile credentials still overlaid")
 	assert.Equal(t, "codex", mc.Runner)
+	assert.Equal(t, 120, mc.MaxRounds, "the member's own profile params apply")
+	assert.True(t, mc.AllowDangerousPermissions)
 }
 
 func TestMemberLabel(t *testing.T) {
@@ -258,4 +253,24 @@ func TestSourceLabels(t *testing.T) {
 		"gpt-5.5-2",
 		"claude",
 	}, got)
+}
+
+func TestRunJudge_FailureShipsDebugBundle(t *testing.T) {
+	srv, fields := newDebugCaptureServer(t)
+	mdir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(mdir, "review.json"), []byte(`{"issues":[]}`), 0o600))
+	outputs := []*memberOutput{{label: "opus", dir: mdir}}
+
+	// Both attempts leave the skeleton untouched, each billed $0.5.
+	c := NewController(&Config{Key: "k", URL: srv.URL, Judge: &MemberSpec{Runner: runner.RunnerClaude, Model: "opus"}}, nil, slog.Default())
+	c.runnerFactory = func(*Config) (runner.ReviewRunner, error) {
+		return failingRunner{name: runner.RunnerClaude, cost: 0.5}, nil
+	}
+
+	_, err := c.runJudge(t.Context(), t.TempDir(), "fuse the members", outputs)
+	require.ErrorContains(t, err, "judge produced an empty review")
+	assert.Equal(t, reviewer.RunStatusFailed, fields["status"])
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, fields["reason"])
+	assert.Equal(t, "1", fields["costUsd"], "both judge attempts are billed")
+	assert.Equal(t, runner.RunnerClaude, fields["runner"])
 }

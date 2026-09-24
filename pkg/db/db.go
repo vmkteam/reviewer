@@ -67,7 +67,7 @@ func (db *DB) RunInLock(ctx context.Context, lockName string, fns ...func(*pg.Tx
 }
 
 // buildQuery applies all functions to orm query.
-func buildQuery(ctx context.Context, db orm.DB, model interface{}, search Searcher, filters []Filter, pager Pager, ops ...OpFunc) *orm.Query {
+func buildQuery(ctx context.Context, db orm.DB, model any, search Searcher, filters []Filter, pager Pager, ops ...OpFunc) *orm.Query {
 	q := db.ModelContext(ctx, model)
 	for _, filter := range filters {
 		filter.Apply(q)

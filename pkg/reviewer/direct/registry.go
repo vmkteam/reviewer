@@ -32,6 +32,7 @@ type Registry struct {
 	// allowed, when set, limits Dispatch to these tools; others fail with deniedMsg.
 	allowed   map[string]bool
 	deniedMsg string
+	denied    int // calls refused by the restriction so far
 }
 
 // NewRegistry returns an empty registry.
@@ -69,15 +70,26 @@ func (r *Registry) Defs() []ToolDef {
 func (r *Registry) Dispatch(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	r.mu.Lock()
 	h, ok := r.handlers[name]
-	denied := r.allowed != nil && !r.allowed[name]
+	denied := ok && r.allowed != nil && !r.allowed[name]
+	deniedMsg := r.deniedMsg
+	if denied {
+		r.denied++
+	}
 	r.mu.Unlock()
 	switch {
 	case !ok:
 		return "", fmt.Errorf("unknown tool %q", name)
 	case denied:
-		return "", fmt.Errorf("%s: %s", name, r.deniedMsg)
+		return "", fmt.Errorf("%s: %s", name, deniedMsg)
 	}
 	return h(ctx, args)
+}
+
+// deniedCalls returns how many calls the restriction has refused so far.
+func (r *Registry) deniedCalls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.denied
 }
 
 // restrict limits Dispatch to the allowed tools; any other call fails with
