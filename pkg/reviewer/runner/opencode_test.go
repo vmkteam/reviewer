@@ -151,17 +151,27 @@ func TestExecOpenCodeRunnerRefusesProjectConfig(t *testing.T) {
 func TestOpenCodeIsolationEnv(t *testing.T) {
 	t.Setenv("OPENCODE_DISABLE_PROJECT_CONFIG", "")
 	t.Setenv("OPENCODE_CONFIG_CONTENT", "")
+	env, merged := opencodeIsolationEnv()
+	assert.True(t, merged)
 	assert.Equal(t, []string{
 		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
 		`OPENCODE_CONFIG_CONTENT={"formatter":false,"lsp":false}`,
-	}, opencodeIsolationEnv())
+	}, env)
 
 	t.Setenv("OPENCODE_DISABLE_PROJECT_CONFIG", "0")
 	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"share":"disabled","lsp":true}`)
+	env, merged = opencodeIsolationEnv()
+	assert.True(t, merged)
 	assert.Equal(t, []string{
 		`OPENCODE_CONFIG_CONTENT={"formatter":false,"lsp":false,"share":"disabled"}`,
-	}, opencodeIsolationEnv(), "the operator's config is kept, formatter and lsp forced off")
+	}, env, "the operator's config is kept, formatter and lsp forced off")
 
 	t.Setenv("OPENCODE_CONFIG_CONTENT", "{ // jsonc\n}")
-	assert.Empty(t, opencodeIsolationEnv(), "an unparsable operator config is left alone")
+	env, merged = opencodeIsolationEnv()
+	assert.False(t, merged)
+	assert.Empty(t, env, "an unparsable operator config is left alone")
+
+	t.Setenv("OPENCODE_CONFIG_CONTENT", "null")
+	_, merged = opencodeIsolationEnv()
+	assert.False(t, merged, "null is not an object either")
 }

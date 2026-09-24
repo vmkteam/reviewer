@@ -1,7 +1,9 @@
 -- Remap runner profiles that point at model ids their providers have retired (as of
 -- 2026-09) to the current replacements. Data only — model/effort are free-form columns,
 -- no DDL needed; profiles on live models are left as chosen. The ids are unambiguous,
--- so the mapping applies to every runner (prefixed ones only exist under opencode).
+-- so the mapping applies to every runner (prefixed ones only exist under opencode) —
+-- except profiles with their own apiBaseURL: behind a gateway (LiteLLM, Azure) the
+-- model is the gateway's alias, which may well still exist.
 UPDATE "runnerProfiles" p SET "model" = m."new"
 FROM (VALUES
 	-- OpenAI: the gpt-5-codex / gpt-5.1-codex* / gpt-5.2-codex family, shut down 2026-07-23.
@@ -29,4 +31,5 @@ FROM (VALUES
 	('anthropic/claude-sonnet-4-0', 'anthropic/claude-sonnet-5'),
 	('anthropic/claude-sonnet-4-20250514', 'anthropic/claude-sonnet-5')
 ) AS m("old", "new")
-WHERE p."model" = m."old";
+WHERE p."model" = m."old"
+	AND coalesce(p."apiBaseURL", '') = '';

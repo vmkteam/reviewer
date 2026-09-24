@@ -68,3 +68,33 @@ func TestNormalizeRunOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestReasonFromMessage(t *testing.T) {
+	for _, tt := range []struct{ msg, want string }{
+		{"unexpected status 401 Unauthorized: Incorrect API key provided", RunReasonAuth},
+		{"exceeded retry limit, last status: 429 Too Many Requests", RunReasonRateLimit},
+		{"You've hit your usage limit. Upgrade to Pro", RunReasonBilling},
+		{"status 429: insufficient_quota", RunReasonBilling},
+		{"HTTP 502 Bad Gateway", RunReasonAPIError},
+		{"stream disconnected: model is overloaded", RunReasonAPIError},
+		{"unexpected status 400 Bad Request: invalid tool schema", ""},
+		{"APICallError: statusCode: 429", RunReasonRateLimit},
+		{"Quota exceeded for quota metric per minute; check your plan and billing details. status 429", RunReasonRateLimit},
+		{"401 Unauthorized", RunReasonAuth},
+		{"Rate limit reached for requests", RunReasonRateLimit},
+		{"HTTP 404 Not Found", ""},
+		{"fetch https://example.com/v1/models failed", ""},
+		{"panic: runtime error", ""},
+	} {
+		assert.Equal(t, tt.want, ReasonFromMessage(tt.msg), tt.msg)
+	}
+}
+
+func TestWithRunReasonKeepsExistingTag(t *testing.T) {
+	cancelled := WithRunReason(RunReasonCancelled, errors.New("signal: terminated"))
+	// A reason guessed from the runner's output must not mask runExec's tag.
+	err := WithRunReason(RunReasonBilling, fmt.Errorf("usage limit (codex %w)", cancelled))
+	status, reason := RunOutcome(err)
+	assert.Equal(t, RunStatusCancelled, status)
+	assert.Equal(t, RunReasonCancelled, reason)
+}

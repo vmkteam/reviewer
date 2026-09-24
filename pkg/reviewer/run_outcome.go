@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 // Status of a reviewctl run, reported with its debug bundle. The status and
@@ -57,6 +60,54 @@ func ReasonForHTTPStatus(code int) string {
 	return RunReasonOther
 }
 
+// httpStatusRe finds an HTTP status in CLI error text: "unexpected status 401",
+// "last status: 429", "statusCode: 429", "HTTP 502".
+var httpStatusRe = regexp.MustCompile(`\b(?:status(?:\s*code)?|http)[\s:=]*([45]\d\d)\b`) // on lowercased text
+
+// ReasonFromMessage guesses a RunReason* from a CLI's error text (codex and
+// opencode report API failures only as text), or "" when nothing matches.
+// Billing wording goes first: an exhausted quota often comes as a 429.
+func ReasonFromMessage(msg string) string {
+	if IsBillingMessage(msg) {
+		return RunReasonBilling
+	}
+	m := strings.ToLower(msg)
+	if sm := httpStatusRe.FindStringSubmatch(m); sm != nil {
+		code, _ := strconv.Atoi(sm[1])
+		if r := ReasonForHTTPStatus(code); r != RunReasonOther {
+			return r
+		}
+	}
+	switch {
+	case containsAny(m, "unauthorized", "invalid api key", "invalid_api_key", "authentication"):
+		return RunReasonAuth
+	case containsAny(m, "rate limit", "rate_limit", "too many requests"):
+		return RunReasonRateLimit
+	case containsAny(m, "overloaded", "internal server error", "server_error", "service unavailable", "bad gateway"):
+		return RunReasonAPIError
+	}
+	return ""
+}
+
+// IsBillingMessage reports whether an error text says the account is out of
+// credit or quota ("Your credit balance is too low", insufficient_quota, a
+// plan's usage limit). Deliberately narrow: a per-minute "Quota exceeded ...
+// check your plan and billing details" is a rate limit, not billing.
+func IsBillingMessage(msg string) bool {
+	return containsAny(strings.ToLower(msg), "insufficient_quota", "credit balance", "usage limit")
+}
+
+// containsAny reports whether s contains any of subs (whole substrings, unlike
+// strings.ContainsAny).
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 // RunError tags a runner failure with a RunReason* so the controller reports a
 // bounded reason without parsing the message. The message is the wrapped error's.
 type RunError struct {
@@ -67,10 +118,13 @@ type RunError struct {
 func (e *RunError) Error() string { return e.Err.Error() }
 func (e *RunError) Unwrap() error { return e.Err }
 
-// WithRunReason tags err with a failure reason. A nil err or an empty reason
-// returns err unchanged.
+// WithRunReason tags err with a failure reason. A nil err, an empty reason or
+// an err already tagged (the tag closest to the cause wins — e.g. runExec's
+// cancelled over a reason guessed from the runner's output) returns err
+// unchanged.
 func WithRunReason(reason string, err error) error {
-	if err == nil || reason == "" {
+	var tagged *RunError
+	if err == nil || reason == "" || errors.As(err, &tagged) {
 		return err
 	}
 	return &RunError{Reason: reason, Err: err}

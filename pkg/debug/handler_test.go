@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"maps"
@@ -23,8 +24,14 @@ import (
 
 func newTestHandler(t *testing.T) (*Storage, *echo.Echo) {
 	t.Helper()
+	return newTestHandlerWith(t, nil, nil)
+}
+
+// newTestHandlerWith builds the handler with a project lookup and run metrics.
+func newTestHandlerWith(t *testing.T, lookup func(context.Context, string) (string, error), metrics *reviewer.RunMetrics) (*Storage, *echo.Echo) {
+	t.Helper()
 	storage := New(5, 5)
-	h := NewHandler(storage, slog.Default(), nil, nil)
+	h := NewHandler(storage, slog.Default(), lookup, metrics)
 
 	e := echo.New()
 	e.POST("/v1/upload/debug/:projectKey/", h.Upload)
@@ -244,6 +251,61 @@ func TestHandler_FileServesArtifactWithContentType(t *testing.T) {
 	}
 }
 
+func TestHandler_FileNeverServesARenderableType(t *testing.T) {
+	storage, e := newTestHandler(t)
+	storage.Add(&Bundle{ID: "xss", Files: map[string]File{
+		"x.html": gzFile(t, "<script>alert(1)</script>"),
+		"x.svg":  gzFile(t, `<svg onload="alert(1)"/>`),
+	}})
+
+	for _, name := range []string{"x.html", "x.svg"} {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/debug/storage/xss/"+name, nil))
+		if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+			t.Errorf("%s: Content-Type = %q, want text/plain", name, got)
+		}
+		if rec.Header().Get("X-Content-Type-Options") != "nosniff" || rec.Header().Get("Content-Security-Policy") != "sandbox" {
+			t.Errorf("%s: missing nosniff/sandbox headers: %v", name, rec.Header())
+		}
+	}
+}
+
+func TestHandler_UploadRefusedWhenProjectLookupFails(t *testing.T) {
+	_, e := newTestHandlerWith(t, func(context.Context, string) (string, error) {
+		return "", errors.New("db down")
+	}, nil)
+
+	body, ct := buildMultipart(t, map[string]string{"errorMsg": "boom"}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/upload/debug/"+uuid.NewString()+"/", body)
+	req.Header.Set("Content-Type", ct)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503: an unverified key is not accepted", rec.Code)
+	}
+}
+
+func TestHandler_UploadHidesProjectKey(t *testing.T) {
+	storage, e := newTestHandler(t)
+	key := uuid.NewString()
+	b := upload(t, storage, e, key, map[string]string{
+		"errorMsg": `upload: Post "https://reviewer/v1/reviewctl/upload/` + key + `/": EOF`,
+		"reviewId": "+42",
+	})
+	if strings.Contains(b.ErrorMsg, key) {
+		t.Errorf("errorMsg reveals the project key: %q", b.ErrorMsg)
+	}
+	if b.ReviewID != "42" {
+		t.Errorf("reviewId = %q, want the canonical 42", b.ReviewID)
+	}
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/debug/storage/"+b.ID+"/", nil))
+	if strings.Contains(rec.Body.String(), key) {
+		t.Error("the bundle page reveals the project key")
+	}
+}
+
 func TestHandler_FileNotFound(t *testing.T) {
 	_, e := newTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/v1/debug/storage/missing/review.json", nil)
@@ -273,20 +335,16 @@ func upload(t *testing.T, storage *Storage, e *echo.Echo, projectKey string, fie
 }
 
 func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
-	storage := New(5, 5)
 	knownKey := uuid.NewString()
 	metrics := reviewer.NewRunMetrics("claude")
 	reg := prometheus.NewRegistry()
 	metrics.Register(reg)
-	h := NewHandler(storage, slog.Default(), func(_ context.Context, key string) (string, error) {
+	storage, e := newTestHandlerWith(t, func(_ context.Context, key string) (string, error) {
 		if key != knownKey {
 			return "", nil // no such project
 		}
 		return "demo", nil
 	}, metrics)
-	e := echo.New()
-	e.POST("/v1/upload/debug/:projectKey/", h.Upload)
-	e.GET("/v1/debug/storage/", h.List)
 
 	b := upload(t, storage, e, knownKey, map[string]string{
 		"runner": "claude", "errorMsg": "run claude: billing_error: Credit balance is too low",
@@ -302,8 +360,15 @@ func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
 	if b.Status != "failed" || b.Reason != "other" {
 		t.Errorf("legacy upload not normalized: %+v", b)
 	}
-	// An ok run is counted on review upload, not here.
+	// An ok run is counted on review upload, not here — and so is a run whose
+	// review was created before it failed.
 	upload(t, storage, e, knownKey, map[string]string{"runner": "claude", "status": "ok", "costUsd": "2"})
+	b = upload(t, storage, e, knownKey, map[string]string{"runner": "claude", "status": "failed", "reason": "other", "costUsd": "3", "reviewId": "80"})
+	if b.ReviewID != "80" {
+		t.Errorf("reviewId not stored: %+v", b)
+	}
+	// A garbage reviewId can't switch the metrics off: this one is counted.
+	upload(t, storage, e, knownKey, map[string]string{"runner": "claude", "status": "failed", "reason": "billing", "reviewId": "x"})
 
 	// A key that matches no project is refused.
 	body, ct := buildMultipart(t, map[string]string{"errorMsg": "x", "costUsd": "999"}, nil)
@@ -321,7 +386,7 @@ func TestHandler_UploadRecordsRunOutcome(t *testing.T) {
 		labels labels
 		want   float64
 	}{
-		{"reviewer_runs_total", labels{"project": "demo", "runner": "claude", "status": "failed", "reason": "billing"}, 1},
+		{"reviewer_runs_total", labels{"project": "demo", "runner": "claude", "status": "failed", "reason": "billing"}, 2},
 		{"reviewer_runs_total", labels{"project": "demo", "runner": "other", "status": "failed", "reason": "other"}, 1},
 		{"reviewer_run_cost_usd_total", labels{"project": "demo", "runner": "claude", "status": "failed"}, 1.5},
 		{"reviewer_run_cost_usd_total", labels{"project": "demo", "runner": "other", "status": "failed"}, 0},

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"reviewsrv/pkg/reviewer"
 )
 
 // exportTimeout caps `opencode export` — it should return in seconds,
@@ -101,27 +103,37 @@ func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeRes
 		return nil, fmt.Errorf("refusing to run opencode: the checkout ships %s, and opencode would execute its plugins and commands with this job's secrets; review this repository with the claude or codex runner", cfgPath)
 	}
 
+	isolation, merged := opencodeIsolationEnv()
+	if !merged {
+		r.Log.WarnContext(ctx, "OPENCODE_CONFIG_CONTENT is not a JSON object (JSONC?): formatters and LSP are not forced off, whatever it enables runs on the checkout")
+	}
+
 	args := r.buildArgs()
 	// opencode reads its own stored provider credentials, so no API token is
 	// injected — only the tracker token the prompt references.
-	env := append(credEnv(envTrackerToken, r.TrackerToken), opencodeIsolationEnv()...)
+	env := append(credEnv(envTrackerToken, r.TrackerToken), isolation...)
 	// Surface significant events (tool calls, per-step usage) live as opencode streams.
 	out := runExec(ctx, r.Log, RunnerOpenCode, r.Dir, args, prompt, env, func(line []byte) { r.logEvent(ctx, line) })
 
 	r.saveOutput(ctx, out.stdout.Bytes())
 
 	if out.err != nil {
+		stderr := out.stderr.String()
 		r.Log.WarnContext(ctx, "opencode error",
-			"stderr", truncate(out.stderr.String(), 2000),
+			"stderr", truncate(stderr, 2000),
 			"stdout", truncate(out.stdout.String(), 2000),
 		)
 		// Try to parse whatever arrived before the error — matches Claude runner behaviour.
+		// opencode reports an API failure only as text on stderr (a cancelled
+		// tag from runExec stays).
+		runErr := reviewer.WithRunReason(reviewer.ReasonFromMessage(errTail(stderr)),
+			fmt.Errorf("opencode exited with error: %w (stderr: %s)", out.err, truncate(stderr, 500)))
 		if out.stdout.Len() > 0 {
 			if cr, parseErr := ParseOpenCodeResult(out.stdout.Bytes(), r.Model); parseErr == nil {
-				return cr, fmt.Errorf("opencode exited with error: %w", out.err)
+				return cr, runErr
 			}
 		}
-		return nil, fmt.Errorf("opencode exited with error: %w (stderr: %s)", out.err, truncate(out.stderr.String(), 500))
+		return nil, runErr
 	}
 
 	if out.stdout.Len() == 0 {
@@ -139,7 +151,7 @@ func (r *ExecOpenCodeRunner) Run(ctx context.Context, prompt string) (*ClaudeRes
 		return nil, parseErr
 	}
 
-	r.resolveSessionModel(ctx, cr)
+	r.resolveSessionModel(ctx, cr, isolation)
 	r.logResult(ctx, cr)
 
 	return cr, nil
@@ -195,11 +207,11 @@ func (r *ExecOpenCodeRunner) logEvent(ctx context.Context, line []byte) {
 // resolveSessionModel enriches cr.ModelUsage when neither -m nor the stream named
 // the model — opencode's step_finish events carry none. Falls back to
 // `opencode export <sessionID>`, which reliably returns messages[*].info.model.
-func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *ClaudeResult) {
+func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *ClaudeResult, isolation []string) {
 	if len(cr.ModelUsage) > 0 || cr.SessionID == "" {
 		return
 	}
-	name := fetchOpenCodeSessionModel(ctx, r.Dir, cr.SessionID)
+	name := fetchOpenCodeSessionModel(ctx, r.Dir, cr.SessionID, isolation)
 	if name == "" {
 		r.Log.WarnContext(ctx, "opencode session model not resolved", "sessionId", cr.SessionID)
 		return
@@ -219,7 +231,7 @@ func (r *ExecOpenCodeRunner) resolveSessionModel(ctx context.Context, cr *Claude
 // fetchOpenCodeSessionModel queries `opencode export <sessionID>` to extract
 // the model used in the session. Returns "" on any failure — caller must
 // treat the result as optional (it's a best-effort enrichment).
-func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string) string {
+func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string, isolation []string) string {
 	if sessionID == "" {
 		return ""
 	}
@@ -232,9 +244,7 @@ func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string) strin
 	// export boots an instance in its working dir and loads that project's
 	// plugins, so run it in the dir Run vetted, under the same isolation.
 	cmd.Dir = dir
-	if env := opencodeIsolationEnv(); len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
+	cmd.Env = reviewer.ChildEnv(isolation...)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -272,13 +282,15 @@ func fetchOpenCodeSessionModel(ctx context.Context, dir, sessionID string) strin
 // config (the legacy loader, plus AGENTS.md auto-loading) is off unless the
 // operator's env says otherwise. Formatters and LSP servers are forced off even
 // then — prettier and eslint run the repo's JS configs, rust-analyzer its
-// build.rs — by merging into the operator's inline config.
-func opencodeIsolationEnv() []string {
+// build.rs — by merging into the operator's inline config; merged is false when
+// that config can't be merged (see opencodeConfigContent).
+func opencodeIsolationEnv() ([]string, bool) {
 	env := credEnv("OPENCODE_DISABLE_PROJECT_CONFIG", "1")
-	if content, ok := opencodeConfigContent(os.Getenv("OPENCODE_CONFIG_CONTENT")); ok {
+	content, merged := opencodeConfigContent(os.Getenv("OPENCODE_CONFIG_CONTENT"))
+	if merged {
 		env = append(env, "OPENCODE_CONFIG_CONTENT="+content)
 	}
-	return env
+	return env, merged
 }
 
 // opencodeConfigContent returns the operator's inline opencode config with
@@ -286,7 +298,8 @@ func opencodeIsolationEnv() []string {
 // comments) cannot be merged and is left alone: ok is false.
 func opencodeConfigContent(operator string) (string, bool) {
 	cfg := map[string]any{}
-	if operator != "" && json.Unmarshal([]byte(operator), &cfg) != nil {
+	// "null" decodes into a nil map: not an object either.
+	if operator != "" && (json.Unmarshal([]byte(operator), &cfg) != nil || cfg == nil) {
 		return "", false
 	}
 	cfg["formatter"], cfg["lsp"] = false, false

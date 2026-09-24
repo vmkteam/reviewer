@@ -298,3 +298,10 @@ func TestCleanReviewArtifacts(t *testing.T) {
 	// Idempotent: clean again on an already-clean dir is a no-op, no error.
 	require.NoError(t, CleanReviewArtifacts(dir))
 }
+
+func TestCollectDebugArtifactsWithoutDir(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "review.json"), []byte("{}"), 0o600))
+	t.Chdir(dir)
+	assert.Nil(t, CollectDebugArtifacts(""), "no dir means no artifacts, not the current one")
+}

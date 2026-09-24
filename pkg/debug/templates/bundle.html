@@ -26,9 +26,10 @@ a:hover { text-decoration: underline; }
 
 <dl class="meta">
   <dt>Timestamp</dt>     <dd><code>{{.Bundle.Timestamp.Format "2006-01-02 15:04:05 MST"}}</code></dd>
-  <dt>Project</dt>       <dd>{{or .Bundle.ProjectTitle "—"}} <code>{{.Bundle.ProjectKey}}</code></dd>
+  <dt>Project</dt>       <dd>{{or .Bundle.ProjectTitle "—"}} <code>{{shortKey .Bundle.ProjectKey}}</code></dd>
   <dt>Status</dt>        <dd>{{.Bundle.Status}}{{if .Bundle.Reason}} · {{.Bundle.Reason}}{{end}}</dd>
   <dt>Cost</dt>          <dd>{{if .Bundle.CostUsd}}<code>${{printf "%.4f" .Bundle.CostUsd}}</code>{{else}}—{{end}}</dd>
+  {{if .Bundle.ReviewID}}<dt>Review</dt>        <dd><code>#{{.Bundle.ReviewID}}</code> created before the failure</dd>{{end}}
   <dt>MR IID</dt>        <dd>{{or .Bundle.MRIid "—"}}</dd>
   <dt>External ID</dt>   <dd>{{or .Bundle.ExternalID "—"}}</dd>
   <dt>Runner</dt>        <dd>{{.Bundle.Runner}}</dd>

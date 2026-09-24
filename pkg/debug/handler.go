@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -49,9 +48,10 @@ const (
 	FieldSourceBranch = "sourceBranch"
 	FieldTargetBranch = "targetBranch"
 	FieldCommitHash   = "commitHash"
-	FieldStatus       = "status"  // reviewer.RunStatus*
-	FieldReason       = "reason"  // reviewer.RunReason*
-	FieldCostUsd      = "costUsd" // spent by the run, incl. a failed one
+	FieldStatus       = "status"   // reviewer.RunStatus*
+	FieldReason       = "reason"   // reviewer.RunReason*
+	FieldCostUsd      = "costUsd"  // spent by the run, incl. a failed one
+	FieldReviewID     = "reviewId" // set when the run's review was created before it failed
 )
 
 //go:embed templates/*.html
@@ -93,11 +93,11 @@ func (h *Handler) Upload(c echo.Context) error {
 	if h.projectTitle != nil {
 		// Before the body is read: the route is unauthenticated, and a key that
 		// matches no project could only fill the ring and the metrics with noise.
-		// A failed lookup proves nothing, so that bundle is kept, untitled.
 		title, err := h.projectTitle(ctx, projectKey)
 		switch {
 		case err != nil:
-			h.log.ErrorContext(ctx, "debug upload: resolve project", "projectKey", projectKey, "err", err)
+			h.log.ErrorContext(ctx, "debug upload: resolve project", "projectKey", shortKey(projectKey), "err", err)
+			return echo.NewHTTPError(http.StatusServiceUnavailable, "resolve project")
 		case title == "":
 			return echo.NewHTTPError(http.StatusNotFound, "unknown project")
 		}
@@ -122,11 +122,14 @@ func (h *Handler) Upload(c echo.Context) error {
 		ExternalID:   field(FieldExternalID, maxFieldBytes),
 		Runner:       field(FieldRunner, maxFieldBytes),
 		Model:        field(FieldModel, maxFieldBytes),
-		ErrorMsg:     field(FieldErrorMsg, maxErrorMsgBytes),
+		// The key authorizes project config (runner-profile and tracker
+		// tokens): an upload URL quoted in an error must not reveal it.
+		ErrorMsg:     strings.ReplaceAll(field(FieldErrorMsg, maxErrorMsgBytes), projectKey, shortKey(projectKey)+"…"),
 		SourceBranch: field(FieldSourceBranch, maxFieldBytes),
 		TargetBranch: field(FieldTargetBranch, maxFieldBytes),
 		CommitHash:   field(FieldCommitHash, maxFieldBytes),
 		CostUsd:      parseCost(formValue(form.Value, FieldCostUsd)),
+		ReviewID:     reviewIDField(formValue(form.Value, FieldReviewID)),
 		Files:        make(map[string]File, len(form.File)),
 	}
 	b.Status, b.Reason = reviewer.NormalizeRunOutcome(formValue(form.Value, FieldStatus), formValue(form.Value, FieldReason), b.ErrorMsg != "")
@@ -148,12 +151,15 @@ func (h *Handler) Upload(c echo.Context) error {
 	if b.Status == reviewer.RunStatusFailed || b.Status == reviewer.RunStatusTimeout {
 		lvl = slog.LevelWarn
 	}
+	// A run whose review was created already counted as ok (with its cost)
+	// on that upload: counting its later failure too would double both.
+	counted := b.Status != reviewer.RunStatusOK && b.ReviewID == ""
 	h.log.Log(ctx, lvl, "debug bundle stored",
-		"id", b.ID, "projectKey", projectKey, "project", b.ProjectTitle, "files", len(b.Files), "hasError", b.ErrorMsg != "",
+		"id", b.ID, "projectKey", shortKey(projectKey), "project", b.ProjectTitle, "files", len(b.Files), "hasError", b.ErrorMsg != "",
 		"status", b.Status, "reason", b.Reason, "runner", b.Runner, "model", b.Model, "costUsd", b.CostUsd,
-		"errorMsg", preview(b.ErrorMsg, 300),
+		"reviewId", b.ReviewID, "countedInMetrics", counted, "errorMsg", preview(b.ErrorMsg, 300),
 	)
-	if b.Status != reviewer.RunStatusOK {
+	if counted {
 		h.metrics.Observe(b.ProjectTitle, b.Runner, b.Status, b.Reason, b.CostUsd)
 	}
 
@@ -194,8 +200,8 @@ func (h *Handler) Bundle(c echo.Context) error {
 	return h.renderHTML(c, "bundle.html", data)
 }
 
-// File serves a single artifact inline so the browser can render it,
-// decompressing it on the fly.
+// File serves a single artifact inline, as JSON or plain text in a sandbox
+// (see contentTypeFor), decompressing it on the fly.
 func (h *Handler) File(c echo.Context) error {
 	f, ok := h.storage.GetFile(c.Param("id"), c.Param("filename"))
 	if !ok {
@@ -206,6 +212,11 @@ func (h *Handler) File(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "gzip: "+err.Error())
 	}
 	defer gr.Close()
+	// Belt and braces for uploaded content: no sniffing into a renderable type,
+	// and no scripts even if a browser renders it anyway.
+	hdr := c.Response().Header()
+	hdr.Set("X-Content-Type-Options", "nosniff")
+	hdr.Set("Content-Security-Policy", "sandbox")
 	return c.Stream(http.StatusOK, contentTypeFor(c.Param("filename")), gr)
 }
 
@@ -215,6 +226,16 @@ func (h *Handler) renderHTML(c echo.Context, name string, data any) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "render "+name+": "+err.Error())
 	}
 	return c.HTML(http.StatusOK, sb.String())
+}
+
+// reviewIDField keeps a client-reported review id only when it is one, so a
+// garbage value can't switch off the run metrics.
+func reviewIDField(s string) string {
+	id, err := strconv.Atoi(s)
+	if err != nil || id <= 0 {
+		return ""
+	}
+	return strconv.Itoa(id)
 }
 
 // parseCost reads a client-reported dollar cost; anything unusable is 0.
@@ -262,16 +283,13 @@ func readArtifact(fh *multipart.FileHeader) (File, error) {
 	return File{Gzip: raw, Size: int(n)}, nil
 }
 
-// contentTypeFor picks a browser-friendly Content-Type by extension.
-// Markdown and JSONL render best as text/plain so the browser shows them inline
-// rather than offering a download or rendering as raw markdown.
+// contentTypeFor picks the Content-Type an artifact is served with: JSON as
+// such, anything else as plain text. The name comes from the uploader, and the
+// debug pages share an origin with the admin panel, so no type that a browser
+// would render as a document (html, svg) is ever derived from it.
 func contentTypeFor(name string) string {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".jsonl", ".log":
-		return "text/plain; charset=utf-8"
-	}
-	if ct := mime.TypeByExtension(filepath.Ext(name)); ct != "" {
-		return ct
+	if strings.EqualFold(filepath.Ext(name), ".json") {
+		return "application/json"
 	}
 	return "text/plain; charset=utf-8"
 }

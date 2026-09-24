@@ -121,6 +121,8 @@ func TestClaudeReason(t *testing.T) {
 		{claudeErrServer, 0, "", reviewer.RunReasonAPIError},
 		{claudeErrUnknown, 529, "", reviewer.RunReasonAPIError},
 		{claudeErrUnknown, 0, "API Error: Internal server error", reviewer.RunReasonAPIError},
+		{claudeErrUnknown, 0, "API Error: Connection error.", reviewer.RunReasonAPIError},
+		{claudeErrUnknown, 429, "Your credit balance is too low", reviewer.RunReasonBilling},
 		{"invalid_request", 400, "prompt is too long", reviewer.RunReasonOther},
 	}
 	for _, tt := range tests {

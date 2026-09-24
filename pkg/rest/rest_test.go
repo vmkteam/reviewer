@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"reviewsrv/pkg/reviewer"
 
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -168,4 +170,63 @@ func cleanupReview(t *testing.T, dbc db.DB, rv *reviewer.Review) {
 	if _, err := dbc.ModelContext(ctx, &db.Review{ID: rv.ID}).WherePK().Delete(); err != nil {
 		t.Logf("cleanup review %d: %v", rv.ID, err)
 	}
+}
+
+func TestDBCreateReviewCountsOkRun(t *testing.T) {
+	dbc, _ := dbtest.Setup(t)
+	pr, prCl := dbtest.Project(t, dbc, nil, dbtest.WithProjectRelations, dbtest.WithFakeProject)
+	t.Cleanup(prCl)
+	metrics := reviewer.NewRunMetrics("claude")
+	reg := prometheus.NewRegistry()
+	metrics.Register(reg)
+	h := NewHandler(dbc, nil, "http://localhost", metrics)
+
+	body := `{"review":{"title":"t","commitHash":"abc","sourceBranch":"f","targetBranch":"master","author":"dev",
+		"createdAt":"2026-09-24T12:00:00Z","modelInfo":{"model":"opus","costUsd":1.25},"runnerProfile":{"runner":"claude"}},
+		"files":[{"reviewType":"code","summary":"ok","isAccepted":true}],"issues":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
+	c.SetParamNames("projectKey")
+	c.SetParamValues(pr.ProjectKey)
+
+	require.NoError(t, h.CreateReview(c))
+	id, err := strconv.Atoi(rec.Body.String())
+	require.NoError(t, err)
+	t.Cleanup(func() { // hard delete: the project's cleanup needs the rows gone
+		ctx := context.Background()
+		_, _ = dbc.ModelContext(ctx, (*db.ReviewFile)(nil)).Where(`"reviewId" = ?`, id).Delete()
+		_, _ = dbc.ModelContext(ctx, &db.Review{ID: id}).WherePK().Delete()
+	})
+
+	// The profile's runner labels the run; the uploaded review is its ok outcome.
+	runs, cost := okRunCounters(t, reg, pr.Title, "claude")
+	assert.InDelta(t, 1, runs, 0)
+	assert.InDelta(t, 1.25, cost, 1e-9)
+}
+
+// okRunCounters reads the ok-run and cost counters of project and runner.
+func okRunCounters(t *testing.T, reg *prometheus.Registry, project, runner string) (runs, cost float64) {
+	t.Helper()
+	mfs, err := reg.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			l := map[string]string{}
+			for _, lp := range m.GetLabel() {
+				l[lp.GetName()] = lp.GetValue()
+			}
+			if l["project"] != project || l["runner"] != runner || l["status"] != reviewer.RunStatusOK {
+				continue
+			}
+			switch mf.GetName() {
+			case "reviewer_runs_total":
+				runs = m.GetCounter().GetValue()
+			case "reviewer_run_cost_usd_total":
+				cost = m.GetCounter().GetValue()
+			}
+		}
+	}
+	return runs, cost
 }

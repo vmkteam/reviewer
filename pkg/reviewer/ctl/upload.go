@@ -122,15 +122,25 @@ func (c *UploadClient) UploadAll(ctx context.Context, serverURL, projectKey stri
 	for reviewType, filePath := range mdFiles {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return reviewID, fmt.Errorf("read %s: %w", filePath, err)
+			return reviewID, &reviewCreatedError{reviewID: reviewID, err: fmt.Errorf("read %s: %w", filePath, err)}
 		}
 		if err := c.UploadFile(ctx, serverURL, projectKey, reviewID, reviewType, content); err != nil {
-			return reviewID, err
+			return reviewID, &reviewCreatedError{reviewID: reviewID, err: err}
 		}
 	}
 
 	return reviewID, nil
 }
+
+// reviewCreatedError is a failure after the review itself was created, which
+// already counted the run as ok on the server; its debug bundle says so.
+type reviewCreatedError struct {
+	reviewID int
+	err      error
+}
+
+func (e *reviewCreatedError) Error() string { return e.err.Error() }
+func (e *reviewCreatedError) Unwrap() error { return e.err }
 
 // ReadReviewJSON reads and validates review.json from the given directory.
 // On validation failure, also returns the parsed draft so the caller can
@@ -180,6 +190,7 @@ type DebugMeta struct {
 	Status       string  // reviewer.RunStatus*
 	Reason       string  // reviewer.RunReason*; empty for an ok run
 	CostUsd      float64 // what the run spent, including a failed run
+	ReviewID     int     // the review created before the run failed, if any
 }
 
 // UploadDebugBundle posts artifacts as a multipart form with each file
@@ -242,6 +253,7 @@ func buildDebugMultipart(meta DebugMeta, files map[string][]byte) (io.Reader, st
 		{debug.FieldStatus, meta.Status},
 		{debug.FieldReason, meta.Reason},
 		{debug.FieldCostUsd, formatCost(meta.CostUsd)},
+		{debug.FieldReviewID, formatID(meta.ReviewID)},
 	}
 	for _, f := range fields {
 		if f.value == "" {
@@ -285,6 +297,14 @@ func formatCost(usd float64) string {
 	return strconv.FormatFloat(usd, 'f', -1, 64)
 }
 
+// formatID renders an optional id for a form field; "" when unset.
+func formatID(id int) string {
+	if id <= 0 {
+		return ""
+	}
+	return strconv.Itoa(id)
+}
+
 // reviewArtifactFiles are the fixed-name outputs a runner writes into the review
 // directory (the R*.md bodies are matched separately by FindMDFiles). The
 // canonical set lives in the reviewer package, shared with the direct runner's
@@ -294,6 +314,9 @@ var reviewArtifactFiles = reviewer.ReviewArtifactFiles
 // CollectDebugArtifacts reads the artifacts that reviewctl writes during a run.
 // Missing files are silently skipped — the caller wants whatever is on disk.
 func CollectDebugArtifacts(dir string) map[string][]byte {
+	if dir == "" { // a run with no working dir of its own, e.g. a failed panel
+		return nil
+	}
 	out := make(map[string][]byte, len(reviewArtifactFiles)+len(reviewTypeByPrefix))
 
 	for _, name := range reviewArtifactFiles {

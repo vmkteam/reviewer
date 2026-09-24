@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"reviewsrv/pkg/reviewer"
 	"reviewsrv/pkg/reviewer/direct"
 )
 
@@ -116,12 +117,15 @@ func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult
 	if out.stdout.Len() == 0 {
 		r.Log.WarnContext(ctx, "codex produced empty stdout", "stderr", truncate(out.stderr.String(), 2000))
 		if out.err != nil {
-			return nil, fmt.Errorf("codex exited with error: %w (stderr: %s)", out.err, truncate(out.stderr.String(), 500))
+			stderr := out.stderr.String()
+			return nil, reviewer.WithRunReason(reviewer.ReasonFromMessage(errTail(stderr)),
+				fmt.Errorf("codex exited with error: %w (stderr: %s)", out.err, truncate(stderr, 500)))
 		}
 		return nil, errors.New("codex produced empty output")
 	}
 
-	cr := r.result(parseCodexStream(out.stdout.Bytes()))
+	agg := parseCodexStream(out.stdout.Bytes())
+	cr := r.result(agg)
 	// codex events report no duration: take the subprocess wall-clock time.
 	cr.DurationMs = int(out.elapsed.Milliseconds())
 	// codex can report a structured failure with a zero exit code; conversely a
@@ -133,7 +137,14 @@ func (r *ExecCodexRunner) Run(ctx context.Context, prompt string) (*ClaudeResult
 
 	if out.err != nil {
 		r.Log.WarnContext(ctx, "codex error", "stderr", truncate(out.stderr.String(), 2000))
-		return cr, fmt.Errorf("codex exited with error: %w", out.err)
+		if agg.errMsg == "" {
+			return cr, fmt.Errorf("codex exited with error: %w", out.err)
+		}
+		// codex reports an API failure only as text: lead with it, and read the
+		// run's reason off it so a billing or auth failure is alertable (a
+		// cancelled tag from runExec stays).
+		return cr, reviewer.WithRunReason(reviewer.ReasonFromMessage(agg.errMsg),
+			fmt.Errorf("%s (codex %w)", agg.errMsg, out.err))
 	}
 	return cr, nil
 }

@@ -1,9 +1,7 @@
 package direct
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -159,6 +157,4 @@ func TestAnthropicCompleteFailsFastOnBilling(t *testing.T) {
 
 func TestIsAnthropicTransient(t *testing.T) {
 	require.True(t, isAnthropicTransient(errors.New("stream error: stream ID 41; INTERNAL_ERROR; received from peer")))
-	require.False(t, isAnthropicTransient(context.Canceled))
-	require.False(t, isAnthropicTransient(fmt.Errorf("post: %w", context.DeadlineExceeded)))
 }

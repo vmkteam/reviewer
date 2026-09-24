@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"slices"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -78,7 +79,7 @@ func New(appName, version string, sl embedlog.Logger, cfg Config, db db.DB, dbc 
 		echo:         appkit.NewEcho(),
 		Logger:       sl,
 		debugStorage: debug.New(cmp.Or(cfg.Debug.Capacity, debugBufferCapacity), cmp.Or(cfg.Debug.FilesCapacity, debugFilesCapacity)),
-		runMetrics:   reviewer.NewRunMetrics(runner.Names...),
+		runMetrics:   reviewer.NewRunMetrics(slices.Concat(runner.Names, []string{reviewer.PanelRunner})...),
 	}
 
 	// add services

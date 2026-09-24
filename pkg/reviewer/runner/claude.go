@@ -528,11 +528,6 @@ func (w *lineWriter) flush() {
 	}
 }
 
-// runExec spawns the runner CLI under the shared runnerTimeout and captures
-// stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
-// focused on argv and result parsing. When onLine is non-nil it receives each
-// stdout line as it streams, so a runner can surface significant events live
-// (e.g. tool calls from a JSONL agent stream) instead of only after completion.
 // Credential env var names CLI runners read their API key from, plus the
 // task-tracker token. envTrackerToken aliases the canonical reviewer const so
 // the $REVIEW_TRACKER_TOKEN reference in assembled prompts and the env injected
@@ -555,6 +550,11 @@ func credEnv(varName, token string) []string {
 	return []string{varName + "=" + token}
 }
 
+// runExec spawns the runner CLI under the shared runnerTimeout and captures
+// stdout/stderr. Centralising I/O wiring keeps the per-runner Run() bodies
+// focused on argv and result parsing. When onLine is non-nil it receives each
+// stdout line as it streams, so a runner can surface significant events live
+// (e.g. tool calls from a JSONL agent stream) instead of only after completion.
 func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []string, prompt string, extraEnv []string, onLine func([]byte)) *runOutput {
 	ctx, cancel := context.WithTimeout(ctx, runnerTimeout)
 	defer cancel()
@@ -562,12 +562,7 @@ func runExec(ctx context.Context, log *slog.Logger, binary, dir string, args []s
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(prompt)
-	// extraEnv comes last: for a key also in the ambient env (a merged
-	// OPENCODE_CONFIG_CONTENT) os/exec keeps the last value. nil extraEnv leaves
-	// cmd.Env nil = inherit.
-	if len(extraEnv) > 0 {
-		cmd.Env = append(os.Environ(), extraEnv...)
-	}
+	cmd.Env = reviewer.ChildEnv(extraEnv...)
 
 	out := &runOutput{}
 	var lw *lineWriter

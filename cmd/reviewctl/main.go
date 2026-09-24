@@ -38,7 +38,7 @@ func main() {
 	}
 
 	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&cfg.Key, "key", os.Getenv("PROJECT_KEY"), "project key (UUID)")
+	pf.StringVar(&cfg.Key, "key", os.Getenv(reviewer.EnvProjectKey), "project key (UUID)")
 	pf.StringVar(&cfg.URL, "url", os.Getenv("REVIEWSRV_URL"), "reviewsrv server URL (used for API calls from CI)")
 	pf.StringVar(&cfg.PublicURL, "public-url", os.Getenv("REVIEWSRV_PUBLIC_URL"), "browser-facing base URL for links in MR comments (defaults to --url)")
 	pf.StringVar(&cfg.Runner, "runner", ctl.EnvDefault("REVIEW_RUNNER", runner.RunnerClaude), "runner: claude | opencode | codex | direct (direct = no CLI, calls the API directly)")
@@ -46,7 +46,7 @@ func main() {
 	pf.StringVar(&cfg.Dir, "dir", ctl.EnvDefault("REVIEW_DIR", "."), "working directory with review files")
 	pf.BoolVar(&cfg.Verbose, "verbose", ctl.EnvBool("REVIEW_VERBOSE", false), "verbose output")
 	pf.StringVar(&cfg.GitLabURL, "gitlab-url", os.Getenv("CI_API_V4_URL"), "GitLab API URL")
-	pf.StringVar(&cfg.GitLabToken, "gitlab-token", os.Getenv("REVIEWER_GITLAB_TOKEN"), "GitLab API token")
+	pf.StringVar(&cfg.GitLabToken, "gitlab-token", os.Getenv(reviewer.EnvGitLabToken), "GitLab API token")
 	pf.StringVar(&cfg.MRIID, "mr-iid", os.Getenv("CI_MERGE_REQUEST_IID"), "MR IID")
 	pf.StringVar(&cfg.ProjectID, "project-id", os.Getenv("CI_PROJECT_ID"), "GitLab project ID")
 	pf.StringVar(&cfg.SourceBranch, "source-branch", os.Getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"), "source branch")
@@ -70,7 +70,7 @@ func main() {
 	pf.StringVar(&cfg.Effort, "effort", os.Getenv("REVIEW_EFFORT"), "reasoning effort for claude, codex and direct: low|medium|high|xhigh|max")
 	pf.StringVar(&multiRaw, "multi", os.Getenv("REVIEW_MULTI"), "local multi-review panel: comma-separated runner:model members (e.g. codex:gpt-6-sol,opencode:deepseek-v4); bypasses server config, uses ambient credentials")
 	pf.StringVar(&judgeRaw, "judge", os.Getenv("REVIEW_JUDGE"), "multi-review judge runner:model (e.g. claude:opus); with >=2 --multi members, fuses them into one review")
-	pf.IntVar(&cfg.MaxRounds, "max-rounds", ctl.EnvInt("REVIEW_MAX_ROUNDS", 0), "direct runner round budget (0 = default 60); overrides the runner profile")
+	pf.IntVar(&cfg.MaxRounds, "max-rounds", ctl.EnvInt(envMaxRounds, 0), "direct runner round budget (0 = default 60); overrides the runner profile")
 	pf.DurationVar(&cfg.Timeout, "timeout", ctl.EnvDuration("REVIEW_TIMEOUT", 30*time.Minute), "per-member/judge run timeout (e.g. 30m, 1h); 0 = no timeout")
 	// --multi/--judge are local debug overrides (ambient creds, bypass the server
 	// panel config). Keep them working but hidden so they don't become a stable CLI
@@ -125,6 +125,9 @@ func main() {
 	// mid-flight, so the runner stops and the debug bundle still ships, marked
 	// cancelled rather than failed.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// After the first signal, restore the default handling: a second Ctrl+C or
+	// SIGTERM ends reviewctl even while it still ships bundles and cleans up.
+	context.AfterFunc(ctx, stop)
 	err := rootCmd.ExecuteContext(ctx)
 	stop()
 	if err != nil {
@@ -185,23 +188,7 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 	}
 
 	p := rc.Primary // never nil: the server returns ErrNoRunnerProfile otherwise
-	fl := cmd.Flags()
-	cfg.RunnerProfileID = p.RunnerProfileID
-	cfg.RunnerProfileTitle = p.Title
-	cfg.Token = p.Token
-	// Server profile fills each runner field only when the user didn't pass the
-	// flag and the server has a value — explicit flags always win over the profile.
-	serverDefault(fl.Changed, "runner", p.Runner, &cfg.Runner)
-	serverDefault(fl.Changed, "model", p.Model, &cfg.Model)
-	serverDefault(fl.Changed, "effort", p.Effort, &cfg.Effort)
-	serverDefault(fl.Changed, "api-provider", p.APIProvider, &cfg.APIProvider)
-	serverDefault(fl.Changed, "api-base-url", p.APIBaseURL, &cfg.APIBaseURL)
-	if !fl.Changed("allow-dangerous-permissions") {
-		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
-	}
-	if cfg.MaxRounds == 0 {
-		cfg.MaxRounds = p.Params.MaxRounds
-	}
+	applyProfile(explicitFlags(cmd.Flags().Changed), cfg, p)
 
 	// Task-tracker access: the URL comes from the server config; the CI env var
 	// wins over the server-stored token (same precedence as the API keys). The
@@ -228,15 +215,42 @@ func applyReviewConfig(cmd *cobra.Command, cfg *ctl.Config, log *slog.Logger) er
 	// The panel members and judge are logged when the panel starts.
 	log.InfoContext(cmd.Context(), "applied runner profile",
 		"profileId", p.RunnerProfileID, "title", p.Title,
-		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", provider)
+		"runner", cfg.Runner, "model", cfg.Model, "effort", cfg.Effort, "provider", provider, "maxRounds", cfg.MaxRounds)
 	return nil
 }
 
-// serverDefault applies a server profile string field to *dst when the user left
-// the flag at its default (changed reports false) and the server has a non-empty
-// value, so an explicit flag always wins over the profile.
-func serverDefault(changed func(string) bool, flag, serverVal string, dst *string) {
-	if !changed(flag) && serverVal != "" {
+// explicitFlags reports a flag as passed when the user gave it on the command
+// line — or, for --max-rounds, which CI sets through REVIEW_MAX_ROUNDS, in the
+// environment. Other runner settings come from the profile in CI.
+func explicitFlags(changed func(string) bool) func(string) bool {
+	return func(name string) bool {
+		return changed(name) || name == "max-rounds" && os.Getenv(envMaxRounds) != ""
+	}
+}
+
+// applyProfile fills cfg from the project's primary runner profile. A profile
+// value fills a field only when the user didn't pass its flag (changed) and the
+// profile has one — explicit flags always win, even an explicit zero.
+func applyProfile(changed func(string) bool, cfg *ctl.Config, p *ctl.ResolvedProfile) {
+	cfg.RunnerProfileID = p.RunnerProfileID
+	cfg.RunnerProfileTitle = p.Title
+	cfg.Token = p.Token
+	serverDefault(changed, "runner", p.Runner, &cfg.Runner)
+	serverDefault(changed, "model", p.Model, &cfg.Model)
+	serverDefault(changed, "effort", p.Effort, &cfg.Effort)
+	serverDefault(changed, "api-provider", p.APIProvider, &cfg.APIProvider)
+	serverDefault(changed, "api-base-url", p.APIBaseURL, &cfg.APIBaseURL)
+	if !changed("allow-dangerous-permissions") {
+		cfg.AllowDangerousPermissions = p.Params.AllowDangerousPermissions
+	}
+	serverDefault(changed, "max-rounds", p.Params.MaxRounds, &cfg.MaxRounds)
+}
+
+// serverDefault sets *dst to a profile value unless the flag was passed or the
+// profile leaves it unset (zero).
+func serverDefault[T comparable](changed func(string) bool, flag string, serverVal T, dst *T) {
+	var zero T
+	if !changed(flag) && serverVal != zero {
 		*dst = serverVal
 	}
 }
@@ -329,7 +343,8 @@ func buildDirectRunner(cfg *ctl.Config, log *slog.Logger) (runner.ReviewRunner, 
 // token override (CI variable wins over the server-stored tracker token; the
 // name aliases the canonical reviewer const referenced by assembled prompts).
 const (
-	envReviewAPIKey    = "REVIEW_API_KEY"
+	envReviewAPIKey    = reviewer.EnvAPIKey
+	envMaxRounds       = "REVIEW_MAX_ROUNDS"
 	envAnthropicAPIKey = "ANTHROPIC_API_KEY"
 	envOpenAIAPIKey    = "OPENAI_API_KEY"
 	envDeepSeekAPIKey  = "DEEPSEEK_API_KEY"

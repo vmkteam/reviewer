@@ -3,9 +3,12 @@ package direct
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"io"
+	"net/url"
 	"testing"
 	"time"
+
+	"reviewsrv/pkg/reviewer"
 
 	openai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/require"
@@ -46,8 +49,25 @@ func TestIsOpenAITransient(t *testing.T) {
 	require.False(t, isOpenAITransient(&openai.APIError{HTTPStatusCode: 400}))
 	require.False(t, isOpenAITransient(&openai.APIError{HTTPStatusCode: 401}))
 	require.False(t, isOpenAITransient(&openai.APIError{HTTPStatusCode: 429, Code: "insufficient_quota"}), "an exhausted quota is billing, not a rate limit")
-	require.True(t, isOpenAITransient(&openai.RequestError{HTTPStatusCode: 500}))
-	require.False(t, isOpenAITransient(errors.New("plain error")))
+
+	// An error body go-openai can't decode (a proxy's HTML page) keeps its status.
+	require.True(t, isOpenAITransient(&openai.RequestError{HTTPStatusCode: 502}))
+	require.False(t, isOpenAITransient(&openai.RequestError{HTTPStatusCode: 401}))
+	require.False(t, isOpenAITransient(&openai.RequestError{HTTPStatusCode: 402}))
+
+	// No HTTP answer at all: go-openai returns the transport error as is.
+	require.True(t, isOpenAITransient(&url.Error{Op: "Post", URL: "https://api.openai.com/v1/responses", Err: io.ErrUnexpectedEOF}))
+	require.True(t, isOpenAITransient(io.ErrUnexpectedEOF))
+	// Anything else — e.g. go-openai rejecting the request before sending it —
+	// fails the same way on every attempt.
+	require.False(t, isOpenAITransient(openai.ErrReasoningModelMaxTokensDeprecated))
+}
+
+func TestProviderReasonOpenAIShapes(t *testing.T) {
+	require.Equal(t, reviewer.RunReasonBilling, providerReason(&openai.RequestError{HTTPStatusCode: 402}))
+	require.Equal(t, reviewer.RunReasonAuth, providerReason(&openai.RequestError{HTTPStatusCode: 401}))
+	require.Equal(t, reviewer.RunReasonBilling, providerReason(&openai.APIError{HTTPStatusCode: 429, Code: "insufficient_quota"}))
+	require.Equal(t, reviewer.RunReasonAPIError, providerReason(&url.Error{Op: "Post", URL: "x", Err: io.ErrUnexpectedEOF}))
 }
 
 func TestToOpenAIMessagesSkipsBareAssistant(t *testing.T) {

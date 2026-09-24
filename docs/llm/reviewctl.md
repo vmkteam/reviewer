@@ -14,14 +14,14 @@
 ```
 GitLab CI Job / Local
   └── reviewctl review
-        ├── 1. GET /v1/prompt/{projectKey}/     → prompt text
-        ├── 2. claude --print --output-format json --model opus -p "$prompt"
-        │       → stdout: ClaudeResult JSON (cost, usage, result)
+        ├── 1. POST /v1/reviewctl/rpc/  ReviewConfig + Prompt → профиль раннера, текст промпта
+        ├── 2. runner (claude / opencode / codex / direct) по профилю раннера
+        │       → ClaudeResult (cost, usage, result)
         │       → files: review.json, R1.md, R2.md, R3.md, R4.md, R5.md
         ├── 3. Parse review.json → ReviewDraft
         │       Merge ClaudeResult cost → ReviewDraft.ModelInfo
-        ├── 4. POST /v1/upload/{projectKey}/    → reviewId
-        │       POST /v1/upload/{projectKey}/{reviewId}/{type}/  × N files
+        ├── 4. POST /v1/reviewctl/upload/{projectKey}/    → reviewId
+        │       POST /v1/reviewctl/upload/{projectKey}/{reviewId}/{type}/  × N files
         ├── 5. GitLab MR comments:
         │       - Cleanup old inline discussions (без ответов)
         │       - POST summary note (история прогресса)
@@ -78,13 +78,16 @@ reviewctl version   — версия бинарника
 
 ```bash
 claude --print \
-  --output-format json \
-  --model $MODEL \
+  --output-format stream-json --verbose \
   --permission-mode bypassPermissions \
-  -p "$PROMPT"
+  --setting-sources user --strict-mcp-config \
+  --model $MODEL [--effort $EFFORT] \
+  -p -            # промпт на stdin
 ```
 
-**Важно:** флаг `--verbose` НЕ используется — он заставляет Claude CLI выводить все сообщения как JSON array, что при большом review может превысить буфер (448KB) и обрезать вывод.
+- `stream-json --verbose` — поток NDJSON-событий: раннер логирует вызовы инструментов по ходу, итоговый `result` тот же, что у `--output-format json`.
+- `--setting-sources user --strict-mcp-config` и env `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` — проверяемый checkout недоверенный: его `.claude/settings.json` (хуки), `.mcp.json` и автопамять разработчика не загружаются.
+- Дочерние процессы на checkout (раннеры, git) получают окружение без секретов CI (`REVIEWER_GITLAB_TOKEN`, `PROJECT_KEY`, `CI_JOB_TOKEN`, …), а git reviewctl запускает без хуков и fsmonitor (`-c core.hooksPath=/dev/null -c core.fsmonitor=false`). Это дополнительный слой, а не граница: агент под тем же uid может прочитать `/proc/<pid>/environ` reviewctl; граница — отдельный uid или PID namespace. Ключ API — из env или токена профиля раннера (`ANTHROPIC_API_KEY`).
 
 ### Session caching
 
@@ -93,9 +96,7 @@ claude --print \
 
 ### Парсинг вывода
 
-`ParseClaudeResult` поддерживает:
-- Одиночный JSON-объект (нормальный режим без `--verbose`)
-- JSON array (от `--resume` / `--verbose`) — потоковый декодер (`json.Decoder`), толерантен к обрезанным массивам
+`ParseClaudeResult` поддерживает поток NDJSON (`stream-json`), одиночный JSON-объект и JSON array — потоковый декодер (`json.Decoder`), толерантен к обрезанному выводу. Ненулевой выход раннера разбирается `claudeRunError`: причина сбоя (billing, auth, rate_limit, api_error) берётся из события ошибки в потоке.
 
 ---
 

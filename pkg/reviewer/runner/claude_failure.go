@@ -62,9 +62,11 @@ func claudeRunError(err error, cr *ClaudeResult, stdout []byte, stderr string) e
 // claudeReason maps a Claude Code error kind (falling back to the HTTP status and
 // the result text) to a RunReason.
 func claudeReason(kind string, status int, text string) string {
-	switch kind {
-	case claudeErrBilling:
+	if kind == claudeErrBilling || reviewer.IsBillingMessage(text) {
+		// Before the status: an exhausted balance can come as a 400 or a 429.
 		return reviewer.RunReasonBilling
+	}
+	switch kind {
 	case claudeErrAuth:
 		return reviewer.RunReasonAuth
 	case claudeErrRateLimit:
@@ -73,6 +75,9 @@ func claudeReason(kind string, status int, text string) string {
 		return reviewer.RunReasonAPIError
 	}
 	if r := reviewer.ReasonForHTTPStatus(status); r != reviewer.RunReasonOther {
+		return r
+	}
+	if r := reviewer.ReasonFromMessage(text); r != "" {
 		return r
 	}
 	if strings.HasPrefix(text, claudeAPIErrorPrefix) {
@@ -112,6 +117,17 @@ func lastAssistantError(stdout []byte) (kind, text string) {
 		kind, text = ev.Error, strings.TrimSpace(sb.String())
 	}
 	return kind, text
+}
+
+// errTail is the end of a CLI's error output, where its final error sits: the
+// lines before it (stack traces, the checkout's paths) would only mislead
+// ReasonFromMessage.
+func errTail(s string) string {
+	const n = 2000
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 // isInterrupted reports whether a subprocess was stopped by SIGTERM/SIGINT —

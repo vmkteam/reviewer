@@ -9,6 +9,10 @@ const (
 	metricOtherRunner    = "other"
 )
 
+// PanelRunner is the runner label of a multi-review panel's own failure (prompt
+// fetch, worktree, upload), outside any member or judge run.
+const PanelRunner = "panel"
+
 // maxRunCostUsd bounds a plausible run cost (a 500-round Opus run stays well
 // below it): a higher client-reported value is not added to the cost counter,
 // which only ever grows.

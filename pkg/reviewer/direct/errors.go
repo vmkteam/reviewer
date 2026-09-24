@@ -2,11 +2,12 @@ package direct
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
-	"strings"
+	"net/url"
 
 	"reviewsrv/pkg/reviewer"
 
@@ -17,19 +18,24 @@ import (
 // providerReason maps a failed LLMProvider.Complete (after the provider's own
 // retries) to a reviewer.RunReason*.
 func providerReason(err error) string {
-	var ae *anthropic.Error
-	if errors.As(err, &ae) {
+	var (
+		ae     *anthropic.Error
+		apiErr *openai.APIError
+		reqErr *openai.RequestError
+		rf     *responseFailedError
+	)
+	switch {
+	case errors.As(err, &ae):
 		return anthropicReason(ae)
-	}
-	var oe *openai.APIError
-	if errors.As(err, &oe) {
-		return openaiReason(oe)
-	}
-	var rf *responseFailedError
-	if errors.As(err, &rf) {
+	case errors.As(err, &apiErr):
+		return openaiReason(apiErr)
+	case errors.As(err, &reqErr):
+		// An error body go-openai could not decode (a proxy's HTML page).
+		return reviewer.ReasonForHTTPStatus(reqErr.HTTPStatusCode)
+	case errors.As(err, &rf):
 		return rf.reason()
 	}
-	// Not an API error: a transport failure (reset stream, EOF, refused
+	// No API answer: a transport failure (reset stream, EOF, refused
 	// connection) that outlived the retries.
 	return reviewer.RunReasonAPIError
 }
@@ -37,7 +43,7 @@ func providerReason(err error) string {
 // anthropicReason classifies an Anthropic API error by its body type, falling
 // back to the HTTP status. Errors inside the SSE stream carry the stream's 200.
 func anthropicReason(e *anthropic.Error) string {
-	if isCreditBalanceError(e.RawJSON()) {
+	if reviewer.IsBillingMessage(e.RawJSON()) {
 		return reviewer.RunReasonBilling
 	}
 	switch e.Type() {
@@ -52,12 +58,6 @@ func anthropicReason(e *anthropic.Error) string {
 	case anthropic.ErrorTypeInvalidRequestError, anthropic.ErrorTypeNotFoundError:
 	}
 	return reviewer.ReasonForHTTPStatus(e.StatusCode)
-}
-
-// isCreditBalanceError catches an exhausted balance reported as a plain
-// invalid_request_error ("Your credit balance is too low ...").
-func isCreditBalanceError(body string) bool {
-	return strings.Contains(strings.ToLower(body), "credit balance")
 }
 
 // openaiReason classifies an OpenAI-protocol API error (OpenAI, DeepSeek, ...)
@@ -112,20 +112,33 @@ func (e *responseFailedError) reason() string {
 }
 
 // isOpenAITransient reports whether an OpenAI-protocol call is worth retrying:
-// a rate limit or server-side API error — as an HTTP status or inside a failed
-// Responses reply — or a network-level request error. Billing
-// (insufficient_quota also comes as a 429) and auth are definitive.
+// a rate limit or server-side error — by HTTP status or inside a failed
+// Responses reply — or a transport failure with no answer (go-openai returns it
+// bare, e.g. a *url.Error). Billing (insufficient_quota also comes as a 429),
+// auth and bad requests are definitive, and so is anything else: go-openai's
+// own request validation fails the same way every time. A cancelled context is
+// withRetry's call.
 func isOpenAITransient(err error) bool {
-	var apiErr *openai.APIError
-	if errors.As(err, &apiErr) {
-		return isTransientReason(openaiReason(apiErr))
+	var (
+		apiErr *openai.APIError
+		reqErr *openai.RequestError
+		rf     *responseFailedError
+	)
+	if errors.As(err, &apiErr) || errors.As(err, &reqErr) || errors.As(err, &rf) {
+		return isTransientReason(providerReason(err))
 	}
-	var rf *responseFailedError
-	if errors.As(err, &rf) {
-		return isTransientReason(rf.reason())
-	}
-	var reqErr *openai.RequestError
-	return errors.As(err, &reqErr)
+	return isTransportError(err)
+}
+
+// isTransportError reports a failure with no HTTP answer: a reset, refused or
+// timed-out connection, or a body cut short.
+func isTransportError(err error) bool {
+	var (
+		urlErr *url.Error
+		netErr net.Error
+	)
+	return errors.As(err, &urlErr) || errors.As(err, &netErr) ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 // isTransientReason reports whether a failure of that reason may pass on retry.
@@ -139,9 +152,6 @@ func isTransientReason(reason string) bool {
 // error event inside the SSE stream (200 + api_error/overloaded_error) and a
 // reset HTTP/2 stream — a bare transport error, hence retry-by-default.
 func isAnthropicTransient(err error) bool {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
 	var ae *anthropic.Error
 	if !errors.As(err, &ae) {
 		return true
@@ -149,7 +159,7 @@ func isAnthropicTransient(err error) bool {
 	switch ae.Type() {
 	case anthropic.ErrorTypeRateLimitError, anthropic.ErrorTypeOverloadedError,
 		anthropic.ErrorTypeAPIError, anthropic.ErrorTypeTimeoutError:
-		return !isCreditBalanceError(ae.RawJSON())
+		return !reviewer.IsBillingMessage(ae.RawJSON())
 	case anthropic.ErrorTypeInvalidRequestError, anthropic.ErrorTypeAuthenticationError, anthropic.ErrorTypePermissionError,
 		anthropic.ErrorTypeNotFoundError, anthropic.ErrorTypeBillingError:
 		return false

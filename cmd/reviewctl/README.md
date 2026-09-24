@@ -53,7 +53,7 @@ Most flags have an environment-variable default for CI.
 | `--effort` | `$REVIEW_EFFORT` | — | Reasoning effort `low`..`max` (honored by the `claude`, `codex` and `direct` runners; opencode and `direct` with `openai-compat` ignore it) |
 | `--api-provider` | `$REVIEW_API_PROVIDER` | `deepseek` | `direct` runner provider: `deepseek` \| `openai` (Responses API) \| `openai-compat` \| `anthropic` |
 | `--api-base-url` | `$REVIEW_API_BASE_URL` | *provider default* | `direct` runner API base URL |
-| `--max-rounds` | `$REVIEW_MAX_ROUNDS` | `60` | `direct` runner round budget; the model is warned 10 and 3 rounds before it, then gets up to 5 review-only rounds to deliver |
+| `--max-rounds` | `$REVIEW_MAX_ROUNDS` | `60` | `direct` runner round budget (10–500); the flag or env var overrides the profile's `maxRounds`. The model is warned 10 and 3 rounds before it, then gets up to 5 review-only rounds to deliver |
 | `--allow-dangerous-permissions` | `$REVIEW_ALLOW_DANGEROUS_PERMISSIONS` | `true` | Pass `--auto` to opencode (needed for unattended CI) |
 | `--codex-sandbox` | `$REVIEW_CODEX_SANDBOX` | `workspace-write` | codex `--sandbox` mode; `danger-full-access` inside containers, where codex's bubblewrap sandbox can't start |
 

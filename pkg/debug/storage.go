@@ -38,6 +38,7 @@ type Bundle struct {
 	Status       string  // reviewer.RunStatus*, normalized on upload
 	Reason       string  // reviewer.RunReason*; empty for an ok run
 	CostUsd      float64 // what the run spent, including a failed one
+	ReviewID     string  // the review created before the run failed, if any
 	ProjectTitle string  // resolved from ProjectKey; empty for an unknown key
 	Files        map[string]File
 	FilesEvicted bool // artifacts dropped to cap memory; metadata kept

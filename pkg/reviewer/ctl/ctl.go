@@ -121,12 +121,6 @@ func NewController(cfg *Config, rr runner.ReviewRunner, log *slog.Logger, opts .
 	return c
 }
 
-func (c *Controller) addSpent(usd float64) {
-	c.spentMu.Lock()
-	c.spent += usd
-	c.spentMu.Unlock()
-}
-
 func (c *Controller) spentTotal() float64 {
 	c.spentMu.Lock()
 	defer c.spentMu.Unlock()
@@ -215,7 +209,9 @@ func (c *Controller) Review(ctx context.Context) (retErr error) {
 // debug ring before a panel worktree goes. The upload gets a detached context:
 // a cancelled or timed-out run is precisely what the bundle should explain.
 func (c *Controller) settleRun(ctx context.Context, cfg *Config, rr *spendTracker, runErr error) {
-	c.addSpent(rr.total())
+	c.spentMu.Lock()
+	c.spent += rr.total()
+	c.spentMu.Unlock()
 	if runErr == nil && !cfg.DebugUpload {
 		return
 	}
@@ -246,6 +242,10 @@ func (c *Controller) uploadDebugBundle(ctx context.Context, cfg *Config, runErr 
 		CostUsd:      costUsd,
 	}
 	meta.Status, meta.Reason = reviewer.RunOutcome(runErr)
+	var created *reviewCreatedError
+	if errors.As(runErr, &created) {
+		meta.ReviewID = created.reviewID
+	}
 	if runErr != nil {
 		meta.ErrorMsg = runErr.Error()
 		// A cancelled job is expected, not a failure worth a warning.
@@ -395,7 +395,9 @@ func (c *Controller) fillMetadata(ctx context.Context, draft *rest.ReviewDraft) 
 // gitMeta returns the trimmed output of a git command in dir, or "" on any
 // error — callers treat the value as optional metadata.
 func gitMeta(ctx context.Context, dir string, args ...string) string {
-	out, err := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
+	cmd := exec.CommandContext(ctx, "git", reviewer.GitArgs(append([]string{"-C", dir}, args...)...)...)
+	cmd.Env = reviewer.ChildEnv()
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

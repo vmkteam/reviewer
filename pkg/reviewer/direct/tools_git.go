@@ -257,8 +257,9 @@ func gitDiff(ctx context.Context, root, base, head, path string) (string, error)
 // runGit runs git -C root with the given args. When allowExit1 is set, an exit
 // code of 1 (git diff "differences found") is treated as success.
 func runGit(ctx context.Context, root string, allowExit1 bool, args ...string) (string, error) {
-	full := append([]string{"-C", root}, args...)
-	out, err := exec.CommandContext(ctx, "git", full...).Output()
+	cmd := exec.CommandContext(ctx, "git", reviewer.GitArgs(append([]string{"-C", root}, args...)...)...)
+	cmd.Env = reviewer.ChildEnv()
+	out, err := cmd.Output()
 	if err == nil {
 		return string(out), nil
 	}

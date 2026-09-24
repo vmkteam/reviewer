@@ -14,6 +14,14 @@ import (
 // cmd/reviewctl alias it so the prompt reference and the injected env can't drift.
 const EnvTrackerToken = "REVIEW_TRACKER_TOKEN"
 
+// reviewctl's own secrets from the CI env: canonical names, which cmd/reviewctl
+// reads and pkg/reviewer/runner keeps out of the agents' env.
+const (
+	EnvProjectKey  = "PROJECT_KEY"
+	EnvGitLabToken = "REVIEWER_GITLAB_TOKEN"
+	EnvAPIKey      = "REVIEW_API_KEY" // the direct runner's provider-agnostic key
+)
+
 type ProjectManager struct {
 	repo       db.ProjectRepo
 	reviewRepo db.ReviewRepo

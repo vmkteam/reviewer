@@ -37,7 +37,7 @@ GitLab CI (merge request)
 
 - Go 1.26+
 - PostgreSQL
-- Node.js 20+ (for frontend build)
+- Node.js 22.12+ (for frontend build; `frontend/.nvmrc` pins 24)
 
 ## Quick Start
 

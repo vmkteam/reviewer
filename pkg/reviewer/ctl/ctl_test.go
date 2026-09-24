@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"reviewsrv/pkg/rest"
@@ -178,11 +179,31 @@ func editReviewJSON(dir string, edit func(*rest.ReviewDraft)) error {
 	return WriteReviewJSON(dir, draft)
 }
 
-// newDebugCaptureServer serves the prompt RPC and records the form fields of
-// the debug bundle upload; nothing else is expected.
-func newDebugCaptureServer(t *testing.T) (*httptest.Server, map[string]string) {
+// debugCapture records the debug bundle uploads a test server received.
+type debugCapture struct {
+	mu      sync.Mutex
+	last    map[string]string // form fields of the latest bundle
+	bundles int
+}
+
+func (d *debugCapture) field(name string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.last[name]
+}
+
+func (d *debugCapture) count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.bundles
+}
+
+// newDebugCaptureServer serves the prompt RPC and records the debug bundle
+// uploads (concurrent ones too: panel members); other requests go to other
+// (404 when nil).
+func newDebugCaptureServer(t *testing.T, other http.HandlerFunc) (*httptest.Server, *debugCapture) {
 	t.Helper()
-	fields := map[string]string{}
+	dc := &debugCapture{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/reviewctl/rpc/" {
 			w.Header().Set("Content-Type", "application/json")
@@ -193,21 +214,57 @@ func newDebugCaptureServer(t *testing.T) (*httptest.Server, map[string]string) {
 			if !assert.NoError(t, r.ParseMultipartForm(32<<20)) {
 				return
 			}
+			fields := make(map[string]string, len(r.MultipartForm.Value))
 			for k, v := range r.MultipartForm.Value {
 				fields[k] = v[0]
 			}
+			dc.mu.Lock()
+			dc.last, dc.bundles = fields, dc.bundles+1
+			dc.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"x","url":"/v1/debug/storage/x/"}`))
+			return
+		}
+		if other != nil {
+			other(w, r)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(srv.Close)
-	return srv, fields
+	return srv, dc
+}
+
+func TestController_Review_PartialUploadNamesTheReview(t *testing.T) {
+	// The review is created, then an R*.md upload fails.
+	srv, dc := newDebugCaptureServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/reviewctl/upload/test-key/" { // the review itself; its files fail
+			_, _ = w.Write([]byte("42"))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	dir := setupTestDir(t)
+	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: dir, Runner: runner.RunnerClaude}
+	rr := &testClaudeRunner{fixturePath: "testdata/claude_result.json", beforeRun: func() error {
+		if err := os.WriteFile(filepath.Join(dir, "R1.architecture.md"), []byte("# Architecture"), 0o644); err != nil {
+			return err
+		}
+		return editReviewJSON(dir, func(d *rest.ReviewDraft) {
+			for i := range d.Files {
+				d.Files[i].Summary = "reviewed"
+			}
+		})
+	}}
+
+	err := NewController(cfg, rr, slog.Default()).Review(context.Background())
+	require.ErrorContains(t, err, "upload")
+	assert.Equal(t, reviewer.RunStatusFailed, dc.field("status"))
+	assert.Equal(t, "42", dc.field("reviewId"), "the server counted this run when the review was created")
 }
 
 func TestController_Review_FailsOnUnfilledReview(t *testing.T) {
-	srv, fields := newDebugCaptureServer(t)
+	srv, dc := newDebugCaptureServer(t, nil)
 	cfg := &Config{Key: "test-key", URL: srv.URL, Model: "opus", Dir: t.TempDir(), Runner: runner.RunnerClaude}
 	// The runner never touches review.json, neither on the run nor on the Step 2 retry.
 	rr := &testClaudeRunner{fixturePath: "testdata/claude_result.json"}
@@ -215,13 +272,13 @@ func TestController_Review_FailsOnUnfilledReview(t *testing.T) {
 	err := NewController(cfg, rr, slog.Default()).Review(context.Background())
 	require.ErrorContains(t, err, "empty review")
 	assert.NotEmpty(t, rr.sessionID, "the Step 2 retry resumed the session")
-	assert.Equal(t, reviewer.RunStatusFailed, fields["status"])
-	assert.Equal(t, reviewer.RunReasonNotSubmitted, fields["reason"])
-	assert.Equal(t, "4.175053", fields["costUsd"], "both runs are billed")
+	assert.Equal(t, reviewer.RunStatusFailed, dc.field("status"))
+	assert.Equal(t, reviewer.RunReasonNotSubmitted, dc.field("reason"))
+	assert.Equal(t, "4.175053", dc.field("costUsd"), "both runs are billed")
 }
 
 func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
-	srv, fields := newDebugCaptureServer(t)
+	srv, dc := newDebugCaptureServer(t, nil)
 
 	// Simulate Claude overwriting the skeleton with an invalid review.json
 	// — reproduces the CI failure where the model picks empty reviewType.
@@ -241,8 +298,8 @@ func TestController_Review_UploadsDebugBundleOnValidationFailure(t *testing.T) {
 	err := c.Review(context.Background())
 	require.Error(t, err, "Review must fail on invalid review.json")
 	assert.Contains(t, err.Error(), "invalid reviewType")
-	assert.Contains(t, fields, "errorMsg", "debug bundle must be uploaded on failure")
-	assert.Contains(t, fields["errorMsg"], "files[0]", "errorMsg must carry verbose validation detail")
+	assert.Equal(t, 1, dc.count(), "debug bundle must be uploaded on failure")
+	assert.Contains(t, dc.field("errorMsg"), "files[0]", "errorMsg must carry verbose validation detail")
 }
 
 // failingRunner fails like a real runner: a tagged error plus the partial result
@@ -260,7 +317,7 @@ func (r failingRunner) Name() string      { return r.name }
 func (r failingRunner) SetSession(string) {}
 
 func TestController_Review_ReportsFailureOutcome(t *testing.T) {
-	srv, fields := newDebugCaptureServer(t)
+	srv, dc := newDebugCaptureServer(t, nil)
 
 	tests := []struct {
 		name       string
@@ -293,17 +350,19 @@ func TestController_Review_ReportsFailureOutcome(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clear(fields)
+			dc.mu.Lock()
+			dc.last = nil
+			dc.mu.Unlock()
 			cfg := &Config{Key: "test-key", URL: srv.URL, Model: "m", Dir: t.TempDir(), Runner: tt.runner.name}
 			err := NewController(cfg, tt.runner, slog.Default()).Review(context.Background())
 			require.Error(t, err)
-			assert.True(t, strings.HasPrefix(fields["errorMsg"], tt.wantMsg), fields["errorMsg"])
-			assert.Equal(t, tt.wantStatus, fields["status"])
-			assert.Equal(t, tt.wantReason, fields["reason"])
+			assert.True(t, strings.HasPrefix(dc.field("errorMsg"), tt.wantMsg), dc.field("errorMsg"))
+			assert.Equal(t, tt.wantStatus, dc.field("status"))
+			assert.Equal(t, tt.wantReason, dc.field("reason"))
 			if tt.runner.cost > 0 {
-				assert.Equal(t, strconv.FormatFloat(tt.runner.cost, 'f', -1, 64), fields["costUsd"])
+				assert.Equal(t, strconv.FormatFloat(tt.runner.cost, 'f', -1, 64), dc.field("costUsd"))
 			} else {
-				assert.NotContains(t, fields, "costUsd")
+				assert.Empty(t, dc.field("costUsd"))
 			}
 		})
 	}
