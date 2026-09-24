@@ -1,0 +1,38 @@
+name: Frontend
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build:all
+
+      # Runtime deps only: they ship inside the embedded bundle. Dev-server
+      # advisories (vite, rolldown) don't reach production.
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high

@@ -4,10 +4,10 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import MarkdownIt from 'markdown-it'
-import type StateCore from 'markdown-it/lib/rules_core/state_core.mjs'
-import type Token from 'markdown-it/lib/token.mjs'
-import hljs from 'highlight.js'
+import MarkdownIt, { type StateCore, type Token } from 'markdown-it'
+// lib/common (~36 languages) instead of the full ~190-language bundle; unknown
+// fences fall back to escaped plain text in the highlight() callback below.
+import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github.css'
 import { buildTaskURL, getTaskPattern } from '../composables/useTaskLink'
 import { StatusValid, StatusFalsePositive, StatusIgnored } from '../constants/status'
@@ -93,7 +93,10 @@ async function renderMermaid() {
   }
 }
 
-const md: MarkdownIt = new MarkdownIt({
+// pgsql is not in lib/common; plain sql highlighting is close enough.
+hljs.registerAliases(['postgresql', 'postgres'], { languageName: 'sql' })
+
+const md = new MarkdownIt({
   html: false,
   linkify: true,
   highlight(str: string, lang: string): string {

@@ -8,7 +8,7 @@ export default defineConfig({
   build: {
     outDir: 'dist-vt',
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: 'vt.html',
     },
   },
