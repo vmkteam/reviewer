@@ -1,8 +1,14 @@
 name: Publish Docker image
 
+# Called by go.yml after GoReleaser: a release it publishes with GITHUB_TOKEN
+# does not trigger workflows, so `on: release` never fired. Manual dispatch
+# rebuilds a tag without moving `latest`.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       tag:
@@ -20,7 +26,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -43,7 +49,8 @@ jobs:
             vmkteam/reviewer
             ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ inputs.tag }}
+            type=raw,value=latest,enable=${{ github.event_name != 'workflow_dispatch' }}
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v6
@@ -53,4 +60,4 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ inputs.tag || github.ref_name }}
+            VERSION=${{ inputs.tag }}
