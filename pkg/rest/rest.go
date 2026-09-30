@@ -103,6 +103,7 @@ func (h *Handler) notifySlack(project *reviewer.Project, rv *reviewer.Review) {
 		stats.Low += rf.IssueStats.Low
 	}
 
+	mrURL, mrLabel := project.MergeRequestLink(rv.ExternalID)
 	notif := slack.ReviewNotification{
 		WebhookURL:   project.SlackChannel.WebhookURL,
 		ProjectTitle: project.Title,
@@ -114,6 +115,8 @@ func (h *Handler) notifySlack(project *reviewer.Project, rv *reviewer.Review) {
 		TrafficLight: rv.TrafficLight,
 		IssueStats:   stats,
 		ReviewURL:    fmt.Sprintf("%s/reviews/%d/", h.baseURL, rv.ID),
+		MRURL:        mrURL,
+		MRLabel:      mrLabel,
 	}
 
 	go h.notifier.Send(context.Background(), notif)

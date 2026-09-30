@@ -267,6 +267,33 @@ func TestHasSlackWebhook(t *testing.T) {
 	}
 }
 
+func TestMergeRequestLink(t *testing.T) {
+	tests := []struct {
+		name       string
+		vcsURL     string
+		externalID string
+		wantURL    string
+		wantLabel  string
+	}{
+		{"gitlab", "https://git.example.com/group/app", "42", "https://git.example.com/group/app/-/merge_requests/42", "MR !42"},
+		{"github", "https://github.com/org/app", "7", "https://github.com/org/app/pull/7", "PR #7"},
+		{"trailing slash", "https://git.example.com/group/app/", "42", "https://git.example.com/group/app/-/merge_requests/42", "MR !42"},
+		{"empty id", "https://git.example.com/group/app", "", "", ""},
+		{"zero id", "https://git.example.com/group/app", "0", "", ""},
+		{"not a number", "https://git.example.com/group/app", "%EXTERNAL_ID%", "", ""},
+		{"no vcs url", "", "42", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Project{db.Project{VcsURL: tt.vcsURL}}
+			url, label := p.MergeRequestLink(tt.externalID)
+			assert.Equal(t, tt.wantURL, url)
+			assert.Equal(t, tt.wantLabel, label)
+		})
+	}
+}
+
 func TestReviewSearch_ToDB(t *testing.T) {
 	t.Run("nil receiver", func(t *testing.T) {
 		var s *ReviewSearch

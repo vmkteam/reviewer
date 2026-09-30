@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vmkteam/embedlog"
@@ -46,6 +47,9 @@ type ReviewNotification struct {
 	TrafficLight string
 	IssueStats   IssueStats
 	ReviewURL    string
+	// MRURL and MRLabel are empty when the review has no merge request.
+	MRURL   string
+	MRLabel string
 }
 
 func trafficLightEmoji(tl string) string {
@@ -61,15 +65,25 @@ func trafficLightEmoji(tl string) string {
 	}
 }
 
+// escaper escapes the control characters of Slack mrkdwn, so a "<" or ">" in a
+// title does not break the surrounding link.
+var escaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
 func (n ReviewNotification) text() string {
-	return fmt.Sprintf("%s [%s] *<%s|%s>* by %s (`%s` → `%s`) — %d critical, %d high, %d medium, %d low",
+	var mr string
+	if n.MRURL != "" {
+		mr = fmt.Sprintf("<%s|%s> ", n.MRURL, escaper.Replace(n.MRLabel))
+	}
+
+	return fmt.Sprintf("%s [%s] %s*<%s|%s>* by %s (`%s` → `%s`) — %d critical, %d high, %d medium, %d low",
 		trafficLightEmoji(n.TrafficLight),
-		n.ProjectTitle,
+		escaper.Replace(n.ProjectTitle),
+		mr,
 		n.ReviewURL,
-		n.Title,
-		n.Author,
-		n.SourceBranch,
-		n.TargetBranch,
+		escaper.Replace(n.Title),
+		escaper.Replace(n.Author),
+		escaper.Replace(n.SourceBranch),
+		escaper.Replace(n.TargetBranch),
 		n.IssueStats.Critical,
 		n.IssueStats.High,
 		n.IssueStats.Medium,

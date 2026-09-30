@@ -49,18 +49,23 @@ Webhook URL привязывается к каналу через VT-админ�
 
 ```json
 {
-  "text": ":red_circle: *<reviewURL|Review Title>* by author (`source` → `target`) — 2 critical, 1 high, 3 medium, 0 low"
+  "text": ":red_circle: [project] <mrURL|MR !42> *<reviewURL|Review Title>* by author (`source` → `target`) — 2 critical, 1 high, 3 medium, 0 low"
 }
 ```
+
+Ссылка на MR (`<mrURL|MR !42>`) выводится, только если `externalId` ревью — положительный номер MR,
+а у проекта задан `vcsURL` (`reviewer.Project.MergeRequestLink`). Для GitLab —
+`<vcsURL>/-/merge_requests/<id>` с меткой `MR !<id>`, для GitHub — `<vcsURL>/pull/<id>` с меткой `PR #<id>`.
+Иначе ссылки нет, остальной текст не меняется. Символы `& < >` в проекте, заголовке, авторе и ветках экранируются.
 
 Примеры:
 
 ```
-:red_circle: *<https://reviewsrv.example.com/reviews/5/|CHT-47: Add payment processing>* by john (`feature/pay` → `main`) — 2 critical, 1 high, 3 medium, 0 low
+:red_circle: [group/app] <https://git.example.com/group/app/-/merge_requests/42|MR !42> *<https://reviewsrv.example.com/reviews/5/|CHT-47: Add payment processing>* by john (`feature/pay` → `main`) — 2 critical, 1 high, 3 medium, 0 low
 ```
 
 ```
-:large_green_circle: *<https://reviewsrv.example.com/reviews/5/|CHT-52: Fix typo in readme>* by anna (`fix/typo` → `main`) — 0 critical, 0 high, 1 medium, 2 low
+:large_green_circle: [group/app] *<https://reviewsrv.example.com/reviews/5/|CHT-52: Fix typo in readme>* by anna (`fix/typo` → `main`) — 0 critical, 0 high, 1 medium, 2 low
 ```
 
 Маппинг `trafficLight` → emoji:
