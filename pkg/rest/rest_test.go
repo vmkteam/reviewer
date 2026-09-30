@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -246,4 +247,25 @@ func TestNotifySlackSkipsMemberReviews(t *testing.T) {
 
 	require.Eventually(t, func() bool { return posts.Load() == 1 }, 5*time.Second, 10*time.Millisecond)
 	assert.Never(t, func() bool { return posts.Load() > 1 }, 200*time.Millisecond, 10*time.Millisecond, "a member review is not announced")
+}
+
+func TestNotifySlackLinksMergeRequest(t *testing.T) {
+	texts := make(chan string, 1)
+	webhook := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		var msg struct{ Text string }
+		_ = json.NewDecoder(r.Body).Decode(&msg)
+		texts <- msg.Text
+	}))
+	t.Cleanup(webhook.Close)
+	h := &Handler{notifier: slack.NewNotifier(embedlog.NewDevLogger()), baseURL: "http://localhost"}
+	project := &reviewer.Project{Project: db.Project{Title: "p", VcsURL: "https://git.example.com/group/app", SlackChannel: &db.SlackChannel{WebhookURL: webhook.URL}}}
+
+	h.notifySlack(project, &reviewer.Review{Review: db.Review{ID: 1, ExternalID: "42", ReviewRole: reviewer.ReviewRoleSingle}})
+
+	select {
+	case text := <-texts:
+		assert.Contains(t, text, "<https://git.example.com/group/app/-/merge_requests/42|MR !42>")
+	case <-time.After(5 * time.Second):
+		t.Fatal("no slack notification sent")
+	}
 }

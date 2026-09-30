@@ -2,7 +2,10 @@ package reviewer
 
 import (
 	"errors"
+	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"reviewsrv/pkg/db"
@@ -127,6 +130,23 @@ func NewProject(in *db.Project) *Project {
 // HasSlackWebhook returns true if the project has a configured Slack webhook.
 func (p *Project) HasSlackWebhook() bool {
 	return p.SlackChannel != nil && p.SlackChannel.WebhookURL != ""
+}
+
+// MergeRequestLink returns the VCS URL and label ("MR !42" on GitLab, "PR #42" on
+// GitHub) of the merge request with the given external ID. Both are empty unless
+// externalID is a positive MR number and the project has a VCS URL.
+func (p *Project) MergeRequestLink(externalID string) (url, label string) {
+	iid, err := strconv.Atoi(externalID)
+	if err != nil || iid <= 0 || p.VcsURL == "" {
+		return "", ""
+	}
+
+	base := strings.TrimRight(p.VcsURL, "/")
+	if strings.Contains(base, "github.com") {
+		return fmt.Sprintf("%s/pull/%d", base, iid), fmt.Sprintf("PR #%d", iid)
+	}
+
+	return fmt.Sprintf("%s/-/merge_requests/%d", base, iid), fmt.Sprintf("MR !%d", iid)
 }
 
 type TaskTracker struct {
